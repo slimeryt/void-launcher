@@ -13,6 +13,7 @@ import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
+import android.util.Log
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -93,7 +94,9 @@ fun GlassPanel(
     )
     val runtimeShader = remember {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            runCatching { LiquidRefractionShader.create() }.getOrNull()
+            runCatching { LiquidRefractionShader.create() }
+                .onFailure { Log.e("GlassPanel", "AGSL refraction shader failed to compile", it) }
+                .getOrNull()
         } else {
             null
         }
@@ -148,14 +151,18 @@ fun GlassPanel(
                             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                             size.width > 1f && size.height > 1f
                         ) {
+                            // Subtle lens bulge — real glass barely shifts pixels; the old
+                            // 0.48-0.62 intensity pulled a quarter of the panel's content
+                            // out of place near corners, showing unrelated wallpaper as
+                            // ugly blobs instead of a smooth bulge.
                             LiquidRefractionShader.update(
                                 shader = runtimeShader,
                                 size = Size(size.width, size.height),
-                                intensity = (if (strong) 0.62f else 0.48f) * b.coerceIn(0.5f, 1.6f),
-                                chromatic = if (strong) 0.028f else 0.018f,
+                                intensity = (if (strong) 0.14f else 0.09f) * b.coerceIn(0.5f, 1.6f),
+                                chromatic = if (strong) 0.010f else 0.006f,
                                 frost = (if (strong) 0.22f else 0.12f) * f,
                                 time = 0f,
-                                bezel = if (strong) 0.28f else 0.20f
+                                bezel = if (strong) 0.30f else 0.22f
                             )
                             AndroidRenderEffect.createRuntimeShaderEffect(runtimeShader, "content")
                         } else {
@@ -184,10 +191,11 @@ fun GlassPanel(
                 val scaleX = wp.bitmapWidth.toFloat() / wp.screenWidth.toFloat()
                 val scaleY = wp.bitmapHeight.toFloat() / wp.screenHeight.toFloat()
 
-                // Keep the sample 1:1 with the real wallpaper behind the panel. A bigger pad
-                // here shrank the source into the same dst size, i.e. zoomed it out — visibly
-                // misaligned vs. the true background. The shader clamps its own UV internally,
-                // so it no longer needs this oversample margin.
+                // Keep the sample 1:1 with the real wallpaper behind the panel — any bigger pad
+                // here shrinks the source into the same dst size, i.e. zooms it out, which
+                // visibly misaligns it from the true background. The shader's own UV clamp
+                // (see LiquidRefractionShader) handles the small edge margin instead, and the
+                // warp is subtle enough now that edge-clamping isn't visually obvious.
                 val pad = 0.02f
                 val srcX = ((pos.x - size.width * pad) * scaleX).roundToInt()
                     .coerceIn(0, (wp.bitmapWidth - 1).coerceAtLeast(0))

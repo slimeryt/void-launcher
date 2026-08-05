@@ -30,8 +30,8 @@ object LiquidRefractionShader {
             float bz = max(bezel, 0.08);
             float t = clamp(ed / bz, 0.0, 1.0);
 
-            float rim = 1.0 - t;
-            rim = rim * rim * (3.0 - 2.0 * rim);
+            float rimRaw = 1.0 - t;
+            float rim = rimRaw * rimRaw * (3.0 - 2.0 * rimRaw);
             float mid = 4.0 * t * (1.0 - t);
             float weight = rim * (0.4 + 0.6 * mid);
 
@@ -39,27 +39,26 @@ object LiquidRefractionShader {
             float mag = intensity * weight;
 
             float2 toCenter = normalize(float2(0.5, 0.5) - uv + 0.0001);
-            float2 base = uv - toCenter * mag;
-            // Sample stayed inside the panel's own content — no oversample needed,
-            // and no black/undefined edges from pulling past the source bounds.
-            base = clamp(base, float2(0.002), float2(0.998));
+            // Clamp so the sample never pulls from past the panel's own content —
+            // avoids black/undefined edges without needing an oversampled buffer.
+            float2 base = clamp(uv - toCenter * mag, float2(0.002), float2(0.998));
 
             float ca = chromatic * (weight + 0.35);
             half4 cR = content.eval((base + toCenter * ca) * resolution);
             half4 cG = content.eval(base * resolution);
             half4 cB = content.eval((base - toCenter * ca) * resolution);
 
-            half4 color = half4(cR.r, cG.g, cB.b, max(max(cR.a, cG.a), cB.a));
+            half3 rgb = half3(cR.r, cG.g, cB.b);
+            half a = max(max(cR.a, cG.a), cB.a);
 
-            if (frost > 0.001) {
-                color.rgb = mix(color.rgb, half3(0.94, 0.97, 1.0), half(frost) * 0.12);
-            }
+            half3 frosted = mix(rgb, half3(0.94, 0.97, 1.0), half(frost) * 0.12);
+            rgb = frost > 0.001 ? frosted : rgb;
 
             // Static rim highlight — brightest at the bezel, no time-based shimmer.
-            float spec = (weight + 0.15) * 0.16;
-            color.rgb += half3(spec, spec, spec);
+            half spec = half((weight + 0.15) * 0.16);
+            rgb = rgb + half3(spec, spec, spec);
 
-            return color;
+            return half4(rgb, a);
         }
     """
 
