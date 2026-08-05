@@ -13,11 +13,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,7 +27,9 @@ import androidx.compose.ui.unit.dp
 import com.voidlauncher.app.ui.theme.IosBlue
 import kotlin.math.roundToInt
 
-/** iOS-style switch: tall track, wide circular thumb. */
+private val ThumbShape = RoundedCornerShape(99.dp)
+
+/** iOS-style switch with a wide capsule thumb (not a small circle). */
 @Composable
 fun IosToggle(
     checked: Boolean,
@@ -37,12 +37,13 @@ fun IosToggle(
     modifier: Modifier = Modifier,
     enabled: Boolean = true
 ) {
-    val trackW = 51.dp
-    val trackH = 31.dp
-    val thumb = 27.dp
+    val trackW = 58.dp
+    val trackH = 32.dp
+    val thumbW = 38.dp
+    val thumbH = 28.dp
     val pad = 2.dp
     val offset by animateDpAsState(
-        targetValue = if (checked) trackW - thumb - pad else pad,
+        targetValue = if (checked) trackW - thumbW - pad else pad,
         animationSpec = tween(220),
         label = "ios-toggle"
     )
@@ -66,15 +67,16 @@ fun IosToggle(
         Box(
             modifier = Modifier
                 .offset(x = offset)
-                .size(thumb)
-                .shadow(3.dp, CircleShape, clip = false)
-                .clip(CircleShape)
+                .width(thumbW)
+                .height(thumbH)
+                .shadow(3.dp, ThumbShape, clip = false)
+                .clip(ThumbShape)
                 .background(Color.White)
         )
     }
 }
 
-/** iOS-style slider with a large circular thumb. */
+/** iOS-style slider with a wide capsule thumb. */
 @Composable
 fun IosSlider(
     value: Float,
@@ -85,8 +87,9 @@ fun IosSlider(
     enabled: Boolean = true
 ) {
     val density = LocalDensity.current
-    val thumbSize = 28.dp
-    val trackH = 4.dp
+    val thumbW = 44.dp
+    val thumbH = 24.dp
+    val trackH = 6.dp
     val rangeSpan = (valueRange.endInclusive - valueRange.start).coerceAtLeast(0.0001f)
 
     fun snap(raw: Float): Float {
@@ -101,11 +104,11 @@ fun IosSlider(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
-            .height(thumbSize),
+            .height(thumbH + 8.dp),
         contentAlignment = Alignment.CenterStart
     ) {
         val widthPx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
-        val thumbPx = with(density) { thumbSize.toPx() }
+        val thumbPx = with(density) { thumbW.toPx() }
         val travel = (widthPx - thumbPx).coerceAtLeast(1f)
         val frac = ((value - valueRange.start) / rangeSpan).coerceIn(0f, 1f)
 
@@ -114,7 +117,6 @@ fun IosSlider(
             onValueChange(snap((x - thumbPx / 2f) / travel))
         }
 
-        // Track
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -132,17 +134,17 @@ fun IosSlider(
             )
         }
 
-        // Thumb
         Box(
             modifier = Modifier
                 .offset(x = with(density) { (frac * travel).toDp() })
-                .size(thumbSize)
-                .shadow(4.dp, CircleShape, clip = false)
-                .clip(CircleShape)
+                .align(Alignment.CenterStart)
+                .width(thumbW)
+                .height(thumbH)
+                .shadow(4.dp, ThumbShape, clip = false)
+                .clip(ThumbShape)
                 .background(Color.White)
         )
 
-        // Full hit area
         Box(
             modifier = Modifier
                 .matchParentSize()

@@ -30,11 +30,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.BlurOn
-import androidx.compose.material.icons.rounded.GridView
-import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material.icons.rounded.SystemUpdate
-import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -50,7 +45,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,7 +58,7 @@ import com.voidlauncher.app.viewmodel.LauncherUiState
 private val SettingsCardBg = Color(0xFF1C1F26)
 private val SettingsChipBg = Color(0xFF2A2E38)
 private val SettingsDivider = Color(0x14FFFFFF)
-private val CardShape = RoundedCornerShape(28.dp)
+private val CardShape = RoundedCornerShape(36.dp)
 
 private enum class SettingsPage { Root, LiquidGlass, HomeLayout, Updates, General }
 
@@ -235,14 +229,12 @@ private fun RootPage(
 ) {
     SettingsGroup(label = "Appearance") {
         NavRow(
-            icon = Icons.Rounded.BlurOn,
             title = "Liquid Glass",
             subtitle = "Blur, frost, refraction",
             onClick = { onOpen(SettingsPage.LiquidGlass) },
             showDivider = true
         )
         NavRow(
-            icon = Icons.Rounded.GridView,
             title = "Home Screen",
             subtitle = "Icons, labels, grid",
             onClick = { onOpen(SettingsPage.HomeLayout) },
@@ -252,7 +244,6 @@ private fun RootPage(
 
     SettingsGroup(label = "System") {
         NavRow(
-            icon = Icons.Rounded.SystemUpdate,
             title = "Updates",
             subtitle = "v${updateState.currentVersion}" +
                 (updateState.available?.let { " · ${it.versionName} available" } ?: ""),
@@ -260,14 +251,12 @@ private fun RootPage(
             showDivider = true
         )
         NavRow(
-            icon = Icons.Rounded.Vibration,
             title = "General",
             subtitle = "Haptics & behavior",
             onClick = { onOpen(SettingsPage.General) },
             showDivider = true
         )
         NavRow(
-            icon = Icons.Rounded.Info,
             title = "About",
             subtitle = "${state.apps.size} apps · ${state.hiddenCount} hidden",
             onClick = { },
@@ -400,11 +389,6 @@ private fun UpdatesPage(
             showDivider = true
         )
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Icon(Icons.Rounded.SystemUpdate, null, tint = IosBlue)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Installed v${updateState.currentVersion}",
@@ -423,7 +407,6 @@ private fun UpdatesPage(
                 if (updateState.checking) {
                     CircularProgressIndicator(color = IosBlue, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
                 }
-            }
 
             if (updateState.downloading) {
                 Spacer(modifier = Modifier.height(12.dp))
@@ -518,7 +501,6 @@ private fun SettingsGroup(
 
 @Composable
 private fun NavRow(
-    icon: ImageVector,
     title: String,
     subtitle: String,
     onClick: () -> Unit,
@@ -530,19 +512,10 @@ private fun NavRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(enabled = enabled, onClick = onClick)
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .padding(horizontal = 18.dp, vertical = 15.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(IosBlue.copy(alpha = 0.18f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(icon, null, tint = IosBlue, modifier = Modifier.size(20.dp))
-            }
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleMedium, color = VoidMist)
                 Text(
@@ -564,7 +537,7 @@ private fun NavRow(
             HorizontalDivider(
                 color = SettingsDivider,
                 thickness = 0.5.dp,
-                modifier = Modifier.padding(start = 64.dp)
+                modifier = Modifier.padding(start = 18.dp)
             )
         }
     }
@@ -685,7 +658,7 @@ private fun ActionChip(
         color = fg,
         textAlign = TextAlign.Center,
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(percent = 40))
             .background(bg)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(vertical = 12.dp)
