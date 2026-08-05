@@ -4,6 +4,7 @@ import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
@@ -14,9 +15,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,9 +34,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.voidlauncher.app.SettingsActivity
 import com.voidlauncher.app.data.AppInfo
@@ -55,7 +61,6 @@ fun HomeScreen(
     var editMode by remember { mutableStateOf(false) }
 
     Box(modifier = modifier.fillMaxSize()) {
-        // Empty-home gestures (under UI chrome)
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -105,14 +110,13 @@ fun HomeScreen(
                         modifier = Modifier.fillMaxWidth(),
                         contentAlignment = Alignment.Center
                     ) {
-                        GlassPanel(
+                        Box(
                             modifier = Modifier
                                 .width(48.dp)
-                                .height(5.dp),
-                            cornerRadius = 99.dp,
-                            enableSheen = false,
-                            enableRefraction = true
-                        ) {}
+                                .height(5.dp)
+                                .clip(CircleShape)
+                                .background(VoidMist.copy(alpha = 0.35f))
+                        )
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                 }
@@ -122,35 +126,32 @@ fun HomeScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp)
-                        .padding(bottom = 12.dp),
+                        .padding(bottom = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     GlassPanel(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .pointerInput(Unit) {
-                                detectTapGestures {
-                                    context.startActivity(
-                                        Intent(context, SettingsActivity::class.java)
-                                    )
-                                    editMode = false
-                                }
-                            },
-                        cornerRadius = 28.dp,
+                        modifier = Modifier.size(56.dp),
+                        cornerRadius = 18.dp,
                         strong = true,
-                        enableSheen = true,
-                        enableRefraction = true
+                        enableSheen = false,
+                        enableRefraction = false
                     ) {
-                        Text(
-                            text = "Settings",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = VoidMist,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 18.dp)
-                        )
+                        IconButton(
+                            onClick = {
+                                context.startActivity(
+                                    Intent(context, SettingsActivity::class.java)
+                                )
+                                editMode = false
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Settings,
+                                contentDescription = "Settings",
+                                tint = VoidMist,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
                     }
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
@@ -158,7 +159,6 @@ fun HomeScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = VoidMuted
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
 
