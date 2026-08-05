@@ -23,6 +23,9 @@ android {
             storePassword = "void-ota-store"
             keyAlias = "void"
             keyPassword = "void-ota-store"
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
         }
     }
 

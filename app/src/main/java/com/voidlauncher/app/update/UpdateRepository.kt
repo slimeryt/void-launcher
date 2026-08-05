@@ -69,39 +69,81 @@ class UpdateRepository(private val context: Context) {
         val outFile = File(dir, UpdateConfig.APK_ASSET_NAME)
         if (outFile.exists()) outFile.delete()
 
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            instanceFollowRedirects = true
-            connectTimeout = 20_000
-            readTimeout = 60_000
-            setRequestProperty("User-Agent", UpdateConfig.USER_AGENT)
-            setRequestProperty("Accept", "application/octet-stream")
-        }
-
-        connection.connect()
-        if (connection.responseCode !in 200..299) {
-            throw IllegalStateException("Download failed (${connection.responseCode})")
-        }
-
-        val total = connection.contentLengthLong.coerceAtLeast(0L)
-        BufferedInputStream(connection.inputStream).use { input ->
-            FileOutputStream(outFile).use { output ->
-                val buffer = ByteArray(8192)
-                var readTotal = 0L
-                while (true) {
-                    val read = input.read(buffer)
-                    if (read < 0) break
-                    output.write(buffer, 0, read)
-                    readTotal += read
-                    if (total > 0L) {
-                        onProgress((readTotal.toFloat() / total.toFloat()).coerceIn(0f, 1f))
-                    }
-                }
-                output.flush()
+        val connection = openDownload(url)
+        try {
+            val code = connection.responseCode
+            if (code !in 200..299) {
+                throw IllegalStateException("Download failed ($code)")
             }
+            val total = connection.contentLengthLong.coerceAtLeast(0L)
+            BufferedInputStream(connection.inputStream).use { input ->
+                FileOutputStream(outFile).use { output ->
+                    val buffer = ByteArray(8192)
+                    var readTotal = 0L
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        output.write(buffer, 0, read)
+                        readTotal += read
+                        if (total > 0L) {
+                            onProgress((readTotal.toFloat() / total.toFloat()).coerceIn(0f, 1f))
+                        }
+                    }
+                    output.flush()
+                }
+            }
+            // Reject HTML/error bodies that some hosts return as 200
+            if (outFile.length() < 64_000L || !isZipApk(outFile)) {
+                outFile.delete()
+                throw IllegalStateException("Downloaded file is not a valid APK")
+            }
+            onProgress(1f)
+            outFile
+        } finally {
+            connection.disconnect()
         }
-        connection.disconnect()
-        onProgress(1f)
-        outFile
+    }
+
+    /** Follow redirects manually — Android HttpURLConnection can mishandle GitHub CDN hops. */
+    private fun openDownload(startUrl: String): HttpURLConnection {
+        var current = startUrl
+        repeat(8) {
+            val connection = (URL(current).openConnection() as HttpURLConnection).apply {
+                instanceFollowRedirects = false
+                connectTimeout = 20_000
+                readTimeout = 120_000
+                setRequestProperty("User-Agent", UpdateConfig.USER_AGENT)
+                setRequestProperty("Accept", "application/octet-stream,*/*")
+            }
+            connection.connect()
+            val code = connection.responseCode
+            if (code in listOf(301, 302, 303, 307, 308)) {
+                val next = connection.getHeaderField("Location")
+                    ?: connection.getHeaderField("location")
+                connection.disconnect()
+                if (next.isNullOrBlank()) {
+                    throw IllegalStateException("Download redirect missing Location")
+                }
+                current = if (next.startsWith("http")) next else URL(URL(current), next).toString()
+                return@repeat
+            }
+            return connection
+        }
+        throw IllegalStateException("Too many download redirects")
+    }
+
+    private fun isZipApk(file: File): Boolean {
+        return runCatching {
+            file.inputStream().use { input ->
+                val magic = ByteArray(4)
+                if (input.read(magic) != 4) return false
+                // ZIP / APK local file header: PK\x03\x04
+                magic[0] == 0x50.toByte() &&
+                    magic[1] == 0x4B.toByte() &&
+                    magic[2] == 0x03.toByte() &&
+                    magic[3] == 0x04.toByte()
+            }
+        }.getOrDefault(false)
     }
 
     private fun fetchLatestRelease(): ReleaseInfo? {
