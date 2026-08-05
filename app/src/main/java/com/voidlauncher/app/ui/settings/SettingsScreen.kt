@@ -341,7 +341,8 @@ private fun LiquidGlassPage(
             valueLabel = "${(state.glassBlurStrength * 100).toInt()}%",
             value = state.glassBlurStrength,
             onValueChange = onGlassBlurChange,
-            valueRange = 0.5f..1.6f,
+            // Down to 0 so "minimum" is actually clear glass, not a mandatory blur floor.
+            valueRange = 0f..1.6f,
             showDivider = true
         )
         SliderBlock(
@@ -349,7 +350,7 @@ private fun LiquidGlassPage(
             valueLabel = "${(state.glassFrostAmount * 100).toInt()}%",
             value = state.glassFrostAmount,
             onValueChange = onGlassFrostChange,
-            valueRange = 0.4f..1.5f,
+            valueRange = 0f..1.5f,
             showDivider = false
         )
     }
