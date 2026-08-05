@@ -122,8 +122,9 @@ class WallpaperBlurController(
         val vibrancy = applyVibrancy(scaled)
         if (vibrancy !== scaled) scaled.recycle()
 
-        // Strong blur — liquid glass depth
-        val blurred = StackBlur.blur(vibrancy, radius = 28)
+        // Default liquid-glass blur ≈ 10% of the blur buffer's short side
+        val blurRadius = (minOf(targetW, targetH) * 0.10f).roundToInt().coerceIn(8, 64)
+        val blurred = StackBlur.blur(vibrancy, radius = blurRadius)
         if (blurred !== vibrancy) vibrancy.recycle()
 
         return BlurredWallpaper(

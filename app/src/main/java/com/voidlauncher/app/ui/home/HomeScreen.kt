@@ -33,7 +33,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -126,12 +125,12 @@ fun HomeScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 16.dp),
+                        .padding(bottom = 28.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     GlassPanel(
                         modifier = Modifier.size(56.dp),
-                        cornerRadius = 18.dp,
+                        cornerRadius = 28.dp, // fully circular
                         strong = true,
                         enableSheen = false,
                         enableRefraction = false
@@ -162,15 +161,19 @@ fun HomeScreen(
                 }
             }
 
-            DockBar(
-                apps = state.dockApps,
-                iconScale = state.iconScale,
-                onAppClick = { if (!editMode) onLaunchApp(it) },
-                onAppLongClick = { if (!editMode) onAppLongClick(it) },
-                modifier = Modifier
-                    .padding(bottom = 20.dp)
-                    .alpha(if (editMode) 0.45f else 1f)
-            )
+            AnimatedVisibility(
+                visible = !editMode,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                DockBar(
+                    apps = state.dockApps,
+                    iconScale = state.iconScale,
+                    onAppClick = onLaunchApp,
+                    onAppLongClick = onAppLongClick,
+                    modifier = Modifier.padding(bottom = 20.dp)
+                )
+            }
         }
     }
 }
