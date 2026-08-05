@@ -1,10 +1,5 @@
 package com.voidlauncher.app.ui.components
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -24,12 +19,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
@@ -48,33 +41,17 @@ fun AppIcon(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
-    squircle: Boolean = true,
     editMode: Boolean = false,
     onRemove: (() -> Unit)? = null
 ) {
     val iconSize = (58 * iconScale).dp
     val imageBitmap = remember(app.key) {
-        app.icon.toCachedBitmap(maxSize = 192).asImageBitmap()
-    }
-    val wiggle = remember { Animatable(0f) }
-    LaunchedEffect(editMode) {
-        if (editMode) {
-            wiggle.animateTo(
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(120, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
-                )
-            )
-        } else {
-            wiggle.snapTo(0f)
-        }
+        app.icon.toCachedBitmap(maxSize = 192, cornerRadiusRatio = 0.24f).asImageBitmap()
     }
 
     Column(
         modifier = modifier
             .width(80.dp)
-            .rotate(if (editMode) (wiggle.value - 0.5f) * 4f else 0f)
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -93,10 +70,7 @@ fun AppIcon(
                 filterQuality = FilterQuality.High,
                 modifier = Modifier
                     .size(iconSize)
-                    .then(
-                        if (squircle) Modifier.clip(IosSquircle)
-                        else Modifier
-                    )
+                    .clip(AppIconShape)
             )
             if (editMode && onRemove != null) {
                 Box(

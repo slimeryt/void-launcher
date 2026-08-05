@@ -26,8 +26,8 @@ object LiquidRefractionShader {
             float edge = smoothstep(0.15, 1.05, sqrt(r2));
             float breathe = 1.0 + 0.015 * sin(time * 1.1);
             // Warp mostly near edges; center almost untouched
-            float k = amount * breathe * edge;
-            c *= 1.0 + k * r2;
+            float k = amount * breathe * (0.35 + 0.65 * edge);
+            c *= 1.0 + k * r2 + 0.35 * k * r2 * r2;
             return clamp(c * 0.5 + 0.5, 0.0, 1.0);
         }
 

@@ -19,6 +19,9 @@ val VoidGlassBorder = Color(0x66FFFFFF)
 val VoidInk = Color(0xFF05060A)
 val VoidMist = Color(0xE6F4F7FA)
 val VoidMuted = Color(0xB3D1D5DB)
+/** iOS system blue for Done-style glass pills. */
+val IosBlue = Color(0xFF0A84FF)
+val IosBlueGlass = Color(0x990A84FF)
 
 private val VoidColorScheme = darkColorScheme(
     primary = VoidCyan,

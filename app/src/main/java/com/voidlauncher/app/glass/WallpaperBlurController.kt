@@ -191,11 +191,11 @@ class WallpaperBlurController(
             colorFilter = ColorMatrixColorFilter(matrix)
         }
         canvas.drawBitmap(src, 0f, 0f, paint)
-        // Soft white frost wash baked into the blur buffer
+        // Very light lift so glass stays clear / readable
         canvas.drawRect(
             Rect(0, 0, src.width, src.height),
             Paint().apply {
-                color = 0x22FFFFFF
+                color = 0x10FFFFFF
             }
         )
         return out

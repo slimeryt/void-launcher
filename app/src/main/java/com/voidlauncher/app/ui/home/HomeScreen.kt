@@ -70,12 +70,12 @@ import com.voidlauncher.app.SettingsActivity
 import com.voidlauncher.app.data.AppInfo
 import com.voidlauncher.app.data.HomeItem
 import com.voidlauncher.app.ui.components.AppIcon
+import com.voidlauncher.app.ui.components.AppIconShape
 import com.voidlauncher.app.ui.components.DockBar
 import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.components.HomeClock
-import com.voidlauncher.app.ui.components.IosSquircle
 import com.voidlauncher.app.ui.components.toCachedBitmap
-import com.voidlauncher.app.ui.theme.VoidCyan
+import com.voidlauncher.app.ui.theme.IosBlueGlass
 import com.voidlauncher.app.ui.theme.VoidMist
 import com.voidlauncher.app.ui.theme.VoidMuted
 import com.voidlauncher.app.viewmodel.LauncherUiState
@@ -118,8 +118,8 @@ fun HomeScreen(
             .fillMaxSize()
             .pointerInput(state.isEditMode) {
                 detectTapGestures(
-                    onLongPress = { onEditModeChange(true) },
-                    onTap = { if (state.isEditMode) onEditModeChange(false) }
+                    onLongPress = { onEditModeChange(true) }
+                    // Cancel / Done only — no tap-empty to exit
                 )
             }
             .pointerInput(state.isEditMode, state.isDrawerOpen) {
@@ -146,30 +146,37 @@ fun HomeScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 if (state.isEditMode) {
+                    EditPillButton(
+                        label = "Cancel",
+                        onClick = { onEditModeChange(false) },
+                        modifier = Modifier.align(Alignment.CenterStart)
+                    )
                     Row(
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .padding(top = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Edit", style = MaterialTheme.typography.titleMedium, color = VoidCyan)
                         IconButton(onClick = onAddPage) {
                             Icon(Icons.Rounded.Add, contentDescription = "Add page", tint = VoidMist)
                         }
+                        EditPillButton(
+                            label = "Done",
+                            onClick = { onEditModeChange(false) },
+                            blue = true
+                        )
                     }
                 }
             }
 
             if (!state.isEditMode) {
-                Spacer(modifier = Modifier.height(40.dp))
+                Spacer(modifier = Modifier.height(32.dp))
                 HomeClock()
                 Spacer(modifier = Modifier.height(12.dp))
             } else {
-                Spacer(modifier = Modifier.height(48.dp))
+                Spacer(modifier = Modifier.height(12.dp))
             }
 
             HorizontalPager(
@@ -309,27 +316,60 @@ fun HomeScreen(
                 }
             }
 
-            // Search pill (page 0) ↔ page dots (other pages / multi-page swipe)
+            // Shared glass wrapper: search icon ↔ page dots
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 10.dp),
                 contentAlignment = Alignment.Center
             ) {
-                val showDots = pageCount > 1 && pagerState.currentPage > 0
-                AnimatedContent(
-                    targetState = showDots,
-                    transitionSpec = { fadeIn() togetherWith fadeOut() },
-                    label = "pill-dots"
-                ) { dots ->
-                    if (dots) {
-                        PageDots(
-                            pageCount = pageCount,
-                            current = pagerState.currentPage,
-                            onDotClick = { scope.launch { pagerState.animateScrollToPage(it) } }
-                        )
-                    } else {
-                        SearchPill(onClick = onOpenDrawerSearch)
+                if (!state.isEditMode) {
+                    val showDots = pageCount > 1 && pagerState.currentPage > 0
+                    GlassPanel(
+                        modifier = Modifier
+                            .height(28.dp)
+                            .then(if (showDots) Modifier.padding(horizontal = 4.dp) else Modifier.width(56.dp))
+                            .clickable(
+                                enabled = !showDots,
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = onOpenDrawerSearch
+                            ),
+                        cornerRadius = 99.dp,
+                        strong = true,
+                        enableSheen = false,
+                        enableRefraction = true
+                    ) {
+                        AnimatedContent(
+                            targetState = showDots,
+                            transitionSpec = { fadeIn() togetherWith fadeOut() },
+                            label = "pill-dots"
+                        ) { dots ->
+                            if (dots) {
+                                PageDots(
+                                    pageCount = pageCount,
+                                    current = pagerState.currentPage,
+                                    onDotClick = {
+                                        scope.launch { pagerState.animateScrollToPage(it) }
+                                    },
+                                    modifier = Modifier.padding(horizontal = 12.dp)
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .width(56.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Search,
+                                        contentDescription = "Search",
+                                        tint = VoidMuted,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -346,11 +386,11 @@ fun HomeScreen(
                     modifier = Modifier.padding(bottom = 20.dp)
                 )
             } else {
-                Column(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 28.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    contentAlignment = Alignment.Center
                 ) {
                     GlassPanel(
                         modifier = Modifier.size(56.dp),
@@ -362,7 +402,6 @@ fun HomeScreen(
                         IconButton(
                             onClick = {
                                 context.startActivity(Intent(context, SettingsActivity::class.java))
-                                onEditModeChange(false)
                             },
                             modifier = Modifier.fillMaxSize()
                         ) {
@@ -374,12 +413,6 @@ fun HomeScreen(
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = "Tap empty space to finish",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = VoidMuted
-                    )
                 }
             }
         }
@@ -387,11 +420,15 @@ fun HomeScreen(
 }
 
 @Composable
-private fun SearchPill(onClick: () -> Unit) {
+private fun EditPillButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    blue: Boolean = false
+) {
     GlassPanel(
-        modifier = Modifier
-            .width(56.dp)
-            .height(24.dp)
+        modifier = modifier
+            .height(32.dp)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -400,18 +437,17 @@ private fun SearchPill(onClick: () -> Unit) {
         cornerRadius = 99.dp,
         strong = true,
         enableSheen = false,
-        enableRefraction = true
+        enableRefraction = !blue,
+        tint = if (blue) IosBlueGlass else Color.Transparent
     ) {
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+        Box(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = Icons.Rounded.Search,
-                contentDescription = "Search",
-                tint = VoidMuted,
-                modifier = Modifier.size(14.dp)
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = VoidMist
             )
         }
     }
@@ -421,12 +457,13 @@ private fun SearchPill(onClick: () -> Unit) {
 private fun PageDots(
     pageCount: Int,
     current: Int,
-    onDotClick: (Int) -> Unit
+    onDotClick: (Int) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.height(28.dp)
+        modifier = modifier
     ) {
         repeat(pageCount) { i ->
             Box(
@@ -468,7 +505,7 @@ private fun FolderIcon(
         Box(
             modifier = Modifier
                 .size(size)
-                .clip(IosSquircle)
+                .clip(AppIconShape)
                 .background(Color(0x66FFFFFF))
                 .padding(6.dp)
         ) {
@@ -486,13 +523,13 @@ private fun FolderIcon(
                                     filterQuality = FilterQuality.Low,
                                     modifier = Modifier
                                         .size(cell)
-                                        .clip(IosSquircle)
+                                        .clip(AppIconShape)
                                 )
                             } else {
                                 Box(
                                     modifier = Modifier
                                         .size(cell)
-                                        .clip(IosSquircle)
+                                        .clip(AppIconShape)
                                         .background(Color(0x33FFFFFF))
                                 )
                             }
