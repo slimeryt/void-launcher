@@ -8,6 +8,7 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
 import android.graphics.RenderEffect as AndroidRenderEffect
+import android.graphics.Shader
 import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
@@ -50,16 +51,14 @@ import androidx.compose.ui.unit.dp
 import com.voidlauncher.app.glass.LiquidRefractionShader
 import com.voidlauncher.app.glass.LocalBlurredWallpaper
 import com.voidlauncher.app.ui.theme.VoidCyan
-import com.voidlauncher.app.ui.theme.VoidGlass
 import com.voidlauncher.app.ui.theme.VoidGlassBorder
-import com.voidlauncher.app.ui.theme.VoidGlassStrong
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
- * Live liquid glass: clear wallpaper sample + visible refraction.
- * AGSL (API 33+) with Offscreen compositing; CPU lens+CA fallback always readable.
+ * Live liquid glass: blurred wallpaper sample + refraction.
+ * Stack-blur buffer + GPU blur (API 31+) so frost always reads.
  */
 @Composable
 fun GlassPanel(
@@ -68,7 +67,6 @@ fun GlassPanel(
     strong: Boolean = false,
     enableSheen: Boolean = true,
     enableRefraction: Boolean = true,
-    /** Optional wash on top of glass (e.g. iOS blue for Done). */
     tint: Color = Color.Transparent,
     content: @Composable BoxScope.() -> Unit
 ) {
@@ -133,30 +131,44 @@ fun GlassPanel(
                 shape = shape
             )
     ) {
-        // Wallpaper + refraction (must be Offscreen for RuntimeShader RenderEffect)
         Box(
             modifier = Modifier
                 .matchParentSize()
-                .then(
-                    if (runtimeShader != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        Modifier.graphicsLayer {
-                            compositingStrategy = CompositingStrategy.Offscreen
+                .graphicsLayer {
+                    compositingStrategy = CompositingStrategy.Offscreen
+                    val blurPx = if (strong) 20f else 14f
+                    val blurEffect = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        AndroidRenderEffect.createBlurEffect(
+                            blurPx,
+                            blurPx,
+                            Shader.TileMode.CLAMP
+                        )
+                    } else {
+                        null
+                    }
+                    val shaderEffect =
+                        if (runtimeShader != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             LiquidRefractionShader.update(
                                 shader = runtimeShader,
                                 size = Size(size.width, size.height),
-                                intensity = if (strong) 0.28f else 0.22f,
-                                chromatic = if (strong) 0.020f else 0.014f,
+                                intensity = if (strong) 0.24f else 0.18f,
+                                chromatic = if (strong) 0.016f else 0.011f,
                                 frost = 0f,
                                 time = refractTime
                             )
-                            renderEffect = AndroidRenderEffect
-                                .createRuntimeShaderEffect(runtimeShader, "content")
-                                .asComposeRenderEffect()
+                            AndroidRenderEffect.createRuntimeShaderEffect(runtimeShader, "content")
+                        } else {
+                            null
                         }
-                    } else {
-                        Modifier
+                    renderEffect = when {
+                        shaderEffect != null && blurEffect != null ->
+                            AndroidRenderEffect.createChainEffect(shaderEffect, blurEffect)
+                                .asComposeRenderEffect()
+                        shaderEffect != null -> shaderEffect.asComposeRenderEffect()
+                        blurEffect != null -> blurEffect.asComposeRenderEffect()
+                        else -> null
                     }
-                )
+                }
                 .drawBehind {
                     val panel = coords
                     val wp = blurred
@@ -167,7 +179,7 @@ fun GlassPanel(
                     val scaleX = wp.bitmapWidth.toFloat() / wp.screenWidth.toFloat()
                     val scaleY = wp.bitmapHeight.toFloat() / wp.screenHeight.toFloat()
 
-                    val pad = if (enableRefraction) 0.12f else 0.02f
+                    val pad = if (enableRefraction) 0.10f else 0.02f
                     val srcX = ((pos.x - size.width * pad) * scaleX).roundToInt()
                         .coerceIn(0, (wp.bitmapWidth - 1).coerceAtLeast(0))
                     val srcY = ((pos.y - size.height * pad) * scaleY).roundToInt()
@@ -182,17 +194,17 @@ fun GlassPanel(
                         size.height.roundToInt().coerceAtLeast(1)
                     )
 
-                    if (enableRefraction) {
-                        val breathe = 1.08f + 0.035f * sin(refractTime.toDouble()).toFloat()
-                        val ca = 3.5f + 1.5f * cos(refractTime.toDouble()).toFloat()
+                    if (enableRefraction && runtimeShader == null) {
+                        val breathe = 1.06f + 0.025f * sin(refractTime.toDouble()).toFloat()
+                        val ca = 2.8f + 1.2f * cos(refractTime.toDouble()).toFloat()
                         withTransform({ scale(breathe, breathe, pivot = center) }) {
                             drawImage(
                                 image = wp.image,
                                 srcOffset = IntOffset(srcX, srcY),
                                 srcSize = IntSize(srcW, srcH),
-                                dstOffset = IntOffset((-ca).roundToInt(), (-ca * 0.3f).roundToInt()),
+                                dstOffset = IntOffset((-ca).roundToInt(), (-ca * 0.25f).roundToInt()),
                                 dstSize = dst,
-                                alpha = 0.40f
+                                alpha = 0.35f
                             )
                             drawImage(
                                 image = wp.image,
@@ -206,9 +218,9 @@ fun GlassPanel(
                                 image = wp.image,
                                 srcOffset = IntOffset(srcX, srcY),
                                 srcSize = IntSize(srcW, srcH),
-                                dstOffset = IntOffset(ca.roundToInt(), (ca * 0.3f).roundToInt()),
+                                dstOffset = IntOffset(ca.roundToInt(), (ca * 0.25f).roundToInt()),
                                 dstSize = dst,
-                                alpha = 0.40f
+                                alpha = 0.35f
                             )
                         }
                     } else {
@@ -224,7 +236,6 @@ fun GlassPanel(
                 }
         )
 
-        // Clear frost / sheen / tint — keep glass readable, not milky
         Box(
             modifier = Modifier
                 .matchParentSize()
@@ -234,22 +245,20 @@ fun GlassPanel(
                         drawRect(
                             brush = Brush.verticalGradient(
                                 colors = listOf(
-                                    Color.White.copy(alpha = if (strong) 0.12f else 0.07f),
-                                    Color.White.copy(alpha = if (strong) 0.05f else 0.03f),
-                                    Color.Transparent
+                                    Color.White.copy(alpha = if (strong) 0.20f else 0.12f),
+                                    Color.White.copy(alpha = if (strong) 0.10f else 0.06f),
+                                    Color.White.copy(alpha = 0.04f)
                                 )
                             )
                         )
-                        if (tint.alpha > 0.01f) {
-                            drawRect(tint)
-                        }
+                        if (tint.alpha > 0.01f) drawRect(tint)
                         if (enableSheen) {
                             val bandX = size.width * sheenShift
                             drawRect(
                                 brush = Brush.linearGradient(
                                     colors = listOf(
                                         Color.Transparent,
-                                        Color.White.copy(alpha = 0.18f),
+                                        Color.White.copy(alpha = 0.16f),
                                         Color.Transparent
                                     ),
                                     start = Offset(bandX - size.width * 0.2f, 0f),
@@ -261,8 +270,8 @@ fun GlassPanel(
                             brush = Brush.linearGradient(
                                 colors = listOf(
                                     Color.White.copy(alpha = 0.75f),
-                                    VoidCyan.copy(alpha = 0.25f),
-                                    Color.White.copy(alpha = 0.12f),
+                                    VoidCyan.copy(alpha = 0.22f),
+                                    Color.White.copy(alpha = 0.10f),
                                     Color.Black.copy(alpha = 0.22f)
                                 ),
                                 start = Offset.Zero,
@@ -282,20 +291,6 @@ fun GlassPanel(
                             )
                         )
                         if (tint.alpha > 0.01f) drawRect(tint)
-                        if (enableSheen) {
-                            val bandX = size.width * sheenShift
-                            drawRect(
-                                brush = Brush.linearGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        Color.White.copy(alpha = 0.14f),
-                                        Color.Transparent
-                                    ),
-                                    start = Offset(bandX - size.width * 0.2f, 0f),
-                                    end = Offset(bandX + size.width * 0.2f, size.height)
-                                )
-                            )
-                        }
                         drawRoundRect(
                             brush = Brush.linearGradient(
                                 colors = listOf(
@@ -352,7 +347,6 @@ fun Drawable.toCachedBitmap(maxSize: Int = 192, cornerRadiusRatio: Float = 0.22f
         }
     }
 
-    // Mask to rounded rect so the shape is baked in for every app
     val out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val outCanvas = AndroidCanvas(out)
     val paint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG)

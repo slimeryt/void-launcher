@@ -122,8 +122,8 @@ class WallpaperBlurController(
         val vibrancy = applyVibrancy(scaled)
         if (vibrancy !== scaled) scaled.recycle()
 
-        // Default liquid-glass blur ≈ 10% of the blur buffer's short side
-        val blurRadius = (minOf(targetW, targetH) * 0.10f).roundToInt().coerceIn(8, 64)
+        // Stronger liquid-glass blur so panels read frosted, not sharp wallpaper crops
+        val blurRadius = (minOf(targetW, targetH) * 0.22f).roundToInt().coerceIn(16, 120)
         val blurred = StackBlur.blur(vibrancy, radius = blurRadius)
         if (blurred !== vibrancy) vibrancy.recycle()
 
@@ -184,18 +184,17 @@ class WallpaperBlurController(
         val out = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
         val matrix = ColorMatrix().apply {
-            setSaturation(1.35f)
+            setSaturation(1.25f)
         }
-        // Lift midtones a touch
         val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG).apply {
             colorFilter = ColorMatrixColorFilter(matrix)
         }
         canvas.drawBitmap(src, 0f, 0f, paint)
-        // Very light lift so glass stays clear / readable
+        // Soft frost baked into blur buffer (helps glass read even if sample is sharp)
         canvas.drawRect(
             Rect(0, 0, src.width, src.height),
             Paint().apply {
-                color = 0x10FFFFFF
+                color = 0x28FFFFFF
             }
         )
         return out

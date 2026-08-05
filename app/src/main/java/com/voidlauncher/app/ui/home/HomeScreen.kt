@@ -2,8 +2,6 @@ package com.voidlauncher.app.ui.home
 
 import android.content.Intent
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -322,13 +320,18 @@ fun HomeScreen(
                 contentAlignment = Alignment.Center
             ) {
                 if (!state.isEditMode) {
-                    val showDots = pageCount > 1 && pagerState.currentPage > 0
+                    // Dominant visible page (offset-aware) so search/dots switch instantly —
+                    // not after pager settle (~1s delay with currentPage alone on some devices).
+                    val page = pagerState.currentPage
+                    val offset = pagerState.currentPageOffsetFraction
+                    val dominantPage = when {
+                        offset >= 0.5f -> page + 1
+                        offset <= -0.5f -> page - 1
+                        else -> page
+                    }.coerceIn(0, (pageCount - 1).coerceAtLeast(0))
+                    val showDots = pageCount > 1 && dominantPage > 0
                     val dotsWidth = (24 + pageCount * 14).dp
-                    val pillWidth by animateDpAsState(
-                        targetValue = if (showDots) dotsWidth.coerceAtLeast(56.dp) else 56.dp,
-                        animationSpec = tween(220),
-                        label = "pill-width"
-                    )
+                    val pillWidth = if (showDots) dotsWidth.coerceAtLeast(56.dp) else 56.dp
                     GlassPanel(
                         modifier = Modifier
                             .height(28.dp)
@@ -351,7 +354,7 @@ fun HomeScreen(
                             if (showDots) {
                                 PageDots(
                                     pageCount = pageCount,
-                                    current = pagerState.currentPage,
+                                    current = dominantPage,
                                     onDotClick = {
                                         scope.launch { pagerState.animateScrollToPage(it) }
                                     }
