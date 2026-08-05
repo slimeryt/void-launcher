@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "VoidLauncher"
+rootProject.name = "Polar"
 include(":app")

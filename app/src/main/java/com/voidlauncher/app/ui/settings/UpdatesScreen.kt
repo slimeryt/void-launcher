@@ -187,7 +187,7 @@ fun UpdatesScreen(
                     .background(UpdatesCardBg)
                     .padding(horizontal = 18.dp, vertical = 16.dp)
             ) {
-                VersionRow("Software version", "Void ${updateState.currentVersion}")
+                VersionRow("Software version", "Polar ${updateState.currentVersion}")
                 Spacer(modifier = Modifier.height(14.dp))
                 VersionRow("Version", updateState.currentVersion)
                 Spacer(modifier = Modifier.height(14.dp))

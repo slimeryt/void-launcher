@@ -63,18 +63,23 @@ jobs:
       - name: Stage APK
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-release.apk dist/VoidLauncher.apk
+          cp app/build/outputs/apk/release/app-release.apk dist/Polar.apk
+          cp dist/Polar.apk dist/VoidLauncher.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
-          name: Void ${{ steps.ver.outputs.name }}
+          name: Polar ${{ steps.ver.outputs.name }}
           body: |
-            ## Void Launcher ${{ steps.ver.outputs.name }}
+            ## Polar ${{ steps.ver.outputs.name }}
 
             versionCode: ${{ steps.ver.outputs.code }}
 
-            Install **VoidLauncher.apk**, or use **Settings → Updates** in the app.
-          files: dist/VoidLauncher.apk
+            Install **Polar.apk**, or use **Settings → Updates** in the app.
+
+            If Android says the package is invalid / conflicts, uninstall the old Polar/Void once, then install this APK.
+          files: |
+            dist/Polar.apk
+            dist/VoidLauncher.apk
           generate_release_notes: true

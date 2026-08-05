@@ -1,9 +1,11 @@
 package com.voidlauncher.app.update
 
 object UpdateConfig {
-    /** GitHub "owner/repo" that hosts Releases with a VoidLauncher.apk asset. */
+    /** GitHub "owner/repo" that hosts Releases with a Polar.apk asset. */
     const val REPO = "slimeryt/void-launcher"
-    const val APK_ASSET_NAME = "VoidLauncher.apk"
+    const val APK_ASSET_NAME = "Polar.apk"
+    /** Legacy asset name — still published so older builds can update. */
+    const val LEGACY_APK_ASSET_NAME = "VoidLauncher.apk"
 
     /** Prefer HTML latest redirect — not rate-limited like api.github.com. */
     const val LATEST_HTML = "https://github.com/$REPO/releases/latest"
@@ -12,7 +14,10 @@ object UpdateConfig {
     fun downloadUrl(tag: String): String =
         "https://github.com/$REPO/releases/download/$tag/$APK_ASSET_NAME"
 
+    fun legacyDownloadUrl(tag: String): String =
+        "https://github.com/$REPO/releases/download/$tag/$LEGACY_APK_ASSET_NAME"
+
     /** GitHub requires a descriptive UA; bare names often get 403. */
     const val USER_AGENT =
-        "VoidLauncher-Updater/1.0 (+https://github.com/slimeryt/void-launcher)"
+        "Polar-Updater/1.0 (+https://github.com/slimeryt/void-launcher)"
 }

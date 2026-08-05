@@ -1,52 +1,27 @@
-# Void Launcher
+# Polar
 
-A minimal glass-aesthetic Android home screen launcher inspired by Void Launcher.
-
-## Features
-
-- **Home screen** with live clock over your system wallpaper
-- **Live liquid glass** with wallpaper blur + lens refraction / chromatic CA
-- **Glass dock** with favorite apps
-- **Swipe-up app drawer** (swipe down to close) with search
-- **Long-press home** → edit mode → **Settings** (solid black activity)
-- **Settings** also has GitHub Releases auto-updater
-- Registers as a system **HOME** launcher
-- App icon opens the **launcher home** (not Settings)
+A minimal glass-aesthetic Android home screen launcher.
 
 ## Updates (OTA)
 
 Repo: [`slimeryt/void-launcher`](https://github.com/slimeryt/void-launcher)
 
-In the app: **Void (Settings) → Updates → Check / Download / Install**.
+In the app: **Polar (Settings) → Updates → Check / Download / Install**.
 
-Publish a build:
+Releases publish **Polar.apk** (and a legacy **VoidLauncher.apk** copy for older builds).
 
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
+### “Invalid package” / package conflicts
 
-Or run the **Release APK** GitHub Action manually. It uploads `VoidLauncher.apk` to a Release; the app installs that asset.
+That almost always means the installed build was signed with a different key than the GitHub APK.
 
-Release body should include `versionCode: N` (the workflow adds this automatically).
+1. Uninstall Polar/Void once  
+2. Install **Polar.apk** from the latest Release  
+3. After that, Settings → Updates works with the shared OTA key
 
-## Signing / OTA
+Or run the **Release APK** GitHub Action manually.
 
-All APKs are signed with `signing/void-ota.jks` (local + CI) so Updates can install over previous builds.
-
-If Android says the package conflicts, uninstall the old Void once, then install the new APK — after that, Settings → Updates works.
-
-## Gestures
+## Home
 
 | Action | Result |
-|--------|--------|
-| Swipe up on home | Open app drawer |
-| Swipe down in apps | Close drawer |
-| Long-press home | Edit mode → Settings |
-| Long-press icon | Favorite / hide / info |
-| Open Void app icon | Launcher home |
-| Long-press home → Settings | Solid-black settings + updater |
-
-## Stack
-
-Kotlin · Jetpack Compose · Material 3 · DataStore · minSdk 26
+|---|---|
+| Open Polar app icon | Launcher home |

@@ -232,18 +232,20 @@ class UpdateRepository(private val context: Context) {
             val assets = json.optJSONArray("assets") ?: return null
 
             var apkUrl: String? = null
+            var legacyUrl: String? = null
+            var anyApkUrl: String? = null
             for (i in 0 until assets.length()) {
                 val asset = assets.getJSONObject(i)
                 val name = asset.optString("name", "")
-                if (name.equals(UpdateConfig.APK_ASSET_NAME, ignoreCase = true) ||
-                    name.endsWith(".apk", ignoreCase = true)
-                ) {
-                    apkUrl = asset.optString("browser_download_url", null)
-                    if (name.equals(UpdateConfig.APK_ASSET_NAME, ignoreCase = true)) break
+                val url = asset.optString("browser_download_url", null) ?: continue
+                when {
+                    name.equals(UpdateConfig.APK_ASSET_NAME, ignoreCase = true) -> apkUrl = url
+                    name.equals(UpdateConfig.LEGACY_APK_ASSET_NAME, ignoreCase = true) -> legacyUrl = url
+                    name.endsWith(".apk", ignoreCase = true) && anyApkUrl == null -> anyApkUrl = url
                 }
             }
             if (apkUrl.isNullOrBlank()) {
-                apkUrl = UpdateConfig.downloadUrl(tag)
+                apkUrl = legacyUrl ?: anyApkUrl ?: UpdateConfig.downloadUrl(tag)
             }
 
             val versionName = tag.removePrefix("v").trim()

@@ -84,10 +84,15 @@ class SettingsActivity : ComponentActivity() {
                         onInstallUpdate = {
                             val apk = updateViewModel.state.value.downloadedApk
                             if (apk == null) return@SettingsContent
+                            val block = ApkInstaller.updateBlockReason(this, apk)
+                            if (block != null) {
+                                Toast.makeText(this, block, Toast.LENGTH_LONG).show()
+                                return@SettingsContent
+                            }
                             if (!ApkInstaller.canInstallPackages(this)) {
                                 Toast.makeText(
                                     this,
-                                    "Allow Void to install updates",
+                                    "Allow Polar to install updates",
                                     Toast.LENGTH_LONG
                                 ).show()
                                 startActivity(ApkInstaller.installPermissionSettingsIntent(this))

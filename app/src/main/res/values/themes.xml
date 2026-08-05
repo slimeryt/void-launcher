@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.VoidLauncher" parent="android:Theme.Material.NoActionBar">
+    <style name="Theme.Polar" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowShowWallpaper">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:colorBackgroundCacheHint">@null</item>
@@ -9,7 +9,7 @@
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
     </style>
 
-    <style name="Theme.VoidSettings" parent="android:Theme.Material.NoActionBar">
+    <style name="Theme.PolarSettings" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowShowWallpaper">false</item>
         <item name="android:windowBackground">@color/void_black</item>
         <item name="android:colorBackground">@color/void_black</item>

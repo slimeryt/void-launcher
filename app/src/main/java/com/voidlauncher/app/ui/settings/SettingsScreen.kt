@@ -114,7 +114,7 @@ fun SettingsContent(
     ) {
         SettingsHeader(
             title = when (page) {
-                SettingsPage.Root -> "Void"
+                SettingsPage.Root -> "Polar"
                 SettingsPage.LiquidGlass -> "Liquid Glass"
                 SettingsPage.HomeLayout -> "Home Screen"
                 SettingsPage.Updates -> "Updates"
