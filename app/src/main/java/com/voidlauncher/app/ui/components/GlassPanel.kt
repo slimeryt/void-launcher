@@ -140,7 +140,7 @@ fun GlassPanel(
                 .matchParentSize()
                 .graphicsLayer {
                     compositingStrategy = CompositingStrategy.Offscreen
-                    val blurPx = (if (strong) 36f else 26f) * glass.blurStrength
+                    val blurPx = (if (strong) 22f else 14f) * glass.blurStrength
                     val blurEffect = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         AndroidRenderEffect.createBlurEffect(
                             blurPx,
@@ -155,15 +155,18 @@ fun GlassPanel(
                             LiquidRefractionShader.update(
                                 shader = runtimeShader,
                                 size = Size(size.width, size.height),
-                                intensity = (if (strong) 0.20f else 0.14f) * glass.blurStrength.coerceAtMost(1.2f),
-                                chromatic = if (strong) 0.012f else 0.008f,
-                                frost = (if (strong) 0.55f else 0.40f) * glass.frostAmount,
-                                time = refractTime
+                                intensity = (if (strong) 0.85f else 0.65f) *
+                                    glass.blurStrength.coerceIn(0.6f, 1.4f),
+                                chromatic = if (strong) 0.018f else 0.012f,
+                                frost = (if (strong) 0.35f else 0.22f) * glass.frostAmount,
+                                time = refractTime,
+                                bezel = if (strong) 0.18f else 0.14f
                             )
                             AndroidRenderEffect.createRuntimeShaderEffect(runtimeShader, "content")
                         } else {
                             null
                         }
+                    // Blur backdrop first, then refract (so warp is visible)
                     renderEffect = when {
                         shaderEffect != null && blurEffect != null ->
                             AndroidRenderEffect.createChainEffect(shaderEffect, blurEffect)
@@ -183,7 +186,7 @@ fun GlassPanel(
                     val scaleX = wp.bitmapWidth.toFloat() / wp.screenWidth.toFloat()
                     val scaleY = wp.bitmapHeight.toFloat() / wp.screenHeight.toFloat()
 
-                    val pad = if (effectiveRefraction) 0.10f else 0.02f
+                    val pad = if (effectiveRefraction) 0.18f else 0.02f
                     val srcX = ((pos.x - size.width * pad) * scaleX).roundToInt()
                         .coerceIn(0, (wp.bitmapWidth - 1).coerceAtLeast(0))
                     val srcY = ((pos.y - size.height * pad) * scaleY).roundToInt()
@@ -247,14 +250,14 @@ fun GlassPanel(
                     val hasWp = blurred != null && coords != null
                     if (hasWp) {
                         val frost = glass.frostAmount
-                        // Opaque frost veil — less wallpaper bleed-through
-                        drawRect(Color.White.copy(alpha = (if (strong) 0.28f else 0.18f) * frost))
+                        // Light veil — keep refraction readable (was washing the warp out)
+                        drawRect(Color.White.copy(alpha = (if (strong) 0.10f else 0.06f) * frost))
                         drawRect(
                             brush = Brush.verticalGradient(
                                 colors = listOf(
-                                    Color.White.copy(alpha = (if (strong) 0.32f else 0.22f) * frost),
-                                    Color.White.copy(alpha = (if (strong) 0.18f else 0.12f) * frost),
-                                    Color.Black.copy(alpha = (if (strong) 0.10f else 0.06f) * frost)
+                                    Color.White.copy(alpha = (if (strong) 0.14f else 0.09f) * frost),
+                                    Color.White.copy(alpha = (if (strong) 0.06f else 0.04f) * frost),
+                                    Color.Black.copy(alpha = (if (strong) 0.05f else 0.03f) * frost)
                                 )
                             )
                         )

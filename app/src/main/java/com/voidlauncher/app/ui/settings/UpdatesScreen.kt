@@ -359,13 +359,13 @@ private fun UpdateDropletActions(
 }
 
 @Composable
-private fun DropletProgressBar(progress: Float) {
+private fun DropletProgressBar(progress: Float, segments: Int = 8) {
     val indeterminate = rememberInfiniteTransition(label = "search-bar")
     val sweep by indeterminate.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1100, easing = FastOutSlowInEasing),
+            animation = tween(1200, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "sweep"
@@ -374,27 +374,31 @@ private fun DropletProgressBar(progress: Float) {
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
-            .height(4.dp)
-            .clip(CircleShape)
+            .height(5.dp)
     ) {
-        drawRoundRect(
-            color = Color.White.copy(alpha = 0.22f),
-            cornerRadius = CornerRadius(size.height / 2f, size.height / 2f)
-        )
-        if (progress < 0f) {
-            val barW = size.width * 0.35f
-            val x = (size.width + barW) * sweep - barW
-            drawRoundRect(
-                color = Color.White.copy(alpha = 0.95f),
-                topLeft = Offset(x, 0f),
-                size = Size(barW, size.height),
-                cornerRadius = CornerRadius(size.height / 2f, size.height / 2f)
-            )
+        val gap = 3.dp.toPx()
+        val segW = ((size.width - gap * (segments - 1)) / segments).coerceAtLeast(1f)
+        val r = size.height / 2f
+        val filled = if (progress >= 0f) {
+            (progress.coerceIn(0f, 1f) * segments).toInt().coerceIn(0, segments)
         } else {
+            -1
+        }
+        val head = ((sweep * (segments + 3)).toInt())
+
+        for (i in 0 until segments) {
+            val x = i * (segW + gap)
+            val on = if (filled < 0) {
+                val d = (i - head + segments * 4) % (segments + 3)
+                d in 0..2
+            } else {
+                i < filled
+            }
             drawRoundRect(
-                color = Color.White,
-                size = Size(size.width * progress, size.height),
-                cornerRadius = CornerRadius(size.height / 2f, size.height / 2f)
+                color = if (on) Color.White else Color.White.copy(alpha = 0.22f),
+                topLeft = Offset(x, 0f),
+                size = Size(segW, size.height),
+                cornerRadius = CornerRadius(r, r)
             )
         }
     }
