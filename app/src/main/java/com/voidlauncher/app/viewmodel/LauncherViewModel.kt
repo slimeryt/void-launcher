@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.voidlauncher.app.data.AppInfo
 import com.voidlauncher.app.data.AppRepository
+import com.voidlauncher.app.data.HomeFolder
+import com.voidlauncher.app.data.HomeItem
 import com.voidlauncher.app.data.LauncherPreferences
 import com.voidlauncher.app.data.PreferencesRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,13 +15,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 data class LauncherUiState(
     val apps: List<AppInfo> = emptyList(),
+    val appsByKey: Map<String, AppInfo> = emptyMap(),
     val dockApps: List<AppInfo> = emptyList(),
     val filteredApps: List<AppInfo> = emptyList(),
+    val pages: List<List<HomeItem>> = listOf(emptyList()),
+    val folders: Map<String, HomeFolder> = emptyMap(),
     val searchQuery: String = "",
     val isDrawerOpen: Boolean = false,
+    val drawerFocusSearch: Boolean = false,
+    val isEditMode: Boolean = false,
     val isLoading: Boolean = true,
     val showLabels: Boolean = true,
     val gridColumns: Int = 4,
@@ -35,47 +43,44 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val allApps = MutableStateFlow<List<AppInfo>>(emptyList())
     private val searchQuery = MutableStateFlow("")
     private val isDrawerOpen = MutableStateFlow(false)
+    private val drawerFocusSearch = MutableStateFlow(false)
+    private val isEditMode = MutableStateFlow(false)
     private val isLoading = MutableStateFlow(true)
 
-    private data class TransientUi(
-        val apps: List<AppInfo>,
-        val query: String,
-        val drawerOpen: Boolean,
-        val loading: Boolean
-    )
-
-    private val transient = combine(
-        allApps,
-        searchQuery,
-        isDrawerOpen,
-        isLoading
-    ) { apps, query, drawerOpen, loading ->
-        TransientUi(apps, query, drawerOpen, loading)
-    }
-
     val state: StateFlow<LauncherUiState> = combine(
-        transient,
+        combine(allApps, searchQuery, isDrawerOpen) { a, q, d -> Triple(a, q, d) },
+        combine(drawerFocusSearch, isEditMode, isLoading) { f, e, l -> Triple(f, e, l) },
         prefsRepository.preferences
-    ) { ui, prefs ->
-        val visible = ui.apps.filterNot { it.key in prefs.hidden }
+    ) { t1, t2, prefs ->
+        val apps = t1.first
+        val query = t1.second
+        val drawerOpen = t1.third
+        val focusSearch = t2.first
+        val editMode = t2.second
+        val loading = t2.third
+
+        val visible = apps.filterNot { it.key in prefs.hidden }
+        val byKey = visible.associateBy { it.key }
         val dock = prefs.favorites
-            .mapNotNull { key -> visible.find { it.key == key } }
+            .mapNotNull { key -> byKey[key] }
             .take(5)
             .ifEmpty { visible.take(4) }
 
-        val filtered = if (ui.query.isBlank()) {
-            visible
-        } else {
-            visible.filter { it.label.contains(ui.query, ignoreCase = true) }
-        }
+        val filtered = if (query.isBlank()) visible
+        else visible.filter { it.label.contains(query, ignoreCase = true) }
 
         LauncherUiState(
             apps = visible,
+            appsByKey = byKey,
             dockApps = dock,
             filteredApps = filtered,
-            searchQuery = ui.query,
-            isDrawerOpen = ui.drawerOpen,
-            isLoading = ui.loading,
+            pages = prefs.pages.ifEmpty { listOf(emptyList()) },
+            folders = prefs.folders,
+            searchQuery = query,
+            isDrawerOpen = drawerOpen,
+            drawerFocusSearch = focusSearch,
+            isEditMode = editMode,
+            isLoading = loading,
             showLabels = prefs.showLabels,
             gridColumns = prefs.gridColumns,
             iconScale = prefs.iconScale,
@@ -88,12 +93,36 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     )
 
     private var prefsCache = LauncherPreferences()
+    private var seeded = false
 
     init {
         viewModelScope.launch {
-            prefsRepository.preferences.collect { prefsCache = it }
+            prefsRepository.preferences.collect { prefs ->
+                prefsCache = prefs
+                maybeSeedHome(prefs)
+            }
         }
         refreshApps()
+    }
+
+    private fun maybeSeedHome(prefs: LauncherPreferences) {
+        if (seeded) return
+        if (prefs.pages.any { it.isNotEmpty() }) {
+            seeded = true
+            return
+        }
+        val apps = allApps.value
+        if (apps.isEmpty()) return
+        seeded = true
+        val page = apps.filterNot { it.key in prefs.hidden }
+            .take(prefs.gridColumns * 5)
+            .map { HomeItem.App(it.key) }
+        viewModelScope.launch {
+            prefsRepository.setHomeLayout(listOf(page), prefs.folders)
+            if (prefs.favorites.isEmpty()) {
+                prefsRepository.setFavorites(apps.take(4).map { it.key }.toSet())
+            }
+        }
     }
 
     fun refreshApps() {
@@ -101,10 +130,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             isLoading.value = true
             allApps.value = appRepository.loadLaunchableApps()
             isLoading.value = false
+            maybeSeedHome(prefsCache)
         }
     }
 
     fun launchApp(app: AppInfo) {
+        if (isEditMode.value) return
         appRepository.launch(app)
         setDrawerOpen(false)
         setSearchQuery("")
@@ -121,12 +152,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun hideApp(app: AppInfo) {
         viewModelScope.launch {
             prefsRepository.setHidden(prefsCache.hidden + app.key)
-        }
-    }
-
-    fun unhideApp(appKey: String) {
-        viewModelScope.launch {
-            prefsRepository.setHidden(prefsCache.hidden - appKey)
+            removeAppFromHome(app.key)
         }
     }
 
@@ -134,9 +160,21 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         searchQuery.value = query
     }
 
-    fun setDrawerOpen(open: Boolean) {
+    fun setDrawerOpen(open: Boolean, focusSearch: Boolean = false) {
         isDrawerOpen.value = open
-        if (!open) searchQuery.value = ""
+        drawerFocusSearch.value = open && focusSearch
+        if (!open) {
+            searchQuery.value = ""
+            drawerFocusSearch.value = false
+        }
+    }
+
+    fun openDrawerSearch() {
+        setDrawerOpen(open = true, focusSearch = true)
+    }
+
+    fun setEditMode(edit: Boolean) {
+        isEditMode.value = edit
     }
 
     fun setShowLabels(show: Boolean) {
@@ -155,7 +193,99 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         appRepository.openAppInfo(app.packageName)
     }
 
-    fun uninstallApp(app: AppInfo) {
-        appRepository.uninstall(app.packageName)
+    fun addAppToHome(app: AppInfo, pageIndex: Int = 0) {
+        viewModelScope.launch {
+            val pages = prefsCache.pages.toMutableList().ifEmpty { mutableListOf(emptyList()) }
+            while (pages.size <= pageIndex) pages.add(emptyList())
+            val page = pages[pageIndex].toMutableList()
+            if (pages.any { p -> p.any { it is HomeItem.App && it.key == app.key } }) return@launch
+            page.add(HomeItem.App(app.key))
+            pages[pageIndex] = page
+            prefsRepository.setHomeLayout(pages, prefsCache.folders)
+        }
+    }
+
+    fun removeItemFromHome(pageIndex: Int, itemIndex: Int) {
+        viewModelScope.launch {
+            val pages = prefsCache.pages.toMutableList()
+            if (pageIndex !in pages.indices) return@launch
+            val page = pages[pageIndex].toMutableList()
+            if (itemIndex !in page.indices) return@launch
+            val removed = page.removeAt(itemIndex)
+            pages[pageIndex] = page
+            var folders = prefsCache.folders
+            if (removed is HomeItem.Folder) folders = folders - removed.id
+            while (pages.size > 1 && pages.last().isEmpty()) pages.removeAt(pages.lastIndex)
+            prefsRepository.setHomeLayout(pages, folders)
+        }
+    }
+
+    fun moveItem(fromPage: Int, fromIndex: Int, toPage: Int, toIndex: Int) {
+        viewModelScope.launch {
+            val pages = prefsCache.pages.map { it.toMutableList() }.toMutableList()
+            while (pages.size <= maxOf(fromPage, toPage)) pages.add(mutableListOf())
+            if (fromPage !in pages.indices || fromIndex !in pages[fromPage].indices) return@launch
+            val item = pages[fromPage].removeAt(fromIndex)
+            val dest = pages[toPage]
+            dest.add(toIndex.coerceIn(0, dest.size), item)
+            while (pages.size > 1 && pages.last().isEmpty()) pages.removeAt(pages.lastIndex)
+            prefsRepository.setHomeLayout(pages, prefsCache.folders)
+        }
+    }
+
+    fun swapItems(pageIndex: Int, a: Int, b: Int) {
+        viewModelScope.launch {
+            val pages = prefsCache.pages.toMutableList()
+            if (pageIndex !in pages.indices) return@launch
+            val page = pages[pageIndex].toMutableList()
+            if (a !in page.indices || b !in page.indices) return@launch
+            val tmp = page[a]
+            page[a] = page[b]
+            page[b] = tmp
+            pages[pageIndex] = page
+            prefsRepository.setHomeLayout(pages, prefsCache.folders)
+        }
+    }
+
+    fun createFolderFromDrop(pageIndex: Int, targetIndex: Int, draggedIndex: Int) {
+        viewModelScope.launch {
+            if (pageIndex !in prefsCache.pages.indices) return@launch
+            val page = prefsCache.pages[pageIndex].toMutableList()
+            if (targetIndex !in page.indices || draggedIndex !in page.indices) return@launch
+            if (targetIndex == draggedIndex) return@launch
+            val targetApp = (page[targetIndex] as? HomeItem.App)?.key ?: return@launch
+            val draggedApp = (page[draggedIndex] as? HomeItem.App)?.key ?: return@launch
+            val id = UUID.randomUUID().toString().take(8)
+            val folder = HomeFolder(id, "Folder", listOf(targetApp, draggedApp))
+            val high = maxOf(targetIndex, draggedIndex)
+            val low = minOf(targetIndex, draggedIndex)
+            page.removeAt(high)
+            page.removeAt(low)
+            page.add(low, HomeItem.Folder(id))
+            val pages = prefsCache.pages.toMutableList()
+            pages[pageIndex] = page
+            prefsRepository.setHomeLayout(pages, prefsCache.folders + (id to folder))
+        }
+    }
+
+    fun addPage() {
+        viewModelScope.launch {
+            prefsRepository.setHomeLayout(prefsCache.pages + listOf(emptyList()), prefsCache.folders)
+        }
+    }
+
+    private suspend fun removeAppFromHome(appKey: String) {
+        val folders = prefsCache.folders.mapValues { (_, f) ->
+            f.copy(appKeys = f.appKeys.filterNot { it == appKey })
+        }.filterValues { it.appKeys.isNotEmpty() }
+        val folderIds = folders.keys
+        val cleaned = prefsCache.pages.map { page ->
+            page.filterNot {
+                (it is HomeItem.App && it.key == appKey) ||
+                    (it is HomeItem.Folder && it.id !in folderIds)
+            }
+        }.toMutableList()
+        while (cleaned.size > 1 && cleaned.last().isEmpty()) cleaned.removeAt(cleaned.lastIndex)
+        prefsRepository.setHomeLayout(cleaned.ifEmpty { listOf(emptyList()) }, folders)
     }
 }

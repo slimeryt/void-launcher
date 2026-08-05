@@ -2,8 +2,10 @@ package com.voidlauncher.app.ui.components
 
 import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas
+import android.graphics.RenderEffect as AndroidRenderEffect
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.os.Build
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -27,7 +29,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -35,17 +40,18 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.voidlauncher.app.glass.LiquidRefractionShader
 import com.voidlauncher.app.glass.LocalBlurredWallpaper
 import com.voidlauncher.app.ui.theme.VoidCyan
 import com.voidlauncher.app.ui.theme.VoidGlass
 import com.voidlauncher.app.ui.theme.VoidGlassBorder
 import com.voidlauncher.app.ui.theme.VoidGlassStrong
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /**
- * Live liquid glass: samples blurred wallpaper at this panel's screen position,
- * then adds frost / specular / rim light. Refraction is a subtle edge highlight
- * only — no RGB ghosting or heavy lens warp (those looked like a stamped image).
+ * Live liquid glass with AGSL refraction (API 33+) of the wallpaper behind the panel.
+ * Pre-33 falls back to a mild zoom+offset sample so refraction still reads.
  */
 @Composable
 fun GlassPanel(
@@ -60,15 +66,33 @@ fun GlassPanel(
     var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val shape = RoundedCornerShape(cornerRadius)
 
-    val sheenShift by rememberInfiniteTransition(label = "sheen").animateFloat(
+    val transition = rememberInfiniteTransition(label = "liquid")
+    val sheenShift by transition.animateFloat(
         initialValue = -0.15f,
         targetValue = 1.15f,
         animationSpec = infiniteRepeatable(
             animation = tween(6400, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
-        label = "sheen-shift"
+        label = "sheen"
     )
+    val refractTime by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = (Math.PI * 2).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(7200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "refract-time"
+    )
+
+    val runtimeShader = remember(enableRefraction) {
+        if (enableRefraction && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            LiquidRefractionShader.create()
+        } else {
+            null
+        }
+    }
 
     Box(
         modifier = modifier
@@ -79,17 +103,36 @@ fun GlassPanel(
                 brush = Brush.linearGradient(
                     colors = listOf(
                         VoidGlassBorder,
-                        Color(0x33FFFFFF),
-                        Color(0x11FFFFFF)
+                        Color(0x44FFFFFF),
+                        Color(0x18FFFFFF)
                     )
                 ),
                 shape = shape
             )
     ) {
-        // matchParentSize = size to content, don't expand like fillMaxSize would
         Box(
             modifier = Modifier
                 .matchParentSize()
+                .then(
+                    if (runtimeShader != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        Modifier.graphicsLayer {
+                            LiquidRefractionShader.update(
+                                shader = runtimeShader,
+                                size = Size(size.width, size.height),
+                                // Stronger lens so wallpaper refraction reads clearly on dock/pill
+                                intensity = if (strong) 0.32f else 0.24f,
+                                chromatic = if (strong) 0.022f else 0.016f,
+                                frost = if (strong) 0.28f else 0.20f,
+                                time = refractTime
+                            )
+                            renderEffect = AndroidRenderEffect
+                                .createRuntimeShaderEffect(runtimeShader, "content")
+                                .asComposeRenderEffect()
+                        }
+                    } else {
+                        Modifier
+                    }
+                )
                 .drawBehind {
                     val panel = coords
                     val wp = blurred
@@ -98,58 +141,68 @@ fun GlassPanel(
                         val scaleX = wp.bitmapWidth.toFloat() / wp.screenWidth.toFloat()
                         val scaleY = wp.bitmapHeight.toFloat() / wp.screenHeight.toFloat()
 
-                        val srcX = (pos.x * scaleX).roundToInt()
+                        // Sample a slightly larger region so lens warp has pixels to pull from
+                        val pad = if (enableRefraction) 0.08f else 0f
+                        val srcX = ((pos.x - size.width * pad) * scaleX).roundToInt()
                             .coerceIn(0, (wp.bitmapWidth - 1).coerceAtLeast(0))
-                        val srcY = (pos.y * scaleY).roundToInt()
+                        val srcY = ((pos.y - size.height * pad) * scaleY).roundToInt()
                             .coerceIn(0, (wp.bitmapHeight - 1).coerceAtLeast(0))
-                        val srcW = (size.width * scaleX).roundToInt().coerceAtLeast(1)
+                        val srcW = ((size.width * (1f + pad * 2f)) * scaleX).roundToInt().coerceAtLeast(1)
                             .coerceAtMost((wp.bitmapWidth - srcX).coerceAtLeast(1))
-                        val srcH = (size.height * scaleY).roundToInt().coerceAtLeast(1)
+                        val srcH = ((size.height * (1f + pad * 2f)) * scaleY).roundToInt().coerceAtLeast(1)
                             .coerceAtMost((wp.bitmapHeight - srcY).coerceAtLeast(1))
 
-                        // Soft wallpaper sample (slightly expanded for frosted feel)
-                        drawImage(
-                            image = wp.image,
-                            srcOffset = IntOffset(srcX, srcY),
-                            srcSize = IntSize(srcW, srcH),
-                            dstOffset = IntOffset.Zero,
-                            dstSize = IntSize(
-                                size.width.roundToInt().coerceAtLeast(1),
-                                size.height.roundToInt().coerceAtLeast(1)
-                            ),
-                            alpha = 0.85f
+                        val dst = IntSize(
+                            size.width.roundToInt().coerceAtLeast(1),
+                            size.height.roundToInt().coerceAtLeast(1)
                         )
 
-                        // Heavy frost so it reads as glass, not a photo crop
-                        drawRect(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.White.copy(alpha = if (strong) 0.38f else 0.26f),
-                                    Color.White.copy(alpha = if (strong) 0.16f else 0.10f),
-                                    Color(0xFF0A0C12).copy(alpha = if (strong) 0.22f else 0.14f)
+                        val useCpuLens = enableRefraction && runtimeShader == null
+                        if (useCpuLens) {
+                            val zoom = 1.06f + 0.015f * sin(refractTime.toDouble()).toFloat()
+                            withTransform({
+                                scale(zoom, zoom, pivot = center)
+                            }) {
+                                drawImage(
+                                    image = wp.image,
+                                    srcOffset = IntOffset(srcX, srcY),
+                                    srcSize = IntSize(srcW, srcH),
+                                    dstOffset = IntOffset.Zero,
+                                    dstSize = dst,
+                                    alpha = 0.95f
                                 )
+                            }
+                            // Light frost only — keep warped wallpaper visible
+                            drawRect(Color.White.copy(alpha = if (strong) 0.18f else 0.12f))
+                        } else {
+                            drawImage(
+                                image = wp.image,
+                                srcOffset = IntOffset(srcX, srcY),
+                                srcSize = IntSize(srcW, srcH),
+                                dstOffset = IntOffset.Zero,
+                                dstSize = dst,
+                                alpha = 1f
                             )
-                        )
-
-                        // Specular
-                        drawRect(
-                            brush = Brush.verticalGradient(
-                                colorStops = arrayOf(
-                                    0.0f to Color.White.copy(alpha = 0.35f),
-                                    0.22f to Color.White.copy(alpha = 0.08f),
-                                    0.5f to Color.Transparent
+                            // When AGSL handles frost, keep overlay light
+                            if (runtimeShader == null) {
+                                drawRect(
+                                    brush = Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.White.copy(alpha = if (strong) 0.28f else 0.18f),
+                                            Color.White.copy(alpha = 0.08f)
+                                        )
+                                    )
                                 )
-                            ),
-                            size = Size(size.width, size.height * 0.5f)
-                        )
+                            }
+                        }
 
-                        if (enableSheen) {
+                        if (enableSheen && runtimeShader == null) {
                             val bandX = size.width * sheenShift
                             drawRect(
                                 brush = Brush.linearGradient(
                                     colors = listOf(
                                         Color.Transparent,
-                                        Color.White.copy(alpha = 0.12f),
+                                        Color.White.copy(alpha = 0.14f),
                                         Color.Transparent
                                     ),
                                     start = Offset(bandX - size.width * 0.2f, 0f),
@@ -158,24 +211,20 @@ fun GlassPanel(
                             )
                         }
 
-                        // Subtle refractive rim (no RGB split / lens warp)
-                        if (enableRefraction) {
-                            val stroke = 1.15.dp.toPx()
-                            drawRoundRect(
-                                brush = Brush.linearGradient(
-                                    colors = listOf(
-                                        Color.White.copy(alpha = 0.65f),
-                                        VoidCyan.copy(alpha = 0.18f),
-                                        Color.White.copy(alpha = 0.08f),
-                                        Color.Black.copy(alpha = 0.18f)
-                                    ),
-                                    start = Offset.Zero,
-                                    end = Offset(size.width, size.height)
+                        drawRoundRect(
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.7f),
+                                    VoidCyan.copy(alpha = 0.22f),
+                                    Color.White.copy(alpha = 0.1f),
+                                    Color.Black.copy(alpha = 0.2f)
                                 ),
-                                cornerRadius = CornerRadius(cornerRadius.toPx(), cornerRadius.toPx()),
-                                style = Stroke(width = stroke)
-                            )
-                        }
+                                start = Offset.Zero,
+                                end = Offset(size.width, size.height)
+                            ),
+                            cornerRadius = CornerRadius(cornerRadius.toPx(), cornerRadius.toPx()),
+                            style = Stroke(width = 1.2.dp.toPx())
+                        )
                     } else {
                         drawRect(
                             brush = Brush.verticalGradient(

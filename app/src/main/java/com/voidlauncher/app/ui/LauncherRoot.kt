@@ -24,8 +24,15 @@ fun LauncherRoot(
     onToggleFavorite: (AppInfo) -> Unit,
     onHideApp: (AppInfo) -> Unit,
     onAppInfo: (AppInfo) -> Unit,
+    onAddAppToHome: (AppInfo) -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onDrawerOpenChange: (Boolean) -> Unit,
+    onOpenDrawerSearch: () -> Unit,
+    onEditModeChange: (Boolean) -> Unit,
+    onRemoveHomeItem: (page: Int, index: Int) -> Unit,
+    onSwapHomeItems: (page: Int, a: Int, b: Int) -> Unit,
+    onCreateFolder: (page: Int, target: Int, dragged: Int) -> Unit,
+    onAddPage: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val systemUi = rememberSystemUiController()
@@ -41,6 +48,13 @@ fun LauncherRoot(
             onLaunchApp = onLaunchApp,
             onAppLongClick = { actionApp = it },
             onOpenDrawer = { onDrawerOpenChange(true) },
+            onOpenDrawerSearch = onOpenDrawerSearch,
+            onEditModeChange = onEditModeChange,
+            onRemoveHomeItem = onRemoveHomeItem,
+            onSwapHomeItems = onSwapHomeItems,
+            onCreateFolder = onCreateFolder,
+            onAddPage = onAddPage,
+            onAddAppToHome = { app, page -> onAddAppToHome(app) },
             modifier = Modifier.fillMaxSize()
         )
 
@@ -58,6 +72,7 @@ fun LauncherRoot(
             app = actionApp,
             onDismiss = { actionApp = null },
             onFavorite = onToggleFavorite,
+            onAddToHome = onAddAppToHome,
             onHide = onHideApp,
             onAppInfo = onAppInfo
         )

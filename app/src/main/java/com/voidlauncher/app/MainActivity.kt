@@ -50,8 +50,15 @@ class MainActivity : ComponentActivity() {
                         onToggleFavorite = viewModel::toggleFavorite,
                         onHideApp = viewModel::hideApp,
                         onAppInfo = viewModel::openAppInfo,
+                        onAddAppToHome = { viewModel.addAppToHome(it) },
                         onSearchQueryChange = viewModel::setSearchQuery,
-                        onDrawerOpenChange = viewModel::setDrawerOpen,
+                        onDrawerOpenChange = { viewModel.setDrawerOpen(it) },
+                        onOpenDrawerSearch = viewModel::openDrawerSearch,
+                        onEditModeChange = viewModel::setEditMode,
+                        onRemoveHomeItem = viewModel::removeItemFromHome,
+                        onSwapHomeItems = viewModel::swapItems,
+                        onCreateFolder = viewModel::createFolderFromDrop,
+                        onAddPage = viewModel::addPage,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -74,9 +81,11 @@ class MainActivity : ComponentActivity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (viewModel.state.value.isDrawerOpen) {
-            viewModel.setDrawerOpen(false)
-            return
+        val s = viewModel.state.value
+        when {
+            s.isDrawerOpen -> viewModel.setDrawerOpen(false)
+            s.isEditMode -> viewModel.setEditMode(false)
+            else -> { /* stay on home */ }
         }
     }
 }

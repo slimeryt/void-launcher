@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.VisibilityOff
@@ -37,6 +38,7 @@ fun AppActionsSheet(
     app: AppInfo?,
     onDismiss: () -> Unit,
     onFavorite: (AppInfo) -> Unit,
+    onAddToHome: (AppInfo) -> Unit,
     onHide: (AppInfo) -> Unit,
     onAppInfo: (AppInfo) -> Unit
 ) {
@@ -73,6 +75,14 @@ fun AppActionsSheet(
                 label = "Toggle dock favorite",
                 onClick = {
                     onFavorite(app)
+                    onDismiss()
+                }
+            )
+            ActionRow(
+                icon = Icons.Rounded.Home,
+                label = "Add to Home",
+                onClick = {
+                    onAddToHome(app)
                     onDismiss()
                 }
             )

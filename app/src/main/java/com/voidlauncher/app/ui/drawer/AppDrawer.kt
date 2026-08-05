@@ -38,15 +38,19 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import com.voidlauncher.app.data.AppInfo
 import com.voidlauncher.app.ui.components.AppIcon
@@ -70,6 +74,15 @@ fun AppDrawer(
 
     val gridState = rememberLazyGridState()
     var headerDrag by remember { mutableFloatStateOf(0f) }
+    val searchFocus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(visible, state.drawerFocusSearch) {
+        if (visible && state.drawerFocusSearch) {
+            searchFocus.requestFocus()
+            keyboard?.show()
+        }
+    }
 
     AnimatedVisibility(
         visible = visible,
@@ -180,7 +193,9 @@ fun AppDrawer(
                                 singleLine = true,
                                 cursorBrush = SolidColor(VoidCyan),
                                 textStyle = MaterialTheme.typography.titleMedium.copy(color = VoidMist),
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(searchFocus),
                                 decorationBox = { inner ->
                                     if (state.searchQuery.isEmpty()) {
                                         Text(
