@@ -7,7 +7,9 @@ import androidx.compose.ui.geometry.Size
 
 /**
  * AGSL liquid-glass refraction (API 33+).
- * Bezel convex warp + subtle full-panel liquid ripple so motion reads live.
+ * Static bezel convex warp — a fixed lens shape, like real glass. It does NOT
+ * animate on its own when idle; only the separate sheen highlight (driven from
+ * GlassPanel) moves, matching how physical/Apple-style Liquid Glass behaves.
  * Profile inspired by https://kube.io/blog/liquid-glass-css-svg
  */
 object LiquidRefractionShader {
@@ -33,13 +35,14 @@ object LiquidRefractionShader {
             float mid = 4.0 * t * (1.0 - t);
             float weight = rim * (0.4 + 0.6 * mid);
 
-            float breathe = 1.0 + 0.12 * sin(time * 1.4);
-            float mag = intensity * weight * breathe;
+            // Static magnitude — a fixed lens shape, not a breathing/rippling one.
+            float mag = intensity * weight;
 
             float2 toCenter = normalize(float2(0.5, 0.5) - uv + 0.0001);
-            // Full-panel ripple so refraction is obviously "live" even away from bezel
-            float ripple = sin(time * 2.2 + uv.x * 12.0 + uv.y * 9.0) * intensity * 0.045;
-            float2 base = uv - toCenter * mag + float2(ripple, -ripple * 0.7);
+            float2 base = uv - toCenter * mag;
+            // Sample stayed inside the panel's own content — no oversample needed,
+            // and no black/undefined edges from pulling past the source bounds.
+            base = clamp(base, float2(0.002), float2(0.998));
 
             float ca = chromatic * (weight + 0.35);
             half4 cR = content.eval((base + toCenter * ca) * resolution);
@@ -52,7 +55,8 @@ object LiquidRefractionShader {
                 color.rgb = mix(color.rgb, half3(0.94, 0.97, 1.0), half(frost) * 0.12);
             }
 
-            float spec = (weight + 0.15) * 0.16 * (0.55 + 0.45 * sin(time * 0.9 + uv.x * 7.0));
+            // Static rim highlight — brightest at the bezel, no time-based shimmer.
+            float spec = (weight + 0.15) * 0.16;
             color.rgb += half3(spec, spec, spec);
 
             return color;

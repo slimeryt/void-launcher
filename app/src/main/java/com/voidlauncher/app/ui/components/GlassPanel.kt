@@ -54,9 +54,7 @@ import com.voidlauncher.app.glass.LocalBlurredWallpaper
 import com.voidlauncher.app.glass.LocalGlassSettings
 import com.voidlauncher.app.ui.theme.VoidCyan
 import com.voidlauncher.app.ui.theme.VoidGlassBorder
-import kotlin.math.cos
 import kotlin.math.roundToInt
-import kotlin.math.sin
 
 /**
  * Live liquid glass: blurred wallpaper sample + refraction.
@@ -93,16 +91,6 @@ fun GlassPanel(
         ),
         label = "sheen"
     )
-    val refractTime by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = (Math.PI * 2).toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(4200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "refract-time"
-    )
-
     val runtimeShader = remember {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             runCatching { LiquidRefractionShader.create() }.getOrNull()
@@ -134,8 +122,8 @@ fun GlassPanel(
                 .matchParentSize()
                 .graphicsLayer {
                     compositingStrategy = CompositingStrategy.Offscreen
-                    // Read animated + settings values so this layer invalidates live
-                    val tick = refractTime
+                    // Refraction is a static lens shape — read settings values only, so this
+                    // layer invalidates when they change, not every animation frame.
                     val b = blurStrength
                     val f = frostAmount
                     val shaderOn = useShader
@@ -166,7 +154,7 @@ fun GlassPanel(
                                 intensity = (if (strong) 0.62f else 0.48f) * b.coerceIn(0.5f, 1.6f),
                                 chromatic = if (strong) 0.028f else 0.018f,
                                 frost = (if (strong) 0.22f else 0.12f) * f,
-                                time = tick,
+                                time = 0f,
                                 bezel = if (strong) 0.28f else 0.20f
                             )
                             AndroidRenderEffect.createRuntimeShaderEffect(runtimeShader, "content")
@@ -187,8 +175,8 @@ fun GlassPanel(
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val panel = coords
                 val wp = blurred
-                // Touch animated time so Canvas redraws with the CPU fallback / layout
-                val tick = refractTime
+                // Refraction is a static lens shape now, so this Canvas only needs to redraw
+                // on real changes (layout/settings) — no per-frame time dependency here.
                 if (wp == null || panel == null || !panel.isAttached || size.minDimension <= 2f) {
                     return@Canvas
                 }
@@ -196,7 +184,11 @@ fun GlassPanel(
                 val scaleX = wp.bitmapWidth.toFloat() / wp.screenWidth.toFloat()
                 val scaleY = wp.bitmapHeight.toFloat() / wp.screenHeight.toFloat()
 
-                val pad = if (effectiveRefraction) 0.22f else 0.02f
+                // Keep the sample 1:1 with the real wallpaper behind the panel. A bigger pad
+                // here shrank the source into the same dst size, i.e. zoomed it out — visibly
+                // misaligned vs. the true background. The shader clamps its own UV internally,
+                // so it no longer needs this oversample margin.
+                val pad = 0.02f
                 val srcX = ((pos.x - size.width * pad) * scaleX).roundToInt()
                     .coerceIn(0, (wp.bitmapWidth - 1).coerceAtLeast(0))
                 val srcY = ((pos.y - size.height * pad) * scaleY).roundToInt()
@@ -212,8 +204,10 @@ fun GlassPanel(
                 )
 
                 if (effectiveRefraction && !useShader) {
-                    val breathe = 1.08f + 0.04f * sin(tick.toDouble()).toFloat()
-                    val ca = 3.5f + 2.0f * cos(tick.toDouble()).toFloat()
+                    // Static lens zoom + chromatic offset — no idle breathing/wobbling
+                    // (pre-API33 CPU fallback for devices without AGSL RuntimeShader).
+                    val breathe = 1.08f
+                    val ca = 3.5f
                     withTransform({ scale(breathe, breathe, pivot = center) }) {
                         drawImage(
                             image = wp.image,
