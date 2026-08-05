@@ -57,7 +57,7 @@ class UpdateRepository(private val context: Context) {
             if (newer) UpdateCheckResult.Available(release)
             else UpdateCheckResult.UpToDate
         } catch (e: Exception) {
-            UpdateCheckResult.Error(e.message ?: "Update check failed")
+            UpdateCheckResult.Error(friendlyError(e))
         }
     }
 
@@ -105,15 +105,82 @@ class UpdateRepository(private val context: Context) {
     }
 
     private fun fetchLatestRelease(): ReleaseInfo? {
+        // HTML redirect first — avoids api.github.com rate-limit 403s
+        fetchViaLatestRedirect()?.let { return it }
+        return fetchViaApi()
+    }
+
+    /**
+     * `GET /releases/latest` → 302 to `/releases/tag/vX.Y.Z`.
+     * No API quota; works for public repos.
+     */
+    private fun fetchViaLatestRedirect(): ReleaseInfo? {
+        val connection = (URL(UpdateConfig.LATEST_HTML).openConnection() as HttpURLConnection).apply {
+            instanceFollowRedirects = false
+            connectTimeout = 15_000
+            readTimeout = 15_000
+            setRequestProperty("User-Agent", UpdateConfig.USER_AGENT)
+            setRequestProperty("Accept", "text/html")
+        }
+        try {
+            val code = connection.responseCode
+            val location = connection.getHeaderField("Location")
+                ?: connection.getHeaderField("location")
+            if (code !in listOf(301, 302, 303, 307, 308) || location.isNullOrBlank()) {
+                return null
+            }
+            val tag = Regex("""/releases/tag/([^/?#]+)""")
+                .find(location)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.trim()
+                ?: return null
+            val versionName = tag.removePrefix("v").trim()
+            if (versionName.isEmpty()) return null
+            return ReleaseInfo(
+                tagName = tag,
+                versionName = versionName,
+                // No release notes here — force semver compare (Gradle versionCode ≠ semver encode)
+                versionCode = 0,
+                apkUrl = UpdateConfig.downloadUrl(tag),
+                notes = "",
+                publishedAt = ""
+            )
+        } catch (_: Exception) {
+            return null
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun fetchViaApi(): ReleaseInfo? {
         val connection = (URL(UpdateConfig.LATEST_API).openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000
             readTimeout = 15_000
             setRequestProperty("User-Agent", UpdateConfig.USER_AGENT)
             setRequestProperty("Accept", "application/vnd.github+json")
+            setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
         }
         try {
-            if (connection.responseCode != 200) {
-                throw IllegalStateException("GitHub API ${connection.responseCode}")
+            val code = connection.responseCode
+            if (code == 403 || code == 429) {
+                throw IllegalStateException(
+                    "GitHub rate limit (API $code). Try again in a few minutes."
+                )
+            }
+            if (code != 200) {
+                val err = runCatching {
+                    (connection.errorStream ?: connection.inputStream)
+                        ?.bufferedReader()
+                        ?.use { it.readText() }
+                        ?.take(200)
+                }.getOrNull()
+                throw IllegalStateException(
+                    buildString {
+                        append("GitHub API $code")
+                        if (!err.isNullOrBlank()) append(": ").append(err)
+                    }
+                )
             }
             val body = connection.inputStream.bufferedReader().use { it.readText() }
             val json = JSONObject(body)
@@ -133,7 +200,9 @@ class UpdateRepository(private val context: Context) {
                     if (name.equals(UpdateConfig.APK_ASSET_NAME, ignoreCase = true)) break
                 }
             }
-            if (apkUrl.isNullOrBlank()) return null
+            if (apkUrl.isNullOrBlank()) {
+                apkUrl = UpdateConfig.downloadUrl(tag)
+            }
 
             val versionName = tag.removePrefix("v").trim()
             val versionCode = parseVersionCode(notes, versionName)
@@ -148,6 +217,16 @@ class UpdateRepository(private val context: Context) {
             )
         } finally {
             connection.disconnect()
+        }
+    }
+
+    private fun friendlyError(e: Exception): String {
+        val msg = e.message.orEmpty()
+        return when {
+            "403" in msg || "429" in msg || msg.contains("rate limit", ignoreCase = true) ->
+                "GitHub rate limit — wait a bit, then Check again"
+            msg.isNotBlank() -> msg
+            else -> "Update check failed"
         }
     }
 
@@ -167,6 +246,8 @@ class UpdateRepository(private val context: Context) {
         val major = parts.getOrElse(0) { 0 }
         val minor = parts.getOrElse(1) { 0 }
         val patch = parts.getOrElse(2) { 0 }
+        // Match our Gradle scheme: 0.2.6 → 1000+style was 1012; keep semver fallback
+        // Prefer encoded patch ladder used in releases when notes missing:
         return major * 1_000_000 + minor * 1_000 + patch
     }
 
