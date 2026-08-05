@@ -106,11 +106,13 @@ class PreferencesRepository(private val context: Context) {
     }
 
     suspend fun setGlassBlurStrength(value: Float) {
-        context.dataStore.edit { it[Keys.GlassBlur] = value.coerceIn(0.5f, 1.6f) }
+        // Must match the slider's valueRange in SettingsScreen.kt (0f..1.6f) — a tighter
+        // floor here silently snapped dragged values back up before persisting.
+        context.dataStore.edit { it[Keys.GlassBlur] = value.coerceIn(0f, 1.6f) }
     }
 
     suspend fun setGlassFrostAmount(value: Float) {
-        context.dataStore.edit { it[Keys.GlassFrost] = value.coerceIn(0.4f, 1.5f) }
+        context.dataStore.edit { it[Keys.GlassFrost] = value.coerceIn(0f, 1.5f) }
     }
 
     suspend fun setGlassRefraction(value: Boolean) {
