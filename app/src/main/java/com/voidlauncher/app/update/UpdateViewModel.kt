@@ -3,6 +3,8 @@ package com.voidlauncher.app.update
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,12 +32,16 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
     )
     val state: StateFlow<UpdateUiState> = _state.asStateFlow()
 
+    private var checkJob: Job? = null
+    private var downloadJob: Job? = null
+
     init {
         checkForUpdates(silent = true)
     }
 
     fun checkForUpdates(silent: Boolean = false) {
-        viewModelScope.launch {
+        checkJob?.cancel()
+        checkJob = viewModelScope.launch {
             _state.update {
                 it.copy(
                     checking = true,
@@ -77,9 +83,30 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun cancelUpdateAction() {
+        checkJob?.cancel()
+        checkJob = null
+        downloadJob?.cancel()
+        downloadJob = null
+        _state.update {
+            it.copy(
+                checking = false,
+                downloading = false,
+                progress = 0f,
+                statusMessage = if (it.available != null) {
+                    "Update ${it.available.versionName} available"
+                } else {
+                    "Check cancelled"
+                },
+                error = null
+            )
+        }
+    }
+
     fun downloadUpdate() {
         val release = _state.value.available ?: return
-        viewModelScope.launch {
+        downloadJob?.cancel()
+        downloadJob = viewModelScope.launch {
             _state.update {
                 it.copy(downloading = true, progress = 0f, error = null, statusMessage = "Downloading…")
             }
@@ -96,6 +123,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                     )
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _state.update {
                     it.copy(
                         downloading = false,

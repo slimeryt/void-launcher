@@ -78,6 +78,7 @@ fun SettingsContent(
     onGlassRefractionChange: (Boolean) -> Unit,
     onGlassSheenChange: (Boolean) -> Unit,
     onCheckUpdate: () -> Unit,
+    onCancelUpdate: () -> Unit,
     onDownloadUpdate: () -> Unit,
     onInstallUpdate: () -> Unit,
     onBack: () -> Unit,
@@ -88,6 +89,19 @@ fun SettingsContent(
     BackHandler {
         if (page != SettingsPage.Root) page = SettingsPage.Root
         else onBack()
+    }
+
+    if (page == SettingsPage.Updates) {
+        UpdatesScreen(
+            updateState = updateState,
+            onBack = { page = SettingsPage.Root },
+            onCheckUpdate = onCheckUpdate,
+            onCancelCheck = onCancelUpdate,
+            onDownloadUpdate = onDownloadUpdate,
+            onInstallUpdate = onInstallUpdate,
+            modifier = modifier.fillMaxSize()
+        )
+        return
     }
 
     Column(
@@ -157,14 +171,7 @@ fun SettingsContent(
                         onGridColumnsChange = onGridColumnsChange,
                         onIconScaleChange = onIconScaleChange
                     )
-                    SettingsPage.Updates -> UpdatesPage(
-                        updateState = updateState,
-                        autoCheck = state.autoCheckUpdates,
-                        onAutoCheckChange = onAutoCheckUpdatesChange,
-                        onCheckUpdate = onCheckUpdate,
-                        onDownloadUpdate = onDownloadUpdate,
-                        onInstallUpdate = onInstallUpdate
-                    )
+                    SettingsPage.Updates -> Unit
                     SettingsPage.General -> GeneralPage(
                         state = state,
                         onHapticChange = onHapticChange
@@ -369,89 +376,6 @@ private fun HomeLayoutPage(
             valueRange = 0.7f..1.3f,
             showDivider = false
         )
-    }
-}
-
-@Composable
-private fun UpdatesPage(
-    updateState: UpdateUiState,
-    autoCheck: Boolean,
-    onAutoCheckChange: (Boolean) -> Unit,
-    onCheckUpdate: () -> Unit,
-    onDownloadUpdate: () -> Unit,
-    onInstallUpdate: () -> Unit
-) {
-    SettingsGroup(label = "GitHub Releases") {
-        ToggleRow(
-            title = "Auto-check",
-            subtitle = "Check on open",
-            checked = autoCheck,
-            onCheckedChange = onAutoCheckChange,
-            showDivider = true
-        )
-        Column(modifier = Modifier.padding(16.dp)) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Installed v${updateState.currentVersion}",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = VoidMist
-                    )
-                    Text(
-                        text = updateState.error
-                            ?: updateState.statusMessage.ifBlank { "Auto-checks GitHub Releases" },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (updateState.error != null) Color(0xFFF87171) else VoidMuted,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                if (updateState.checking) {
-                    CircularProgressIndicator(color = IosBlue, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
-                }
-
-            if (updateState.downloading) {
-                Spacer(modifier = Modifier.height(12.dp))
-                LinearProgressIndicator(
-                    progress = { updateState.progress },
-                    modifier = Modifier.fillMaxWidth().clip(CircleShape),
-                    color = IosBlue,
-                    trackColor = VoidMuted.copy(alpha = 0.2f)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                ActionChip(
-                    label = "Check",
-                    enabled = !updateState.checking && !updateState.downloading,
-                    onClick = onCheckUpdate,
-                    modifier = Modifier.weight(1f)
-                )
-                when {
-                    updateState.downloadedApk != null -> ActionChip(
-                        label = "Install", enabled = true, filled = true,
-                        onClick = onInstallUpdate, modifier = Modifier.weight(1f)
-                    )
-                    updateState.available != null -> ActionChip(
-                        label = "Download", enabled = !updateState.downloading, filled = true,
-                        onClick = onDownloadUpdate, modifier = Modifier.weight(1f)
-                    )
-                    else -> ActionChip(
-                        label = "Up to date", enabled = false,
-                        onClick = {}, modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-
-            updateState.available?.let { release ->
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = "Latest: v${release.versionName}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = IosBlue
-                )
-            }
-        }
     }
 }
 

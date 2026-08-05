@@ -53,6 +53,7 @@ class SettingsActivity : ComponentActivity() {
                     onGlassRefractionChange = viewModel::setGlassRefraction,
                     onGlassSheenChange = viewModel::setGlassSheen,
                     onCheckUpdate = { updateViewModel.checkForUpdates(silent = false) },
+                    onCancelUpdate = updateViewModel::cancelUpdateAction,
                     onDownloadUpdate = updateViewModel::downloadUpdate,
                     onInstallUpdate = {
                         val apk = updateViewModel.state.value.downloadedApk
