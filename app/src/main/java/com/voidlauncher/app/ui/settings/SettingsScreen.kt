@@ -1,5 +1,12 @@
 package com.voidlauncher.app.ui.settings
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -15,28 +22,35 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.BlurOn
+import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.SystemUpdate
+import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -49,6 +63,10 @@ import com.voidlauncher.app.viewmodel.LauncherUiState
 
 private val SettingsCardBg = Color(0xFF1C1F26)
 private val SettingsChipBg = Color(0xFF2A2E38)
+private val SettingsDivider = Color(0x14FFFFFF)
+private val CardShape = RoundedCornerShape(28.dp)
+
+private enum class SettingsPage { Root, LiquidGlass, HomeLayout, Updates, General }
 
 @Composable
 fun SettingsContent(
@@ -57,243 +75,589 @@ fun SettingsContent(
     onShowLabelsChange: (Boolean) -> Unit,
     onGridColumnsChange: (Int) -> Unit,
     onIconScaleChange: (Float) -> Unit,
+    onDockLabelsChange: (Boolean) -> Unit,
+    onHapticChange: (Boolean) -> Unit,
+    onAutoCheckUpdatesChange: (Boolean) -> Unit,
+    onGlassBlurChange: (Float) -> Unit,
+    onGlassFrostChange: (Float) -> Unit,
+    onGlassRefractionChange: (Boolean) -> Unit,
+    onGlassSheenChange: (Boolean) -> Unit,
     onCheckUpdate: () -> Unit,
     onDownloadUpdate: () -> Unit,
     onInstallUpdate: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var page by remember { mutableStateOf(SettingsPage.Root) }
+
+    BackHandler {
+        if (page != SettingsPage.Root) page = SettingsPage.Root
+        else onBack()
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(VoidInk)
             .statusBarsPadding()
             .navigationBarsPadding()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.padding(bottom = 4.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(SettingsCardBg)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onBack
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Back",
-                    tint = VoidMist,
-                    modifier = Modifier.size(22.dp)
-                )
+        SettingsHeader(
+            title = when (page) {
+                SettingsPage.Root -> "Void"
+                SettingsPage.LiquidGlass -> "Liquid Glass"
+                SettingsPage.HomeLayout -> "Home Screen"
+                SettingsPage.Updates -> "Updates"
+                SettingsPage.General -> "General"
+            },
+            subtitle = when (page) {
+                SettingsPage.Root -> "Launcher settings"
+                else -> null
+            },
+            onBack = {
+                if (page != SettingsPage.Root) page = SettingsPage.Root
+                else onBack()
             }
-            Column {
+        )
+
+        AnimatedContent(
+            targetState = page,
+            transitionSpec = {
+                if (targetState == SettingsPage.Root) {
+                    (slideInHorizontally { -it / 4 } + fadeIn()) togetherWith
+                        (slideOutHorizontally { it / 3 } + fadeOut())
+                } else {
+                    (slideInHorizontally { it / 3 } + fadeIn()) togetherWith
+                        (slideOutHorizontally { -it / 4 } + fadeOut())
+                }
+            },
+            label = "settings-page",
+            modifier = Modifier.fillMaxSize()
+        ) { current ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                when (current) {
+                    SettingsPage.Root -> RootPage(
+                        state = state,
+                        updateState = updateState,
+                        onOpen = { page = it }
+                    )
+                    SettingsPage.LiquidGlass -> LiquidGlassPage(
+                        state = state,
+                        onGlassBlurChange = onGlassBlurChange,
+                        onGlassFrostChange = onGlassFrostChange,
+                        onGlassRefractionChange = onGlassRefractionChange,
+                        onGlassSheenChange = onGlassSheenChange
+                    )
+                    SettingsPage.HomeLayout -> HomeLayoutPage(
+                        state = state,
+                        onShowLabelsChange = onShowLabelsChange,
+                        onDockLabelsChange = onDockLabelsChange,
+                        onGridColumnsChange = onGridColumnsChange,
+                        onIconScaleChange = onIconScaleChange
+                    )
+                    SettingsPage.Updates -> UpdatesPage(
+                        updateState = updateState,
+                        autoCheck = state.autoCheckUpdates,
+                        onAutoCheckChange = onAutoCheckUpdatesChange,
+                        onCheckUpdate = onCheckUpdate,
+                        onDownloadUpdate = onDownloadUpdate,
+                        onInstallUpdate = onInstallUpdate
+                    )
+                    SettingsPage.General -> GeneralPage(
+                        state = state,
+                        onHapticChange = onHapticChange
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsHeader(
+    title: String,
+    subtitle: String?,
+    onBack: () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(SettingsCardBg)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onBack
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                contentDescription = "Back",
+                tint = VoidMist,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+        Column {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineMedium,
+                color = VoidMist
+            )
+            if (subtitle != null) {
                 Text(
-                    text = "Void",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = VoidMist
-                )
-                Text(
-                    text = "Launcher settings",
+                    text = subtitle,
                     style = MaterialTheme.typography.bodyMedium,
                     color = VoidMuted
                 )
             }
         }
-
-        UpdateCard(
-            updateState = updateState,
-            onCheckUpdate = onCheckUpdate,
-            onDownloadUpdate = onDownloadUpdate,
-            onInstallUpdate = onInstallUpdate
-        )
-
-        SettingCard(title = "Show app labels") {
-            Switch(
-                checked = state.showLabels,
-                onCheckedChange = onShowLabelsChange,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = VoidInk,
-                    checkedTrackColor = IosBlue,
-                    uncheckedThumbColor = VoidMist,
-                    uncheckedTrackColor = VoidMuted.copy(alpha = 0.3f)
-                )
-            )
-        }
-
-        SettingCard(title = "Grid columns — ${state.gridColumns}") {
-            Slider(
-                value = state.gridColumns.toFloat(),
-                onValueChange = { onGridColumnsChange(it.toInt()) },
-                valueRange = 3f..6f,
-                steps = 2,
-                colors = SliderDefaults.colors(
-                    thumbColor = IosBlue,
-                    activeTrackColor = IosBlue,
-                    inactiveTrackColor = VoidMuted.copy(alpha = 0.25f)
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        SettingCard(title = "Icon scale — ${"%.0f".format(state.iconScale * 100)}%") {
-            Slider(
-                value = state.iconScale,
-                onValueChange = onIconScaleChange,
-                valueRange = 0.7f..1.3f,
-                colors = SliderDefaults.colors(
-                    thumbColor = IosBlue,
-                    activeTrackColor = IosBlue,
-                    inactiveTrackColor = VoidMuted.copy(alpha = 0.25f)
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "${state.apps.size} apps · ${state.hiddenCount} hidden",
-            style = MaterialTheme.typography.bodyMedium,
-            color = VoidMuted,
-            modifier = Modifier.padding(start = 8.dp)
-        )
-
-        Text(
-            text = "Swipe up on home for apps · long-press home to edit · drag to Remove to clear home icons",
-            style = MaterialTheme.typography.bodyMedium,
-            color = VoidMuted,
-            modifier = Modifier.padding(horizontal = 8.dp)
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
     }
 }
 
 @Composable
-private fun UpdateCard(
+private fun RootPage(
+    state: LauncherUiState,
     updateState: UpdateUiState,
+    onOpen: (SettingsPage) -> Unit
+) {
+    SettingsGroup(label = "Appearance") {
+        NavRow(
+            icon = Icons.Rounded.BlurOn,
+            title = "Liquid Glass",
+            subtitle = "Blur, frost, refraction",
+            onClick = { onOpen(SettingsPage.LiquidGlass) },
+            showDivider = true
+        )
+        NavRow(
+            icon = Icons.Rounded.GridView,
+            title = "Home Screen",
+            subtitle = "Icons, labels, grid",
+            onClick = { onOpen(SettingsPage.HomeLayout) },
+            showDivider = false
+        )
+    }
+
+    SettingsGroup(label = "System") {
+        NavRow(
+            icon = Icons.Rounded.SystemUpdate,
+            title = "Updates",
+            subtitle = "v${updateState.currentVersion}" +
+                (updateState.available?.let { " · ${it.versionName} available" } ?: ""),
+            onClick = { onOpen(SettingsPage.Updates) },
+            showDivider = true
+        )
+        NavRow(
+            icon = Icons.Rounded.Vibration,
+            title = "General",
+            subtitle = "Haptics & behavior",
+            onClick = { onOpen(SettingsPage.General) },
+            showDivider = true
+        )
+        NavRow(
+            icon = Icons.Rounded.Info,
+            title = "About",
+            subtitle = "${state.apps.size} apps · ${state.hiddenCount} hidden",
+            onClick = { },
+            showDivider = false,
+            enabled = false
+        )
+    }
+
+    Text(
+        text = "Swipe up on home for apps · long-press home to edit",
+        style = MaterialTheme.typography.bodyMedium,
+        color = VoidMuted,
+        modifier = Modifier.padding(horizontal = 8.dp)
+    )
+}
+
+@Composable
+private fun LiquidGlassPage(
+    state: LauncherUiState,
+    onGlassBlurChange: (Float) -> Unit,
+    onGlassFrostChange: (Float) -> Unit,
+    onGlassRefractionChange: (Boolean) -> Unit,
+    onGlassSheenChange: (Boolean) -> Unit
+) {
+    SettingsGroup(label = "Look") {
+        ToggleRow(
+            title = "Refraction",
+            subtitle = "Lens bend + chromatic edge",
+            checked = state.glassRefraction,
+            onCheckedChange = onGlassRefractionChange,
+            showDivider = true
+        )
+        ToggleRow(
+            title = "Sheen",
+            subtitle = "Moving highlight band",
+            checked = state.glassSheen,
+            onCheckedChange = onGlassSheenChange,
+            showDivider = false
+        )
+    }
+
+    SettingsGroup(label = "Intensity") {
+        SliderBlock(
+            title = "Blur strength",
+            valueLabel = "${(state.glassBlurStrength * 100).toInt()}%",
+            value = state.glassBlurStrength,
+            onValueChange = onGlassBlurChange,
+            valueRange = 0.5f..1.6f,
+            showDivider = true
+        )
+        SliderBlock(
+            title = "Frost amount",
+            valueLabel = "${(state.glassFrostAmount * 100).toInt()}%",
+            value = state.glassFrostAmount,
+            onValueChange = onGlassFrostChange,
+            valueRange = 0.4f..1.5f,
+            showDivider = false
+        )
+    }
+
+    Text(
+        text = "Changes apply live on the home screen dock, search pill, and folders.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = VoidMuted,
+        modifier = Modifier.padding(horizontal = 8.dp)
+    )
+}
+
+@Composable
+private fun HomeLayoutPage(
+    state: LauncherUiState,
+    onShowLabelsChange: (Boolean) -> Unit,
+    onDockLabelsChange: (Boolean) -> Unit,
+    onGridColumnsChange: (Int) -> Unit,
+    onIconScaleChange: (Float) -> Unit
+) {
+    SettingsGroup(label = "Labels") {
+        ToggleRow(
+            title = "App labels",
+            subtitle = "Show names under icons",
+            checked = state.showLabels,
+            onCheckedChange = onShowLabelsChange,
+            showDivider = true
+        )
+        ToggleRow(
+            title = "Dock labels",
+            subtitle = "Names on dock icons",
+            checked = state.dockLabels,
+            onCheckedChange = onDockLabelsChange,
+            showDivider = false
+        )
+    }
+
+    SettingsGroup(label = "Size & grid") {
+        SliderBlock(
+            title = "Grid columns",
+            valueLabel = "${state.gridColumns}",
+            value = state.gridColumns.toFloat(),
+            onValueChange = { onGridColumnsChange(it.toInt()) },
+            valueRange = 3f..6f,
+            steps = 2,
+            showDivider = true
+        )
+        SliderBlock(
+            title = "Icon scale",
+            valueLabel = "${(state.iconScale * 100).toInt()}%",
+            value = state.iconScale,
+            onValueChange = onIconScaleChange,
+            valueRange = 0.7f..1.3f,
+            showDivider = false
+        )
+    }
+}
+
+@Composable
+private fun UpdatesPage(
+    updateState: UpdateUiState,
+    autoCheck: Boolean,
+    onAutoCheckChange: (Boolean) -> Unit,
     onCheckUpdate: () -> Unit,
     onDownloadUpdate: () -> Unit,
     onInstallUpdate: () -> Unit
 ) {
-    SettingCard(title = "Updates") {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.SystemUpdate,
-                contentDescription = null,
-                tint = IosBlue
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Installed v${updateState.currentVersion}",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = VoidMist
+    SettingsGroup(label = "GitHub Releases") {
+        ToggleRow(
+            title = "Auto-check",
+            subtitle = "Check on open",
+            checked = autoCheck,
+            onCheckedChange = onAutoCheckChange,
+            showDivider = true
+        )
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(Icons.Rounded.SystemUpdate, null, tint = IosBlue)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Installed v${updateState.currentVersion}",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = VoidMist
+                    )
+                    Text(
+                        text = updateState.error
+                            ?: updateState.statusMessage.ifBlank { "Auto-checks GitHub Releases" },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (updateState.error != null) Color(0xFFF87171) else VoidMuted,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (updateState.checking) {
+                    CircularProgressIndicator(color = IosBlue, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+                }
+            }
+
+            if (updateState.downloading) {
+                Spacer(modifier = Modifier.height(12.dp))
+                LinearProgressIndicator(
+                    progress = { updateState.progress },
+                    modifier = Modifier.fillMaxWidth().clip(CircleShape),
+                    color = IosBlue,
+                    trackColor = VoidMuted.copy(alpha = 0.2f)
                 )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                ActionChip(
+                    label = "Check",
+                    enabled = !updateState.checking && !updateState.downloading,
+                    onClick = onCheckUpdate,
+                    modifier = Modifier.weight(1f)
+                )
+                when {
+                    updateState.downloadedApk != null -> ActionChip(
+                        label = "Install", enabled = true, filled = true,
+                        onClick = onInstallUpdate, modifier = Modifier.weight(1f)
+                    )
+                    updateState.available != null -> ActionChip(
+                        label = "Download", enabled = !updateState.downloading, filled = true,
+                        onClick = onDownloadUpdate, modifier = Modifier.weight(1f)
+                    )
+                    else -> ActionChip(
+                        label = "Up to date", enabled = false,
+                        onClick = {}, modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            updateState.available?.let { release ->
+                Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                    text = updateState.error
-                        ?: updateState.statusMessage.ifBlank { "Auto-checks GitHub Releases" },
+                    text = "Latest: v${release.versionName}",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = if (updateState.error != null) Color(0xFFF87171) else VoidMuted,
-                    maxLines = 3,
+                    color = IosBlue
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GeneralPage(
+    state: LauncherUiState,
+    onHapticChange: (Boolean) -> Unit
+) {
+    SettingsGroup(label = "Feedback") {
+        ToggleRow(
+            title = "Haptic feedback",
+            subtitle = "Vibrate on long-press & edit",
+            checked = state.hapticFeedback,
+            onCheckedChange = onHapticChange,
+            showDivider = false
+        )
+    }
+
+    SettingsGroup(label = "Stats") {
+        InfoRow("Apps", "${state.apps.size}", showDivider = true)
+        InfoRow("Hidden", "${state.hiddenCount}", showDivider = true)
+        InfoRow("Home pages", "${state.pages.size}", showDivider = false)
+    }
+}
+
+@Composable
+private fun SettingsGroup(
+    label: String,
+    content: @Composable () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = label.uppercase(),
+            style = MaterialTheme.typography.labelMedium,
+            color = VoidMuted,
+            modifier = Modifier.padding(start = 12.dp)
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(CardShape)
+                .background(SettingsCardBg)
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun NavRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    showDivider: Boolean,
+    enabled: Boolean = true
+) {
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = enabled, onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(IosBlue.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, null, tint = IosBlue, modifier = Modifier.size(20.dp))
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium, color = VoidMist)
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = VoidMuted,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            if (updateState.checking) {
-                CircularProgressIndicator(
-                    color = IosBlue,
-                    strokeWidth = 2.dp,
-                    modifier = Modifier.height(22.dp)
-                )
-            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                contentDescription = null,
+                tint = VoidMuted.copy(alpha = 0.7f),
+                modifier = Modifier.size(22.dp)
+            )
         }
+        if (showDivider) {
+            HorizontalDivider(
+                color = SettingsDivider,
+                thickness = 0.5.dp,
+                modifier = Modifier.padding(start = 64.dp)
+            )
+        }
+    }
+}
 
-        if (updateState.downloading) {
+@Composable
+private fun ToggleRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    showDivider: Boolean
+) {
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium, color = VoidMist)
+                Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = VoidMuted)
+            }
+            IosToggle(checked = checked, onCheckedChange = onCheckedChange)
+        }
+        if (showDivider) {
+            HorizontalDivider(
+                color = SettingsDivider,
+                thickness = 0.5.dp,
+                modifier = Modifier.padding(start = 16.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SliderBlock(
+    title: String,
+    valueLabel: String,
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    valueRange: ClosedFloatingPointRange<Float>,
+    showDivider: Boolean,
+    steps: Int = 0
+) {
+    Column {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(title, style = MaterialTheme.typography.titleMedium, color = VoidMist)
+                Text(valueLabel, style = MaterialTheme.typography.titleMedium, color = IosBlue)
+            }
             Spacer(modifier = Modifier.height(12.dp))
-            LinearProgressIndicator(
-                progress = { updateState.progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(CircleShape),
-                color = IosBlue,
-                trackColor = VoidMuted.copy(alpha = 0.2f)
-            )
-            Text(
-                text = "${(updateState.progress * 100).toInt()}%",
-                style = MaterialTheme.typography.bodyMedium,
-                color = VoidMuted,
-                modifier = Modifier.padding(top = 6.dp)
+            IosSlider(
+                value = value,
+                onValueChange = onValueChange,
+                valueRange = valueRange,
+                steps = steps
             )
         }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            ActionChip(
-                label = "Check",
-                enabled = !updateState.checking && !updateState.downloading,
-                onClick = onCheckUpdate,
-                modifier = Modifier.weight(1f)
-            )
-
-            when {
-                updateState.downloadedApk != null -> {
-                    ActionChip(
-                        label = "Install",
-                        enabled = true,
-                        filled = true,
-                        onClick = onInstallUpdate,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                updateState.available != null -> {
-                    ActionChip(
-                        label = "Download",
-                        enabled = !updateState.downloading,
-                        filled = true,
-                        onClick = onDownloadUpdate,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                else -> {
-                    ActionChip(
-                        label = "Up to date",
-                        enabled = false,
-                        onClick = {},
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-        }
-
-        updateState.available?.let { release ->
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = "Latest: v${release.versionName} (${release.tagName})",
-                style = MaterialTheme.typography.bodyMedium,
-                color = IosBlue
+        if (showDivider) {
+            HorizontalDivider(
+                color = SettingsDivider,
+                thickness = 0.5.dp,
+                modifier = Modifier.padding(start = 16.dp)
             )
         }
+    }
+}
 
-        Spacer(modifier = Modifier.height(10.dp))
-        Text(
-            text = "If install says “package conflicts”, uninstall Void once, then install this build. Later updates will work over-the-air.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = VoidMuted
-        )
+@Composable
+private fun InfoRow(title: String, value: String, showDivider: Boolean) {
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(title, style = MaterialTheme.typography.titleMedium, color = VoidMist)
+            Text(value, style = MaterialTheme.typography.titleMedium, color = VoidMuted)
+        }
+        if (showDivider) {
+            HorizontalDivider(
+                color = SettingsDivider,
+                thickness = 0.5.dp,
+                modifier = Modifier.padding(start = 16.dp)
+            )
+        }
     }
 }
 
@@ -321,31 +685,9 @@ private fun ActionChip(
         color = fg,
         textAlign = TextAlign.Center,
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(bg)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(vertical = 12.dp)
     )
-}
-
-@Composable
-private fun SettingCard(
-    title: String,
-    content: @Composable () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
-            .background(SettingsCardBg)
-            .padding(16.dp)
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            color = VoidMist
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        content()
-    }
 }

@@ -32,7 +32,14 @@ data class LauncherUiState(
     val showLabels: Boolean = true,
     val gridColumns: Int = 4,
     val iconScale: Float = 1f,
-    val hiddenCount: Int = 0
+    val hiddenCount: Int = 0,
+    val glassBlurStrength: Float = 1f,
+    val glassFrostAmount: Float = 1f,
+    val glassRefraction: Boolean = true,
+    val glassSheen: Boolean = true,
+    val dockLabels: Boolean = false,
+    val hapticFeedback: Boolean = true,
+    val autoCheckUpdates: Boolean = true
 )
 
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
@@ -84,7 +91,14 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             showLabels = prefs.showLabels,
             gridColumns = prefs.gridColumns,
             iconScale = prefs.iconScale,
-            hiddenCount = prefs.hidden.size
+            hiddenCount = prefs.hidden.size,
+            glassBlurStrength = prefs.glassBlurStrength,
+            glassFrostAmount = prefs.glassFrostAmount,
+            glassRefraction = prefs.glassRefraction,
+            glassSheen = prefs.glassSheen,
+            dockLabels = prefs.dockLabels,
+            hapticFeedback = prefs.hapticFeedback,
+            autoCheckUpdates = prefs.autoCheckUpdates
         )
     }.stateIn(
         scope = viewModelScope,
@@ -187,6 +201,34 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun setIconScale(scale: Float) {
         viewModelScope.launch { prefsRepository.setIconScale(scale) }
+    }
+
+    fun setGlassBlurStrength(value: Float) {
+        viewModelScope.launch { prefsRepository.setGlassBlurStrength(value) }
+    }
+
+    fun setGlassFrostAmount(value: Float) {
+        viewModelScope.launch { prefsRepository.setGlassFrostAmount(value) }
+    }
+
+    fun setGlassRefraction(value: Boolean) {
+        viewModelScope.launch { prefsRepository.setGlassRefraction(value) }
+    }
+
+    fun setGlassSheen(value: Boolean) {
+        viewModelScope.launch { prefsRepository.setGlassSheen(value) }
+    }
+
+    fun setDockLabels(value: Boolean) {
+        viewModelScope.launch { prefsRepository.setDockLabels(value) }
+    }
+
+    fun setHapticFeedback(value: Boolean) {
+        viewModelScope.launch { prefsRepository.setHapticFeedback(value) }
+    }
+
+    fun setAutoCheckUpdates(value: Boolean) {
+        viewModelScope.launch { prefsRepository.setAutoCheckUpdates(value) }
     }
 
     fun openAppInfo(app: AppInfo) {

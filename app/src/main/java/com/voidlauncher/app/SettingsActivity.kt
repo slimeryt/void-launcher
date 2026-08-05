@@ -45,6 +45,13 @@ class SettingsActivity : ComponentActivity() {
                     onShowLabelsChange = viewModel::setShowLabels,
                     onGridColumnsChange = viewModel::setGridColumns,
                     onIconScaleChange = viewModel::setIconScale,
+                    onDockLabelsChange = viewModel::setDockLabels,
+                    onHapticChange = viewModel::setHapticFeedback,
+                    onAutoCheckUpdatesChange = viewModel::setAutoCheckUpdates,
+                    onGlassBlurChange = viewModel::setGlassBlurStrength,
+                    onGlassFrostChange = viewModel::setGlassFrostAmount,
+                    onGlassRefractionChange = viewModel::setGlassRefraction,
+                    onGlassSheenChange = viewModel::setGlassSheen,
                     onCheckUpdate = { updateViewModel.checkForUpdates(silent = false) },
                     onDownloadUpdate = updateViewModel::downloadUpdate,
                     onInstallUpdate = {

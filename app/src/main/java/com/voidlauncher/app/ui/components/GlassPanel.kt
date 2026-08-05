@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.voidlauncher.app.glass.LiquidRefractionShader
 import com.voidlauncher.app.glass.LocalBlurredWallpaper
+import com.voidlauncher.app.glass.LocalGlassSettings
 import com.voidlauncher.app.ui.theme.VoidCyan
 import com.voidlauncher.app.ui.theme.VoidGlassBorder
 import kotlin.math.cos
@@ -71,10 +72,13 @@ fun GlassPanel(
     content: @Composable BoxScope.() -> Unit
 ) {
     val blurred = LocalBlurredWallpaper.current
+    val glass = LocalGlassSettings.current
+    val effectiveRefraction = enableRefraction && glass.refractionEnabled
+    val effectiveSheen = enableSheen && glass.sheenEnabled
     var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val shape = RoundedCornerShape(cornerRadius)
 
-    val needsMotion = enableSheen || enableRefraction
+    val needsMotion = effectiveSheen || effectiveRefraction
     val transition = if (needsMotion) {
         rememberInfiniteTransition(label = "liquid")
     } else {
@@ -107,8 +111,8 @@ fun GlassPanel(
         remember { mutableStateOf(0f) }
     }
 
-    val runtimeShader = remember(enableRefraction) {
-        if (enableRefraction && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    val runtimeShader = remember(effectiveRefraction) {
+        if (effectiveRefraction && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             runCatching { LiquidRefractionShader.create() }.getOrNull()
         } else {
             null
@@ -136,7 +140,7 @@ fun GlassPanel(
                 .matchParentSize()
                 .graphicsLayer {
                     compositingStrategy = CompositingStrategy.Offscreen
-                    val blurPx = if (strong) 36f else 26f
+                    val blurPx = (if (strong) 36f else 26f) * glass.blurStrength
                     val blurEffect = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         AndroidRenderEffect.createBlurEffect(
                             blurPx,
@@ -151,9 +155,9 @@ fun GlassPanel(
                             LiquidRefractionShader.update(
                                 shader = runtimeShader,
                                 size = Size(size.width, size.height),
-                                intensity = if (strong) 0.20f else 0.14f,
+                                intensity = (if (strong) 0.20f else 0.14f) * glass.blurStrength.coerceAtMost(1.2f),
                                 chromatic = if (strong) 0.012f else 0.008f,
-                                frost = if (strong) 0.55f else 0.40f,
+                                frost = (if (strong) 0.55f else 0.40f) * glass.frostAmount,
                                 time = refractTime
                             )
                             AndroidRenderEffect.createRuntimeShaderEffect(runtimeShader, "content")
@@ -179,7 +183,7 @@ fun GlassPanel(
                     val scaleX = wp.bitmapWidth.toFloat() / wp.screenWidth.toFloat()
                     val scaleY = wp.bitmapHeight.toFloat() / wp.screenHeight.toFloat()
 
-                    val pad = if (enableRefraction) 0.10f else 0.02f
+                    val pad = if (effectiveRefraction) 0.10f else 0.02f
                     val srcX = ((pos.x - size.width * pad) * scaleX).roundToInt()
                         .coerceIn(0, (wp.bitmapWidth - 1).coerceAtLeast(0))
                     val srcY = ((pos.y - size.height * pad) * scaleY).roundToInt()
@@ -194,7 +198,7 @@ fun GlassPanel(
                         size.height.roundToInt().coerceAtLeast(1)
                     )
 
-                    if (enableRefraction && runtimeShader == null) {
+                    if (effectiveRefraction && runtimeShader == null) {
                         val breathe = 1.06f + 0.025f * sin(refractTime.toDouble()).toFloat()
                         val ca = 2.8f + 1.2f * cos(refractTime.toDouble()).toFloat()
                         withTransform({ scale(breathe, breathe, pivot = center) }) {
@@ -242,19 +246,20 @@ fun GlassPanel(
                 .drawBehind {
                     val hasWp = blurred != null && coords != null
                     if (hasWp) {
+                        val frost = glass.frostAmount
                         // Opaque frost veil — less wallpaper bleed-through
-                        drawRect(Color.White.copy(alpha = if (strong) 0.28f else 0.18f))
+                        drawRect(Color.White.copy(alpha = (if (strong) 0.28f else 0.18f) * frost))
                         drawRect(
                             brush = Brush.verticalGradient(
                                 colors = listOf(
-                                    Color.White.copy(alpha = if (strong) 0.32f else 0.22f),
-                                    Color.White.copy(alpha = if (strong) 0.18f else 0.12f),
-                                    Color.Black.copy(alpha = if (strong) 0.10f else 0.06f)
+                                    Color.White.copy(alpha = (if (strong) 0.32f else 0.22f) * frost),
+                                    Color.White.copy(alpha = (if (strong) 0.18f else 0.12f) * frost),
+                                    Color.Black.copy(alpha = (if (strong) 0.10f else 0.06f) * frost)
                                 )
                             )
                         )
                         if (tint.alpha > 0.01f) drawRect(tint)
-                        if (enableSheen) {
+                        if (effectiveSheen) {
                             val bandX = size.width * sheenShift
                             drawRect(
                                 brush = Brush.linearGradient(

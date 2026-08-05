@@ -4,6 +4,8 @@ import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -80,6 +82,7 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.voidlauncher.app.SettingsActivity
 import com.voidlauncher.app.data.AppInfo
@@ -130,8 +133,13 @@ fun HomeScreen(
     var removeZone by remember { mutableStateOf(Rect.Zero) }
     var overRemove by remember { mutableStateOf(false) }
     var openFolderId by remember { mutableStateOf<String?>(null) }
+    var openFolderSource by remember { mutableStateOf(Rect.Zero) }
+    var folderClosing by remember { mutableStateOf(false) }
+    var folderBounds by remember { mutableStateOf<Map<String, Rect>>(emptyMap()) }
 
-    BackHandler(enabled = openFolderId != null) { openFolderId = null }
+    BackHandler(enabled = openFolderId != null) {
+        if (!folderClosing) folderClosing = true
+    }
     BackHandler(enabled = state.isEditMode && openFolderId == null) { onEditModeChange(false) }
 
     LaunchedEffect(state.isEditMode) {
@@ -142,6 +150,7 @@ fun HomeScreen(
             dragOffset = Offset.Zero
             overRemove = false
             openFolderId = null
+            folderClosing = false
         }
     }
 
@@ -447,12 +456,24 @@ fun HomeScreen(
                                                     if (item.id in selectedKeys) selectedKeys - item.id
                                                     else selectedKeys + item.id
                                             } else {
+                                                openFolderSource = folderBounds[item.id] ?: Rect.Zero
+                                                folderClosing = false
                                                 openFolderId = item.id
                                             }
                                         },
                                         onLongClick = { onEditModeChange(true) },
                                         modifier = Modifier
                                             .fillMaxWidth()
+                                            .onGloballyPositioned { coords ->
+                                                val pos = coords.positionInWindow()
+                                                val size = coords.size
+                                                folderBounds = folderBounds + (item.id to Rect(
+                                                    pos.x,
+                                                    pos.y,
+                                                    pos.x + size.width,
+                                                    pos.y + size.height
+                                                ))
+                                            }
                                             .then(
                                                 if (dragging) Modifier.offset {
                                                     IntOffset(
@@ -525,6 +546,7 @@ fun HomeScreen(
                 DockBar(
                     apps = state.dockApps,
                     iconScale = state.iconScale,
+                    showLabels = state.dockLabels,
                     onAppClick = onLaunchApp,
                     onAppLongClick = { app ->
                         onEditModeChange(true)
@@ -564,22 +586,20 @@ fun HomeScreen(
             }
         }
 
-        var displayedFolderId by remember { mutableStateOf<String?>(null) }
-        if (openFolderId != null) displayedFolderId = openFolderId
-
-        AnimatedVisibility(
-            visible = openFolderId != null,
-            enter = fadeIn(tween(200)) + scaleIn(initialScale = 0.82f, animationSpec = tween(280)),
-            exit = fadeOut(tween(160)) + scaleOut(targetScale = 0.88f, animationSpec = tween(220))
-        ) {
-            val folderId = displayedFolderId
-            val folder = folderId?.let { state.folders[it] }
+        openFolderId?.let { folderId ->
+            val folder = state.folders[folderId]
             if (folder != null) {
                 OpenFolderOverlay(
                     name = folder.name,
                     apps = folder.appKeys.mapNotNull { state.appsByKey[it] },
                     iconScale = state.iconScale,
-                    onDismiss = { openFolderId = null },
+                    sourceBounds = openFolderSource,
+                    closing = folderClosing,
+                    onRequestClose = { folderClosing = true },
+                    onCloseFinished = {
+                        openFolderId = null
+                        folderClosing = false
+                    },
                     onLaunchApp = onLaunchApp
                 )
             }
@@ -776,73 +796,126 @@ private fun OpenFolderOverlay(
     name: String,
     apps: List<AppInfo>,
     iconScale: Float,
-    onDismiss: () -> Unit,
+    sourceBounds: Rect,
+    closing: Boolean,
+    onRequestClose: () -> Unit,
+    onCloseFinished: () -> Unit,
     onLaunchApp: (AppInfo) -> Unit
 ) {
-    // Fixed shell — same size regardless of app count
     val panelWidth = 312.dp
     val titleBlock = 44.dp
     val gridHeight = 268.dp
     val panelHeight = titleBlock + gridHeight + 36.dp
+    val density = LocalDensity.current
+
+    var rootSize by remember { mutableStateOf(IntSize.Zero) }
+    var rootPos by remember { mutableStateOf(Offset.Zero) }
+
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(closing) {
+        if (!closing) {
+            progress.snapTo(0f)
+            progress.animateTo(1f, tween(340, easing = FastOutSlowInEasing))
+        } else {
+            progress.animateTo(0f, tween(280, easing = FastOutSlowInEasing))
+            onCloseFinished()
+        }
+    }
+
+    val t = progress.value
+    val panelWpx = with(density) { panelWidth.toPx() }
+    val panelHpx = with(density) { panelHeight.toPx() }
+    val destCx = rootPos.x + rootSize.width / 2f
+    val destCy = rootPos.y + rootSize.height / 2f
+    val srcCx = if (sourceBounds.width > 1f) sourceBounds.center.x else destCx
+    val srcCy = if (sourceBounds.height > 1f) sourceBounds.center.y else destCy
+    val srcScale = if (sourceBounds.width > 1f && panelWpx > 1f) {
+        (sourceBounds.width / panelWpx).coerceIn(0.12f, 0.95f)
+    } else {
+        0.35f
+    }
+    val scale = srcScale + (1f - srcScale) * t
+    val translateX = (srcCx - destCx) * (1f - t)
+    val translateY = (srcCy - destCy) * (1f - t)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.55f))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onDismiss
-            ),
-        contentAlignment = Alignment.Center
+            .onGloballyPositioned { coords ->
+                rootSize = coords.size
+                rootPos = coords.positionInWindow()
+            }
     ) {
-        GlassPanel(
+        Box(
             modifier = Modifier
-                .width(panelWidth)
-                .height(panelHeight)
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.55f * t))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = {}
-                ),
-            cornerRadius = 28.dp,
-            strong = true,
-            enableSheen = false,
-            enableRefraction = true
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp, vertical = 18.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = name,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = VoidMist,
-                    modifier = Modifier.height(titleBlock),
-                    maxLines = 1
+                    onClick = onRequestClose
                 )
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+        )
+
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            GlassPanel(
+                modifier = Modifier
+                    .width(panelWidth)
+                    .height(panelHeight)
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = translateX
+                        translationY = translateY
+                        alpha = (0.35f + 0.65f * t).coerceIn(0f, 1f)
+                    }
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {}
+                    ),
+                cornerRadius = 28.dp,
+                strong = true,
+                enableSheen = false,
+                enableRefraction = true
+            ) {
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(gridHeight)
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp, vertical = 18.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    items(apps.size) { i ->
-                        val app = apps[i]
-                        AppIcon(
-                            app = app,
-                            iconScale = iconScale * 0.92f,
-                            showLabel = true,
-                            onClick = {
-                                onDismiss()
-                                onLaunchApp(app)
-                            },
-                            onLongClick = {}
-                        )
+                    Text(
+                        text = name,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = VoidMist,
+                        modifier = Modifier.height(titleBlock),
+                        maxLines = 1
+                    )
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(gridHeight)
+                    ) {
+                        items(apps.size) { i ->
+                            val app = apps[i]
+                            AppIcon(
+                                app = app,
+                                iconScale = iconScale * 0.92f,
+                                showLabel = true,
+                                onClick = {
+                                    onRequestClose()
+                                    onLaunchApp(app)
+                                },
+                                onLongClick = {}
+                            )
+                        }
                     }
                 }
             }

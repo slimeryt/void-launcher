@@ -37,7 +37,14 @@ data class LauncherPreferences(
     val iconScale: Float = 1f,
     /** Each page is an ordered list of home items. */
     val pages: List<List<HomeItem>> = listOf(emptyList()),
-    val folders: Map<String, HomeFolder> = emptyMap()
+    val folders: Map<String, HomeFolder> = emptyMap(),
+    val glassBlurStrength: Float = 1f,
+    val glassFrostAmount: Float = 1f,
+    val glassRefraction: Boolean = true,
+    val glassSheen: Boolean = true,
+    val dockLabels: Boolean = false,
+    val hapticFeedback: Boolean = true,
+    val autoCheckUpdates: Boolean = true
 )
 
 class PreferencesRepository(private val context: Context) {
@@ -50,6 +57,13 @@ class PreferencesRepository(private val context: Context) {
         val IconScale = floatPreferencesKey("icon_scale")
         val PagesJson = stringPreferencesKey("home_pages_json")
         val FoldersJson = stringPreferencesKey("home_folders_json")
+        val GlassBlur = floatPreferencesKey("glass_blur")
+        val GlassFrost = floatPreferencesKey("glass_frost")
+        val GlassRefraction = booleanPreferencesKey("glass_refraction")
+        val GlassSheen = booleanPreferencesKey("glass_sheen")
+        val DockLabels = booleanPreferencesKey("dock_labels")
+        val Haptic = booleanPreferencesKey("haptic_feedback")
+        val AutoCheckUpdates = booleanPreferencesKey("auto_check_updates")
     }
 
     val preferences: Flow<LauncherPreferences> = context.dataStore.data.map { prefs ->
@@ -60,7 +74,14 @@ class PreferencesRepository(private val context: Context) {
             gridColumns = prefs[Keys.GridColumns] ?: 4,
             iconScale = prefs[Keys.IconScale] ?: 1f,
             pages = decodePages(prefs[Keys.PagesJson]),
-            folders = decodeFolders(prefs[Keys.FoldersJson])
+            folders = decodeFolders(prefs[Keys.FoldersJson]),
+            glassBlurStrength = prefs[Keys.GlassBlur] ?: 1f,
+            glassFrostAmount = prefs[Keys.GlassFrost] ?: 1f,
+            glassRefraction = prefs[Keys.GlassRefraction] ?: true,
+            glassSheen = prefs[Keys.GlassSheen] ?: true,
+            dockLabels = prefs[Keys.DockLabels] ?: false,
+            hapticFeedback = prefs[Keys.Haptic] ?: true,
+            autoCheckUpdates = prefs[Keys.AutoCheckUpdates] ?: true
         )
     }
 
@@ -82,6 +103,34 @@ class PreferencesRepository(private val context: Context) {
 
     suspend fun setIconScale(value: Float) {
         context.dataStore.edit { it[Keys.IconScale] = value.coerceIn(0.7f, 1.3f) }
+    }
+
+    suspend fun setGlassBlurStrength(value: Float) {
+        context.dataStore.edit { it[Keys.GlassBlur] = value.coerceIn(0.5f, 1.6f) }
+    }
+
+    suspend fun setGlassFrostAmount(value: Float) {
+        context.dataStore.edit { it[Keys.GlassFrost] = value.coerceIn(0.4f, 1.5f) }
+    }
+
+    suspend fun setGlassRefraction(value: Boolean) {
+        context.dataStore.edit { it[Keys.GlassRefraction] = value }
+    }
+
+    suspend fun setGlassSheen(value: Boolean) {
+        context.dataStore.edit { it[Keys.GlassSheen] = value }
+    }
+
+    suspend fun setDockLabels(value: Boolean) {
+        context.dataStore.edit { it[Keys.DockLabels] = value }
+    }
+
+    suspend fun setHapticFeedback(value: Boolean) {
+        context.dataStore.edit { it[Keys.Haptic] = value }
+    }
+
+    suspend fun setAutoCheckUpdates(value: Boolean) {
+        context.dataStore.edit { it[Keys.AutoCheckUpdates] = value }
     }
 
     suspend fun setHomeLayout(pages: List<List<HomeItem>>, folders: Map<String, HomeFolder>) {

@@ -16,7 +16,8 @@ fun DockBar(
     iconScale: Float,
     onAppClick: (AppInfo) -> Unit,
     onAppLongClick: (AppInfo) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showLabels: Boolean = false
 ) {
     GlassPanel(
         modifier = modifier
@@ -37,7 +38,7 @@ fun DockBar(
             apps.forEach { app ->
                 AppIcon(
                     app = app,
-                    showLabel = false,
+                    showLabel = showLabels,
                     iconScale = iconScale,
                     onClick = { onAppClick(app) },
                     onLongClick = { onAppLongClick(app) }

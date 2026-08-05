@@ -14,7 +14,9 @@ import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import com.voidlauncher.app.glass.GlassSettings
 import com.voidlauncher.app.glass.LocalBlurredWallpaper
+import com.voidlauncher.app.glass.LocalGlassSettings
 import com.voidlauncher.app.glass.WallpaperBlurController
 import com.voidlauncher.app.ui.LauncherRoot
 import com.voidlauncher.app.ui.theme.VoidTheme
@@ -42,7 +44,15 @@ class MainActivity : ComponentActivity() {
                 onDispose { blurController.stop() }
             }
 
-            CompositionLocalProvider(LocalBlurredWallpaper provides blurredWallpaper) {
+            CompositionLocalProvider(
+                LocalBlurredWallpaper provides blurredWallpaper,
+                LocalGlassSettings provides GlassSettings(
+                    blurStrength = state.glassBlurStrength,
+                    frostAmount = state.glassFrostAmount,
+                    refractionEnabled = state.glassRefraction,
+                    sheenEnabled = state.glassSheen
+                )
+            ) {
                 VoidTheme {
                     LauncherRoot(
                         state = state,
