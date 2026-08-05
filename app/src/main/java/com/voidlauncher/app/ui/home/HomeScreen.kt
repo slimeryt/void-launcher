@@ -2,10 +2,8 @@ package com.voidlauncher.app.ui.home
 
 import android.content.Intent
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,17 +20,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Search
@@ -65,7 +64,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.offset
 import com.voidlauncher.app.SettingsActivity
 import com.voidlauncher.app.data.AppInfo
 import com.voidlauncher.app.data.HomeItem
@@ -316,7 +314,7 @@ fun HomeScreen(
                 }
             }
 
-            // Shared glass wrapper: search icon ↔ page dots
+            // Shared glass pill: fixed size so AnimatedContent can't blow the wrapper up
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -325,10 +323,16 @@ fun HomeScreen(
             ) {
                 if (!state.isEditMode) {
                     val showDots = pageCount > 1 && pagerState.currentPage > 0
+                    val dotsWidth = (24 + pageCount * 14).dp
+                    val pillWidth by animateDpAsState(
+                        targetValue = if (showDots) dotsWidth.coerceAtLeast(56.dp) else 56.dp,
+                        animationSpec = tween(220),
+                        label = "pill-width"
+                    )
                     GlassPanel(
                         modifier = Modifier
                             .height(28.dp)
-                            .then(if (showDots) Modifier.padding(horizontal = 4.dp) else Modifier.width(56.dp))
+                            .width(pillWidth)
                             .clickable(
                                 enabled = !showDots,
                                 interactionSource = remember { MutableInteractionSource() },
@@ -340,34 +344,25 @@ fun HomeScreen(
                         enableSheen = false,
                         enableRefraction = true
                     ) {
-                        AnimatedContent(
-                            targetState = showDots,
-                            transitionSpec = { fadeIn() togetherWith fadeOut() },
-                            label = "pill-dots"
-                        ) { dots ->
-                            if (dots) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (showDots) {
                                 PageDots(
                                     pageCount = pageCount,
                                     current = pagerState.currentPage,
                                     onDotClick = {
                                         scope.launch { pagerState.animateScrollToPage(it) }
-                                    },
-                                    modifier = Modifier.padding(horizontal = 12.dp)
+                                    }
                                 )
                             } else {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .width(56.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Search,
-                                        contentDescription = "Search",
-                                        tint = VoidMuted,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
+                                Icon(
+                                    imageVector = Icons.Rounded.Search,
+                                    contentDescription = "Search",
+                                    tint = VoidMuted,
+                                    modifier = Modifier.size(14.dp)
+                                )
                             }
                         }
                     }
@@ -461,14 +456,14 @@ private fun PageDots(
     modifier: Modifier = Modifier
 ) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier
+        modifier = modifier.wrapContentWidth()
     ) {
         repeat(pageCount) { i ->
             Box(
                 modifier = Modifier
-                    .size(if (i == current) 8.dp else 6.dp)
+                    .size(6.dp)
                     .clip(CircleShape)
                     .background(if (i == current) VoidMist else VoidMuted.copy(alpha = 0.45f))
                     .clickable { onDotClick(i) }
