@@ -136,7 +136,7 @@ fun GlassPanel(
                 .matchParentSize()
                 .graphicsLayer {
                     compositingStrategy = CompositingStrategy.Offscreen
-                    val blurPx = if (strong) 20f else 14f
+                    val blurPx = if (strong) 36f else 26f
                     val blurEffect = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         AndroidRenderEffect.createBlurEffect(
                             blurPx,
@@ -151,9 +151,9 @@ fun GlassPanel(
                             LiquidRefractionShader.update(
                                 shader = runtimeShader,
                                 size = Size(size.width, size.height),
-                                intensity = if (strong) 0.24f else 0.18f,
-                                chromatic = if (strong) 0.016f else 0.011f,
-                                frost = 0f,
+                                intensity = if (strong) 0.20f else 0.14f,
+                                chromatic = if (strong) 0.012f else 0.008f,
+                                frost = if (strong) 0.55f else 0.40f,
                                 time = refractTime
                             )
                             AndroidRenderEffect.createRuntimeShaderEffect(runtimeShader, "content")
@@ -242,12 +242,14 @@ fun GlassPanel(
                 .drawBehind {
                     val hasWp = blurred != null && coords != null
                     if (hasWp) {
+                        // Opaque frost veil — less wallpaper bleed-through
+                        drawRect(Color.White.copy(alpha = if (strong) 0.28f else 0.18f))
                         drawRect(
                             brush = Brush.verticalGradient(
                                 colors = listOf(
-                                    Color.White.copy(alpha = if (strong) 0.20f else 0.12f),
-                                    Color.White.copy(alpha = if (strong) 0.10f else 0.06f),
-                                    Color.White.copy(alpha = 0.04f)
+                                    Color.White.copy(alpha = if (strong) 0.32f else 0.22f),
+                                    Color.White.copy(alpha = if (strong) 0.18f else 0.12f),
+                                    Color.Black.copy(alpha = if (strong) 0.10f else 0.06f)
                                 )
                             )
                         )
@@ -258,7 +260,7 @@ fun GlassPanel(
                                 brush = Brush.linearGradient(
                                     colors = listOf(
                                         Color.Transparent,
-                                        Color.White.copy(alpha = 0.16f),
+                                        Color.White.copy(alpha = 0.14f),
                                         Color.Transparent
                                     ),
                                     start = Offset(bandX - size.width * 0.2f, 0f),
@@ -281,12 +283,13 @@ fun GlassPanel(
                             style = Stroke(width = 1.2.dp.toPx())
                         )
                     } else {
+                        drawRect(Color.White.copy(alpha = if (strong) 0.22f else 0.14f))
                         drawRect(
                             brush = Brush.verticalGradient(
                                 colors = listOf(
-                                    Color.White.copy(alpha = if (strong) 0.16f else 0.10f),
-                                    Color.White.copy(alpha = if (strong) 0.08f else 0.05f),
-                                    Color.White.copy(alpha = 0.03f)
+                                    Color.White.copy(alpha = if (strong) 0.26f else 0.16f),
+                                    Color.White.copy(alpha = if (strong) 0.14f else 0.08f),
+                                    Color.Black.copy(alpha = 0.08f)
                                 )
                             )
                         )

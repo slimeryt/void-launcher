@@ -74,6 +74,7 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
@@ -563,8 +564,16 @@ fun HomeScreen(
             }
         }
 
-        openFolderId?.let { folderId ->
-            val folder = state.folders[folderId]
+        var displayedFolderId by remember { mutableStateOf<String?>(null) }
+        if (openFolderId != null) displayedFolderId = openFolderId
+
+        AnimatedVisibility(
+            visible = openFolderId != null,
+            enter = fadeIn(tween(200)) + scaleIn(initialScale = 0.82f, animationSpec = tween(280)),
+            exit = fadeOut(tween(160)) + scaleOut(targetScale = 0.88f, animationSpec = tween(220))
+        ) {
+            val folderId = displayedFolderId
+            val folder = folderId?.let { state.folders[it] }
             if (folder != null) {
                 OpenFolderOverlay(
                     name = folder.name,
@@ -675,8 +684,11 @@ private fun FolderIcon(
 ) {
     val size = (56 * iconScale).dp
     val previews = remember(apps.map { it.key }) {
-        apps.take(4).map { it.icon.toCachedBitmap(64).asImageBitmap() }
+        apps.take(9).map { it.icon.toCachedBitmap(64, cornerRadiusRatio = 0.24f).asImageBitmap() }
     }
+    val pad = 5.dp
+    val gap = 2.dp
+    val cell = (size - pad * 2 - gap * 2) / 3
     Column(
         modifier = modifier
             .width(80.dp)
@@ -697,31 +709,27 @@ private fun FolderIcon(
                     .size(size)
                     .clip(AppIconShape)
                     .background(Color(0x66FFFFFF))
-                    .padding(6.dp)
+                    .padding(pad)
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    for (row in 0 until 2) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                            for (col in 0 until 2) {
-                                val idx = row * 2 + col
-                                val cell = (size - 16.dp) / 2
+                Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+                    for (row in 0 until 3) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                            for (col in 0 until 3) {
+                                val idx = row * 3 + col
                                 val bmp = previews.getOrNull(idx)
                                 if (bmp != null) {
                                     Image(
                                         bitmap = bmp,
                                         contentDescription = null,
+                                        contentScale = ContentScale.Crop,
                                         filterQuality = FilterQuality.Low,
                                         modifier = Modifier
                                             .size(cell)
                                             .clip(AppIconShape)
                                     )
                                 } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(cell)
-                                            .clip(AppIconShape)
-                                            .background(Color(0x33FFFFFF))
-                                    )
+                                    // Empty slot — no placeholder wrapper
+                                    Spacer(modifier = Modifier.size(cell))
                                 }
                             }
                         }
@@ -771,6 +779,12 @@ private fun OpenFolderOverlay(
     onDismiss: () -> Unit,
     onLaunchApp: (AppInfo) -> Unit
 ) {
+    // Fixed shell — same size regardless of app count
+    val panelWidth = 312.dp
+    val titleBlock = 44.dp
+    val gridHeight = 268.dp
+    val panelHeight = titleBlock + gridHeight + 36.dp
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -784,7 +798,8 @@ private fun OpenFolderOverlay(
     ) {
         GlassPanel(
             modifier = Modifier
-                .fillMaxWidth(0.82f)
+                .width(panelWidth)
+                .height(panelHeight)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -796,28 +811,31 @@ private fun OpenFolderOverlay(
             enableRefraction = true
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = name,
                     style = MaterialTheme.typography.titleMedium,
-                    color = VoidMist
+                    color = VoidMist,
+                    modifier = Modifier.height(titleBlock),
+                    maxLines = 1
                 )
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(4),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    columns = GridCells.Fixed(3),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(((80 * ((apps.size + 3) / 4).coerceAtLeast(1)) + 8).dp)
+                        .height(gridHeight)
                 ) {
                     items(apps.size) { i ->
                         val app = apps[i]
                         AppIcon(
                             app = app,
-                            iconScale = iconScale,
+                            iconScale = iconScale * 0.92f,
                             showLabel = true,
                             onClick = {
                                 onDismiss()
