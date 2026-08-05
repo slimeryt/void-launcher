@@ -9,6 +9,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -43,24 +44,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voidlauncher.app.BuildConfig
+import com.voidlauncher.app.R
 import com.voidlauncher.app.ui.theme.IosBlue
 import com.voidlauncher.app.ui.theme.VoidInk
 import com.voidlauncher.app.ui.theme.VoidMist
 import com.voidlauncher.app.ui.theme.VoidMuted
 import com.voidlauncher.app.update.UpdateUiState
-import kotlin.math.cos
-import kotlin.math.sin
 
 private val UpdatesCardBg = Color(0xFF1C1F26)
 private val CancelGrey = Color(0xFF3A3A3C)
@@ -245,109 +243,12 @@ private fun VersionRow(label: String, value: String, accent: Boolean = false) {
 
 @Composable
 private fun UpdateHeroArt(modifier: Modifier = Modifier) {
-    val pulse = rememberInfiniteTransition(label = "hero")
-    val glow by pulse.animateFloat(
-        initialValue = 0.55f,
-        targetValue = 0.9f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "glow"
+    Image(
+        painter = painterResource(R.drawable.update_hero),
+        contentDescription = "Software update",
+        contentScale = ContentScale.Fit,
+        modifier = modifier
     )
-    val spin by pulse.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(18_000, easing = androidx.compose.animation.core.LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "orbit"
-    )
-
-    Canvas(modifier = modifier) {
-        val cx = size.width / 2f
-        val cy = size.height / 2f
-        val r = size.minDimension * 0.38f
-
-        // Soft backdrop glow (ColorOS-like)
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    IosBlue.copy(alpha = 0.28f * glow),
-                    IosBlue.copy(alpha = 0.08f),
-                    Color.Transparent
-                ),
-                center = Offset(cx, cy),
-                radius = r * 1.85f
-            ),
-            radius = r * 1.85f,
-            center = Offset(cx, cy)
-        )
-
-        // Main orb
-        drawCircle(
-            brush = Brush.linearGradient(
-                colors = listOf(
-                    Color(0xFF5B9DFF),
-                    IosBlue,
-                    Color(0xFF0A5ECC)
-                ),
-                start = Offset(cx - r, cy - r),
-                end = Offset(cx + r, cy + r)
-            ),
-            radius = r,
-            center = Offset(cx, cy)
-        )
-
-        // Glass sheen
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    Color.White.copy(alpha = 0.35f),
-                    Color.White.copy(alpha = 0.05f),
-                    Color.Transparent
-                ),
-                center = Offset(cx - r * 0.35f, cy - r * 0.4f),
-                radius = r * 0.9f
-            ),
-            radius = r * 0.85f,
-            center = Offset(cx - r * 0.15f, cy - r * 0.2f)
-        )
-
-        // Orbit ring
-        drawCircle(
-            color = Color.White.copy(alpha = 0.22f),
-            radius = r * 1.22f,
-            center = Offset(cx, cy),
-            style = Stroke(width = 2.5.dp.toPx())
-        )
-
-        // Orbiting dot
-        val rad = Math.toRadians(spin.toDouble())
-        val ox = cx + cos(rad).toFloat() * r * 1.22f
-        val oy = cy + sin(rad).toFloat() * r * 1.22f
-        drawCircle(Color.White.copy(alpha = 0.9f), radius = 5.dp.toPx(), center = Offset(ox, oy))
-
-        // Up arrow (update metaphor)
-        val arrow = Path().apply {
-            val top = cy - r * 0.28f
-            val bot = cy + r * 0.32f
-            val mid = cx
-            val half = r * 0.22f
-            moveTo(mid, top)
-            lineTo(mid + half, top + half * 1.1f)
-            moveTo(mid, top)
-            lineTo(mid - half, top + half * 1.1f)
-            moveTo(mid, top)
-            lineTo(mid, bot)
-        }
-        drawPath(
-            path = arrow,
-            color = Color.White.copy(alpha = 0.95f),
-            style = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round)
-        )
-    }
 }
 
 @Composable
