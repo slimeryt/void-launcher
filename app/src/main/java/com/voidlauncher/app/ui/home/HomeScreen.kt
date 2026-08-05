@@ -322,7 +322,7 @@ fun HomeScreen(
                 contentAlignment = Alignment.Center
             ) {
                 if (!state.isEditMode) {
-                    val showDots = pageCount > 1
+                    val showDots = pageCount > 1 && pagerState.currentPage > 0
                     val dotsWidth = (24 + pageCount * 14).dp
                     val pillWidth by animateDpAsState(
                         targetValue = if (showDots) dotsWidth.coerceAtLeast(56.dp) else 56.dp,

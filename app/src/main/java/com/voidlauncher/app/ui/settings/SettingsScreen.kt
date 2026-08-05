@@ -40,7 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voidlauncher.app.ui.components.GlassPanel
-import com.voidlauncher.app.ui.theme.VoidCyan
+import com.voidlauncher.app.ui.theme.IosBlue
 import com.voidlauncher.app.ui.theme.VoidInk
 import com.voidlauncher.app.ui.theme.VoidMist
 import com.voidlauncher.app.ui.theme.VoidMuted
@@ -124,7 +124,7 @@ fun SettingsContent(
                 onCheckedChange = onShowLabelsChange,
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = VoidInk,
-                    checkedTrackColor = VoidCyan,
+                    checkedTrackColor = IosBlue,
                     uncheckedThumbColor = VoidMist,
                     uncheckedTrackColor = VoidMuted.copy(alpha = 0.3f)
                 )
@@ -138,8 +138,8 @@ fun SettingsContent(
                 valueRange = 3f..6f,
                 steps = 2,
                 colors = SliderDefaults.colors(
-                    thumbColor = VoidCyan,
-                    activeTrackColor = VoidCyan,
+                    thumbColor = IosBlue,
+                    activeTrackColor = IosBlue,
                     inactiveTrackColor = VoidMuted.copy(alpha = 0.25f)
                 ),
                 modifier = Modifier.fillMaxWidth()
@@ -152,8 +152,8 @@ fun SettingsContent(
                 onValueChange = onIconScaleChange,
                 valueRange = 0.7f..1.3f,
                 colors = SliderDefaults.colors(
-                    thumbColor = VoidCyan,
-                    activeTrackColor = VoidCyan,
+                    thumbColor = IosBlue,
+                    activeTrackColor = IosBlue,
                     inactiveTrackColor = VoidMuted.copy(alpha = 0.25f)
                 ),
                 modifier = Modifier.fillMaxWidth()
@@ -195,7 +195,7 @@ private fun UpdateCard(
             Icon(
                 imageVector = Icons.Rounded.SystemUpdate,
                 contentDescription = null,
-                tint = VoidCyan
+                tint = IosBlue
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -214,7 +214,7 @@ private fun UpdateCard(
             }
             if (updateState.checking) {
                 CircularProgressIndicator(
-                    color = VoidCyan,
+                    color = IosBlue,
                     strokeWidth = 2.dp,
                     modifier = Modifier.height(22.dp)
                 )
@@ -228,7 +228,7 @@ private fun UpdateCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(CircleShape),
-                color = VoidCyan,
+                color = IosBlue,
                 trackColor = VoidMuted.copy(alpha = 0.2f)
             )
             Text(
@@ -284,7 +284,7 @@ private fun UpdateCard(
             Text(
                 text = "Latest: v${release.versionName} (${release.tagName})",
                 style = MaterialTheme.typography.bodyMedium,
-                color = VoidCyan
+                color = IosBlue
             )
         }
 
@@ -320,7 +320,7 @@ private fun ActionChip(
         enableRefraction = false,
         tint = when {
             !enabled -> Color(0x33000000)
-            filled -> VoidCyan.copy(alpha = 0.55f)
+            filled -> IosBlue.copy(alpha = 0.55f)
             else -> Color.Transparent
         }
     ) {
@@ -348,7 +348,7 @@ private fun SettingCard(
         modifier = Modifier.fillMaxWidth(),
         cornerRadius = 22.dp,
         strong = true,
-        enableSheen = true,
+        enableSheen = false,
         enableRefraction = false
     ) {
         Column(

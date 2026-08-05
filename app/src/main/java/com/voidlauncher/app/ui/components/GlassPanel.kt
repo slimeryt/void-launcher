@@ -76,25 +76,38 @@ fun GlassPanel(
     var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val shape = RoundedCornerShape(cornerRadius)
 
-    val transition = rememberInfiniteTransition(label = "liquid")
-    val sheenShift by transition.animateFloat(
-        initialValue = -0.15f,
-        targetValue = 1.15f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(6400, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "sheen"
-    )
-    val refractTime by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = (Math.PI * 2).toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(5200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "refract-time"
-    )
+    val needsMotion = enableSheen || enableRefraction
+    val transition = if (needsMotion) {
+        rememberInfiniteTransition(label = "liquid")
+    } else {
+        null
+    }
+    val sheenShift by if (transition != null) {
+        transition.animateFloat(
+            initialValue = -0.15f,
+            targetValue = 1.15f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(6400, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "sheen"
+        )
+    } else {
+        remember { mutableStateOf(0.5f) }
+    }
+    val refractTime by if (transition != null) {
+        transition.animateFloat(
+            initialValue = 0f,
+            targetValue = (Math.PI * 2).toFloat(),
+            animationSpec = infiniteRepeatable(
+                animation = tween(5200, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "refract-time"
+        )
+    } else {
+        remember { mutableStateOf(0f) }
+    }
 
     val runtimeShader = remember(enableRefraction) {
         if (enableRefraction && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
