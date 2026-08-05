@@ -120,8 +120,6 @@ fun HomeScreen(
     val pageCount = state.pages.size.coerceAtLeast(1)
     val pagerState = rememberPagerState(pageCount = { pageCount })
 
-    BackHandler(enabled = state.isEditMode) { onEditModeChange(false) }
-
     var dragIndex by remember { mutableIntStateOf(-1) }
     var dragPage by remember { mutableIntStateOf(-1) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
@@ -130,6 +128,10 @@ fun HomeScreen(
     var selectedKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
     var removeZone by remember { mutableStateOf(Rect.Zero) }
     var overRemove by remember { mutableStateOf(false) }
+    var openFolderId by remember { mutableStateOf<String?>(null) }
+
+    BackHandler(enabled = openFolderId != null) { openFolderId = null }
+    BackHandler(enabled = state.isEditMode && openFolderId == null) { onEditModeChange(false) }
 
     LaunchedEffect(state.isEditMode) {
         if (!state.isEditMode) {
@@ -138,6 +140,7 @@ fun HomeScreen(
             dragPage = -1
             dragOffset = Offset.Zero
             overRemove = false
+            openFolderId = null
         }
     }
 
@@ -437,7 +440,15 @@ fun HomeScreen(
                                         iconScale = state.iconScale,
                                         editMode = state.isEditMode,
                                         selected = item.id in selectedKeys,
-                                        onClick = {},
+                                        onClick = {
+                                            if (state.isEditMode) {
+                                                selectedKeys =
+                                                    if (item.id in selectedKeys) selectedKeys - item.id
+                                                    else selectedKeys + item.id
+                                            } else {
+                                                openFolderId = item.id
+                                            }
+                                        },
                                         onLongClick = { onEditModeChange(true) },
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -464,14 +475,9 @@ fun HomeScreen(
                 contentAlignment = Alignment.Center
             ) {
                 if (!state.isEditMode) {
-                    val page = pagerState.currentPage
-                    val offset = pagerState.currentPageOffsetFraction
-                    val dominantPage = when {
-                        offset >= 0.5f -> page + 1
-                        offset <= -0.5f -> page - 1
-                        else -> page
-                    }.coerceIn(0, (pageCount - 1).coerceAtLeast(0))
-                    val showDots = pageCount > 1
+                    // Page 0 = search pill; other pages = dots. No offset hacks.
+                    val currentPage = pagerState.currentPage
+                    val showDots = pageCount > 1 && currentPage > 0
                     val dotsWidth = (24 + pageCount * 14).dp
                     val pillWidth = if (showDots) dotsWidth.coerceAtLeast(56.dp) else 56.dp
                     GlassPanel(
@@ -496,7 +502,7 @@ fun HomeScreen(
                             if (showDots) {
                                 PageDots(
                                     pageCount = pageCount,
-                                    current = dominantPage,
+                                    current = currentPage,
                                     onDotClick = {
                                         scope.launch { pagerState.animateScrollToPage(it) }
                                     }
@@ -554,6 +560,19 @@ fun HomeScreen(
                         }
                     }
                 }
+            }
+        }
+
+        openFolderId?.let { folderId ->
+            val folder = state.folders[folderId]
+            if (folder != null) {
+                OpenFolderOverlay(
+                    name = folder.name,
+                    apps = folder.appKeys.mapNotNull { state.appsByKey[it] },
+                    iconScale = state.iconScale,
+                    onDismiss = { openFolderId = null },
+                    onLaunchApp = onLaunchApp
+                )
             }
         }
     }
@@ -671,36 +690,39 @@ private fun FolderIcon(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(size)
-                .clip(AppIconShape)
-                .background(Color(0x66FFFFFF))
-                .padding(6.dp)
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                for (row in 0 until 2) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        for (col in 0 until 2) {
-                            val idx = row * 2 + col
-                            val cell = (size - 16.dp) / 2
-                            val bmp = previews.getOrNull(idx)
-                            if (bmp != null) {
-                                Image(
-                                    bitmap = bmp,
-                                    contentDescription = null,
-                                    filterQuality = FilterQuality.Low,
-                                    modifier = Modifier
-                                        .size(cell)
-                                        .clip(AppIconShape)
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .size(cell)
-                                        .clip(AppIconShape)
-                                        .background(Color(0x33FFFFFF))
-                                )
+        // Unclipped outer box so the check sits outside the folder clip (like AppIcon)
+        Box {
+            Box(
+                modifier = Modifier
+                    .size(size)
+                    .clip(AppIconShape)
+                    .background(Color(0x66FFFFFF))
+                    .padding(6.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    for (row in 0 until 2) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            for (col in 0 until 2) {
+                                val idx = row * 2 + col
+                                val cell = (size - 16.dp) / 2
+                                val bmp = previews.getOrNull(idx)
+                                if (bmp != null) {
+                                    Image(
+                                        bitmap = bmp,
+                                        contentDescription = null,
+                                        filterQuality = FilterQuality.Low,
+                                        modifier = Modifier
+                                            .size(cell)
+                                            .clip(AppIconShape)
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(cell)
+                                            .clip(AppIconShape)
+                                            .background(Color(0x33FFFFFF))
+                                    )
+                                }
                             }
                         }
                     }
@@ -710,7 +732,7 @@ private fun FolderIcon(
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .offset(x = 6.dp, y = (-6).dp)
+                        .offset(x = 4.dp, y = (-4).dp)
                         .size(22.dp)
                         .clip(CircleShape)
                         .background(if (selected) IosBlue else Color(0xE6FFFFFF))
@@ -735,8 +757,77 @@ private fun FolderIcon(
         Text(
             text = name,
             style = MaterialTheme.typography.labelSmall,
-            maxLines = 1,
-            color = VoidMist
+            color = VoidMist,
+            maxLines = 1
         )
+    }
+}
+
+@Composable
+private fun OpenFolderOverlay(
+    name: String,
+    apps: List<AppInfo>,
+    iconScale: Float,
+    onDismiss: () -> Unit,
+    onLaunchApp: (AppInfo) -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.55f))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onDismiss
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        GlassPanel(
+            modifier = Modifier
+                .fillMaxWidth(0.82f)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {}
+                ),
+            cornerRadius = 28.dp,
+            strong = true,
+            enableSheen = false,
+            enableRefraction = true
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = name,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = VoidMist
+                )
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(4),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(((80 * ((apps.size + 3) / 4).coerceAtLeast(1)) + 8).dp)
+                ) {
+                    items(apps.size) { i ->
+                        val app = apps[i]
+                        AppIcon(
+                            app = app,
+                            iconScale = iconScale,
+                            showLabel = true,
+                            onClick = {
+                                onDismiss()
+                                onLaunchApp(app)
+                            },
+                            onLongClick = {}
+                        )
+                    }
+                }
+            }
+        }
     }
 }

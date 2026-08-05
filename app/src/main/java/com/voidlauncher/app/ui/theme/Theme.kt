@@ -34,12 +34,15 @@ private val VoidColorScheme = darkColorScheme(
 )
 
 val VoidDisplay = FontFamily(
-    Font(R.font.space_grotesk_bold, FontWeight.Bold)
+    Font(R.font.sf_compact_rounded_bold, FontWeight.Bold),
+    Font(R.font.sf_compact_rounded_semibold, FontWeight.SemiBold)
 )
 
 val VoidBody = FontFamily(
-    Font(R.font.space_grotesk_medium, FontWeight.Medium),
-    Font(R.font.space_grotesk_regular, FontWeight.Normal)
+    Font(R.font.sf_compact_rounded_regular, FontWeight.Normal),
+    Font(R.font.sf_compact_rounded_medium, FontWeight.Medium),
+    Font(R.font.sf_compact_rounded_semibold, FontWeight.SemiBold),
+    Font(R.font.sf_compact_rounded_bold, FontWeight.Bold)
 )
 
 @Composable
@@ -64,6 +67,18 @@ fun VoidTheme(content: @Composable () -> Unit) {
             titleMedium = TextStyle(
                 fontFamily = VoidBody,
                 fontWeight = FontWeight.Medium,
+                fontSize = 16.sp,
+                color = VoidMist
+            ),
+            labelLarge = TextStyle(
+                fontFamily = VoidBody,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp,
+                color = VoidMist
+            ),
+            bodyLarge = TextStyle(
+                fontFamily = VoidBody,
+                fontWeight = FontWeight.Normal,
                 fontSize = 16.sp,
                 color = VoidMist
             ),
