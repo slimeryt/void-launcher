@@ -146,17 +146,9 @@ fun HomeScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp, end = 8.dp)
+                    .padding(top = 8.dp)
             ) {
                 if (state.isEditMode) {
-                    IconButton(
-                        onClick = {
-                            context.startActivity(Intent(context, SettingsActivity::class.java))
-                        },
-                        modifier = Modifier.align(Alignment.TopEnd)
-                    ) {
-                        Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = VoidMist)
-                    }
                     Row(
                         modifier = Modifier
                             .align(Alignment.TopCenter)
@@ -354,7 +346,41 @@ fun HomeScreen(
                     modifier = Modifier.padding(bottom = 20.dp)
                 )
             } else {
-                Spacer(modifier = Modifier.height(20.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 28.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    GlassPanel(
+                        modifier = Modifier.size(56.dp),
+                        cornerRadius = 28.dp,
+                        strong = true,
+                        enableSheen = false,
+                        enableRefraction = false
+                    ) {
+                        IconButton(
+                            onClick = {
+                                context.startActivity(Intent(context, SettingsActivity::class.java))
+                                onEditModeChange(false)
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Settings,
+                                contentDescription = "Settings",
+                                tint = VoidMist,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "Tap empty space to finish",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = VoidMuted
+                    )
+                }
             }
         }
     }
@@ -364,8 +390,8 @@ fun HomeScreen(
 private fun SearchPill(onClick: () -> Unit) {
     GlassPanel(
         modifier = Modifier
-            .width(120.dp)
-            .height(28.dp)
+            .width(56.dp)
+            .height(24.dp)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -385,7 +411,7 @@ private fun SearchPill(onClick: () -> Unit) {
                 imageVector = Icons.Rounded.Search,
                 contentDescription = "Search",
                 tint = VoidMuted,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(14.dp)
             )
         }
     }

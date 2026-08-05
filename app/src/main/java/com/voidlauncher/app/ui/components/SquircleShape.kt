@@ -1,5 +1,6 @@
 package com.voidlauncher.app.ui.components
 
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
@@ -12,10 +13,11 @@ import kotlin.math.pow
 import kotlin.math.sin
 
 /**
- * iOS-style continuous-corner / squircle (superellipse n≈5).
+ * iOS-style continuous corners.
+ * Uses a superellipse (n≈5) which reads as a rounded square — not a circle (n=2).
  */
 class SquircleShape(
-    private val exponent: Float = 5f
+    private val exponent: Float = 5.2f
 ) : Shape {
     override fun createOutline(
         size: Size,
@@ -29,12 +31,13 @@ class SquircleShape(
         val cy = h / 2f
         val rx = w / 2f
         val ry = h / 2f
-        val n = exponent
-        val steps = 64
+        val n = exponent.coerceAtLeast(2.5f)
+        val steps = 72
         for (i in 0..steps) {
             val t = (i.toFloat() / steps) * (Math.PI * 2).toFloat()
             val cosT = cos(t.toDouble()).toFloat()
             val sinT = sin(t.toDouble()).toFloat()
+            // Superellipse: higher n → squarer (iOS icons ≈ 5)
             val x = cx + rx * signPow(cosT, 2f / n)
             val y = cy + ry * signPow(sinT, 2f / n)
             if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
@@ -49,4 +52,8 @@ class SquircleShape(
     }
 }
 
-val IosSquircle = SquircleShape(exponent = 5f)
+/** Primary mask for home/dock icons — visibly squircle, not CircleShape. */
+val IosSquircle: Shape = SquircleShape(exponent = 5.2f)
+
+/** Fallback continuous-corner approx (~22% like iOS). */
+val IosContinuousCorner = RoundedCornerShape(percent = 22)

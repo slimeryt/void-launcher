@@ -7,8 +7,8 @@ import androidx.compose.ui.geometry.Size
 
 /**
  * AGSL liquid-glass refraction (API 33+).
- * Warps the wallpaper sample like a convex lens and adds light chromatic aberration
- * toward the edges so the dock/panels actually refract what's behind them.
+ * Edge-weighted lens + light chromatic aberration — center stays clear so it
+ * doesn't look like a stamped wallpaper crop.
  */
 object LiquidRefractionShader {
 
@@ -23,17 +23,18 @@ object LiquidRefractionShader {
         float2 distort(float2 uv, float amount) {
             float2 c = uv * 2.0 - 1.0;
             float r2 = dot(c, c);
-            float breathe = 1.0 + 0.02 * sin(time * 1.25);
-            float k = amount * breathe;
-            // Barrel / lens warp — stronger toward edges
-            c *= 1.0 + k * r2 + 0.45 * k * r2 * r2;
+            float edge = smoothstep(0.15, 1.05, sqrt(r2));
+            float breathe = 1.0 + 0.015 * sin(time * 1.1);
+            // Warp mostly near edges; center almost untouched
+            float k = amount * breathe * edge;
+            c *= 1.0 + k * r2;
             return clamp(c * 0.5 + 0.5, 0.0, 1.0);
         }
 
         half4 main(float2 fragCoord) {
             float2 uv = fragCoord / resolution;
             float2 centered = uv * 2.0 - 1.0;
-            float edge = smoothstep(0.05, 1.1, length(centered));
+            float edge = smoothstep(0.2, 1.05, length(centered));
 
             float2 base = distort(uv, intensity);
 
@@ -46,12 +47,12 @@ object LiquidRefractionShader {
 
             half4 color = half4(cR.r, cG.g, cB.b, max(max(cR.a, cG.a), cB.a));
 
-            // Soft frost wash kept mild so refraction stays readable
-            half3 frostTint = half3(0.92, 0.95, 0.98);
-            color.rgb = mix(color.rgb, frostTint, half(frost) * 0.35);
+            if (frost > 0.001) {
+                half3 frostTint = half3(0.92, 0.95, 0.98);
+                color.rgb = mix(color.rgb, frostTint, half(frost) * 0.25);
+            }
 
-            // Specular catch near top
-            float spec = smoothstep(0.55, 0.0, uv.y) * 0.22;
+            float spec = smoothstep(0.5, 0.0, uv.y) * 0.12 * edge;
             color.rgb += half(spec);
 
             return color;
@@ -65,9 +66,9 @@ object LiquidRefractionShader {
     fun update(
         shader: RuntimeShader,
         size: Size,
-        intensity: Float = 0.18f,
-        chromatic: Float = 0.012f,
-        frost: Float = 0.45f,
+        intensity: Float = 0.12f,
+        chromatic: Float = 0.008f,
+        frost: Float = 0f,
         time: Float = 0f
     ) {
         shader.setFloatUniform("resolution", size.width.coerceAtLeast(1f), size.height.coerceAtLeast(1f))

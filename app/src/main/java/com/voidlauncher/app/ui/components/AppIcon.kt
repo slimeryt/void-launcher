@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -51,9 +52,9 @@ fun AppIcon(
     editMode: Boolean = false,
     onRemove: (() -> Unit)? = null
 ) {
-    val iconSize = (56 * iconScale).dp
+    val iconSize = (58 * iconScale).dp
     val imageBitmap = remember(app.key) {
-        app.icon.toCachedBitmap(maxSize = 160).asImageBitmap()
+        app.icon.toCachedBitmap(maxSize = 192).asImageBitmap()
     }
     val wiggle = remember { Animatable(0f) }
     LaunchedEffect(editMode) {
@@ -88,7 +89,8 @@ fun AppIcon(
             Image(
                 bitmap = imageBitmap,
                 contentDescription = app.label,
-                filterQuality = FilterQuality.Medium,
+                contentScale = ContentScale.Crop,
+                filterQuality = FilterQuality.High,
                 modifier = Modifier
                     .size(iconSize)
                     .then(
