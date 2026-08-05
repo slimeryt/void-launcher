@@ -262,12 +262,41 @@ fun GlassPanel(
                         drawRect(
                             brush = Brush.verticalGradient(
                                 colors = listOf(
-                                    if (strong) VoidGlassStrong else VoidGlass,
-                                    Color(0x22FFFFFF)
+                                    Color.White.copy(alpha = if (strong) 0.16f else 0.10f),
+                                    Color.White.copy(alpha = if (strong) 0.08f else 0.05f),
+                                    Color.White.copy(alpha = 0.03f)
                                 )
                             )
                         )
                         if (tint.alpha > 0.01f) drawRect(tint)
+                        if (enableSheen) {
+                            val bandX = size.width * sheenShift
+                            drawRect(
+                                brush = Brush.linearGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color.White.copy(alpha = 0.14f),
+                                        Color.Transparent
+                                    ),
+                                    start = Offset(bandX - size.width * 0.2f, 0f),
+                                    end = Offset(bandX + size.width * 0.2f, size.height)
+                                )
+                            )
+                        }
+                        drawRoundRect(
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.55f),
+                                    VoidCyan.copy(alpha = 0.20f),
+                                    Color.White.copy(alpha = 0.10f),
+                                    Color.Black.copy(alpha = 0.25f)
+                                ),
+                                start = Offset.Zero,
+                                end = Offset(size.width, size.height)
+                            ),
+                            cornerRadius = CornerRadius(cornerRadius.toPx(), cornerRadius.toPx()),
+                            style = Stroke(width = 1.1.dp.toPx())
+                        )
                     }
                 }
         )

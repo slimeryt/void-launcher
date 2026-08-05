@@ -2,7 +2,9 @@ package com.voidlauncher.app.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,16 +13,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -29,12 +31,15 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.theme.VoidCyan
 import com.voidlauncher.app.ui.theme.VoidInk
 import com.voidlauncher.app.ui.theme.VoidMist
@@ -62,32 +67,49 @@ fun SettingsContent(
             .statusBarsPadding()
             .navigationBarsPadding()
             .padding(16.dp)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(bottom = 4.dp)
         ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.Rounded.ArrowBack,
-                    contentDescription = "Back",
-                    tint = VoidMist
+            GlassPanel(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onBack
+                    ),
+                cornerRadius = 22.dp,
+                strong = true,
+                enableSheen = false,
+                enableRefraction = false
+            ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Rounded.ArrowBack,
+                        contentDescription = "Back",
+                        tint = VoidMist,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+            Column {
+                Text(
+                    text = "Void",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = VoidMist
+                )
+                Text(
+                    text = "Launcher settings",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = VoidMuted
                 )
             }
-            Text(
-                text = "Void",
-                style = MaterialTheme.typography.headlineMedium,
-                color = VoidMist
-            )
         }
-
-        Text(
-            text = "Launcher settings",
-            style = MaterialTheme.typography.bodyMedium,
-            color = VoidMuted,
-            modifier = Modifier.padding(start = 12.dp, bottom = 20.dp)
-        )
 
         UpdateCard(
             updateState = updateState,
@@ -95,8 +117,6 @@ fun SettingsContent(
             onDownloadUpdate = onDownloadUpdate,
             onInstallUpdate = onInstallUpdate
         )
-
-        Spacer(modifier = Modifier.height(12.dp))
 
         SettingCard(title = "Show app labels") {
             Switch(
@@ -110,8 +130,6 @@ fun SettingsContent(
                 )
             )
         }
-
-        Spacer(modifier = Modifier.height(12.dp))
 
         SettingCard(title = "Grid columns — ${state.gridColumns}") {
             Slider(
@@ -128,8 +146,6 @@ fun SettingsContent(
             )
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
-
         SettingCard(title = "Icon scale — ${"%.0f".format(state.iconScale * 100)}%") {
             Slider(
                 value = state.iconScale,
@@ -144,7 +160,7 @@ fun SettingsContent(
             )
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         Text(
             text = "${state.apps.size} apps · ${state.hiddenCount} hidden",
@@ -153,14 +169,14 @@ fun SettingsContent(
             modifier = Modifier.padding(start = 8.dp)
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
-
         Text(
             text = "Swipe up on home for apps · swipe down in apps to close · long-press home to edit",
             style = MaterialTheme.typography.bodyMedium,
             color = VoidMuted,
             modifier = Modifier.padding(horizontal = 8.dp)
         )
+
+        Spacer(modifier = Modifier.height(12.dp))
     }
 }
 
@@ -188,7 +204,8 @@ private fun UpdateCard(
                     color = VoidMist
                 )
                 Text(
-                    text = updateState.error ?: updateState.statusMessage.ifBlank { "Auto-checks GitHub Releases" },
+                    text = updateState.error
+                        ?: updateState.statusMessage.ifBlank { "Auto-checks GitHub Releases" },
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (updateState.error != null) Color(0xFFF87171) else VoidMuted,
                     maxLines = 3,
@@ -210,7 +227,7 @@ private fun UpdateCard(
                 progress = { updateState.progress },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(99.dp)),
+                    .clip(CircleShape),
                 color = VoidCyan,
                 trackColor = VoidMuted.copy(alpha = 0.2f)
             )
@@ -288,27 +305,38 @@ private fun ActionChip(
     modifier: Modifier = Modifier,
     filled: Boolean = false
 ) {
-    val bg = when {
-        !enabled -> Color(0xFF1A1D24)
-        filled -> VoidCyan
-        else -> Color(0xFF1C212B)
-    }
-    val fg = when {
-        !enabled -> VoidMuted
-        filled -> VoidInk
-        else -> VoidMist
-    }
-    Text(
-        text = label,
-        style = MaterialTheme.typography.titleMedium,
-        color = fg,
+    GlassPanel(
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(bg)
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(vertical = 12.dp),
-        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-    )
+            .height(44.dp)
+            .clickable(
+                enabled = enabled,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            ),
+        cornerRadius = 14.dp,
+        strong = true,
+        enableSheen = false,
+        enableRefraction = false,
+        tint = when {
+            !enabled -> Color(0x33000000)
+            filled -> VoidCyan.copy(alpha = 0.55f)
+            else -> Color.Transparent
+        }
+    ) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleMedium,
+                color = when {
+                    !enabled -> VoidMuted
+                    filled -> VoidInk
+                    else -> VoidMist
+                },
+                textAlign = TextAlign.Center
+            )
+        }
+    }
 }
 
 @Composable
@@ -316,19 +344,25 @@ private fun SettingCard(
     title: String,
     content: @Composable () -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
-            .background(Color(0xFF12141A))
-            .padding(16.dp)
+    GlassPanel(
+        modifier = Modifier.fillMaxWidth(),
+        cornerRadius = 22.dp,
+        strong = true,
+        enableSheen = true,
+        enableRefraction = false
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            color = VoidMist
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        content()
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = VoidMist
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            content()
+        }
     }
 }
