@@ -114,6 +114,7 @@ fun HomeScreen(
     onRemoveHomeItem: (page: Int, index: Int) -> Unit,
     onSwapHomeItems: (page: Int, a: Int, b: Int) -> Unit,
     onCreateFolder: (page: Int, target: Int, dragged: Int) -> Unit,
+    onAddAppToFolder: (page: Int, folderIndex: Int, appIndex: Int) -> Unit,
     onAddPage: () -> Unit,
     onAddAppToHome: (AppInfo, Int) -> Unit,
     modifier: Modifier = Modifier
@@ -383,10 +384,15 @@ fun HomeScreen(
                                                         if (dist < threshold) {
                                                             val tItem = items.getOrNull(target.key)
                                                             val dItem = items.getOrNull(from)
-                                                            if (tItem is HomeItem.App && dItem is HomeItem.App) {
-                                                                onCreateFolder(page, target.key, from)
-                                                            } else {
-                                                                onSwapHomeItems(page, from, target.key)
+                                                            when {
+                                                                tItem is HomeItem.App && dItem is HomeItem.App ->
+                                                                    onCreateFolder(page, target.key, from)
+                                                                tItem is HomeItem.Folder && dItem is HomeItem.App ->
+                                                                    onAddAppToFolder(page, target.key, from)
+                                                                tItem is HomeItem.App && dItem is HomeItem.Folder ->
+                                                                    onAddAppToFolder(page, from, target.key)
+                                                                else ->
+                                                                    onSwapHomeItems(page, from, target.key)
                                                             }
                                                         }
                                                     }

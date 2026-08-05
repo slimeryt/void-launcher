@@ -68,6 +68,7 @@ class MainActivity : ComponentActivity() {
                         onRemoveHomeItem = viewModel::removeItemFromHome,
                         onSwapHomeItems = viewModel::swapItems,
                         onCreateFolder = viewModel::createFolderFromDrop,
+                        onAddAppToFolder = viewModel::addAppToFolderFromDrop,
                         onAddPage = viewModel::addPage,
                         modifier = Modifier.fillMaxSize()
                     )

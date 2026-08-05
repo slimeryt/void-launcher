@@ -32,6 +32,7 @@ fun LauncherRoot(
     onRemoveHomeItem: (page: Int, index: Int) -> Unit,
     onSwapHomeItems: (page: Int, a: Int, b: Int) -> Unit,
     onCreateFolder: (page: Int, target: Int, dragged: Int) -> Unit,
+    onAddAppToFolder: (page: Int, folderIndex: Int, appIndex: Int) -> Unit,
     onAddPage: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -53,6 +54,7 @@ fun LauncherRoot(
             onRemoveHomeItem = onRemoveHomeItem,
             onSwapHomeItems = onSwapHomeItems,
             onCreateFolder = onCreateFolder,
+            onAddAppToFolder = onAddAppToFolder,
             onAddPage = onAddPage,
             onAddAppToHome = { app, page -> onAddAppToHome(app) },
             modifier = Modifier.fillMaxSize()

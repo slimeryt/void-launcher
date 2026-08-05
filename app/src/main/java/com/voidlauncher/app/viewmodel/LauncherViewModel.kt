@@ -310,6 +310,28 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    /** Drop an app onto an existing folder (or fold an app under a dragged folder). */
+    fun addAppToFolderFromDrop(pageIndex: Int, folderIndex: Int, appIndex: Int) {
+        viewModelScope.launch {
+            if (pageIndex !in prefsCache.pages.indices) return@launch
+            val page = prefsCache.pages[pageIndex].toMutableList()
+            if (folderIndex !in page.indices || appIndex !in page.indices) return@launch
+            if (folderIndex == appIndex) return@launch
+            val folderItem = page[folderIndex] as? HomeItem.Folder ?: return@launch
+            val appItem = page[appIndex] as? HomeItem.App ?: return@launch
+            val folder = prefsCache.folders[folderItem.id] ?: return@launch
+            val keys = if (appItem.key in folder.appKeys) folder.appKeys
+            else folder.appKeys + appItem.key
+            page.removeAt(appIndex)
+            val pages = prefsCache.pages.toMutableList()
+            pages[pageIndex] = page
+            prefsRepository.setHomeLayout(
+                pages,
+                prefsCache.folders + (folder.id to folder.copy(appKeys = keys))
+            )
+        }
+    }
+
     fun addPage() {
         viewModelScope.launch {
             prefsRepository.setHomeLayout(prefsCache.pages + listOf(emptyList()), prefsCache.folders)
