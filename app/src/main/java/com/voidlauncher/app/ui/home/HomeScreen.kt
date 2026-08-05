@@ -46,7 +46,6 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
@@ -89,6 +88,7 @@ import com.voidlauncher.app.data.AppInfo
 import com.voidlauncher.app.data.HomeItem
 import com.voidlauncher.app.ui.components.AppIcon
 import com.voidlauncher.app.ui.components.AppIconShape
+import com.voidlauncher.app.ui.components.CapsuleShape
 import com.voidlauncher.app.ui.components.DockBar
 import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.components.HomeClock
@@ -621,12 +621,12 @@ private fun RemoveDropPill(
     Box(
         modifier = modifier
             .height(36.dp)
-            .clip(RoundedCornerShape(99.dp))
+            .clip(CapsuleShape)
             .background(if (highlighted) Color(0xFFE5484D) else Color(0xE61C1F26))
             .border(
                 width = 1.dp,
                 color = if (highlighted) Color.White.copy(alpha = 0.5f) else Color(0x44FFFFFF),
-                shape = RoundedCornerShape(99.dp)
+                shape = CapsuleShape
             )
             .padding(horizontal = 22.dp),
         contentAlignment = Alignment.Center

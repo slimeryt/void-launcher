@@ -24,7 +24,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -81,7 +80,7 @@ fun GlassPanel(
     val blurStrength = glass.blurStrength
     val frostAmount = glass.frostAmount
     var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
-    val shape = RoundedCornerShape(cornerRadius)
+    val shape = remember(cornerRadius) { SmoothCornerShape(radius = cornerRadius) }
 
     // Always remember — never conditional (breaks when toggling refraction/sheen)
     val transition = rememberInfiniteTransition(label = "liquid")

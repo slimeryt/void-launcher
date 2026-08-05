@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material3.Icon
@@ -54,6 +53,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voidlauncher.app.BuildConfig
 import com.voidlauncher.app.R
+import com.voidlauncher.app.ui.components.SmoothCornerShape
 import com.voidlauncher.app.ui.theme.IosBlue
 import com.voidlauncher.app.ui.theme.VoidInk
 import com.voidlauncher.app.ui.theme.VoidMist
@@ -62,7 +62,7 @@ import com.voidlauncher.app.update.UpdateUiState
 
 private val UpdatesCardBg = Color(0xFF1C1F26)
 private val CancelGrey = Color(0xFF3A3A3C)
-private val ButtonShape = RoundedCornerShape(28.dp)
+private val ButtonShape = SmoothCornerShape(28.dp)
 
 @Composable
 fun UpdatesScreen(
@@ -183,7 +183,7 @@ fun UpdatesScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(SmoothCornerShape(20.dp))
                     .background(UpdatesCardBg)
                     .padding(horizontal = 18.dp, vertical = 16.dp)
             ) {

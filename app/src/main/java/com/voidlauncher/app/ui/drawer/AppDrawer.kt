@@ -27,7 +27,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import com.voidlauncher.app.ui.components.CapsuleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
@@ -144,7 +144,7 @@ fun AppDrawer(
                             modifier = Modifier
                                 .width(40.dp)
                                 .height(4.dp)
-                                .background(VoidMuted.copy(alpha = 0.55f), RoundedCornerShape(99.dp))
+                                .background(VoidMuted.copy(alpha = 0.55f), CapsuleShape)
                         )
                     }
 

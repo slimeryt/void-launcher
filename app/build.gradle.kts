@@ -80,6 +80,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.animation:animation")
+    implementation("androidx.graphics:graphics-shapes:1.0.1")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("com.google.accompanist:accompanist-drawablepainter:0.36.0")
     implementation("com.google.accompanist:accompanist-systemuicontroller:0.36.0")

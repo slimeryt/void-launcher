@@ -7,10 +7,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -27,6 +25,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.voidlauncher.app.data.AppInfo
 import com.voidlauncher.app.ui.theme.VoidMist
+
+private val SheetShape = SmoothCornerShape(14.dp)
 
 /**
  * Compact iOS-style floating context menu (not a bottom sheet).
@@ -56,8 +56,8 @@ fun AppActionsSheet(
         Column(
             modifier = Modifier
                 .width(210.dp)
-                .shadow(18.dp, RoundedCornerShape(14.dp), clip = false)
-                .clip(RoundedCornerShape(14.dp))
+                .shadow(18.dp, SheetShape, clip = false)
+                .clip(SheetShape)
                 .background(Color(0xF22C2C2E))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },

@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -24,10 +23,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import com.voidlauncher.app.ui.components.CapsuleShape
 import com.voidlauncher.app.ui.theme.IosBlue
 import kotlin.math.roundToInt
 
-private val ThumbShape = RoundedCornerShape(99.dp)
+private val ThumbShape = CapsuleShape
 
 /** iOS-style switch with a wide capsule thumb (not a small circle). */
 @Composable
@@ -56,7 +56,7 @@ fun IosToggle(
         modifier = modifier
             .width(trackW)
             .height(trackH)
-            .clip(RoundedCornerShape(99.dp))
+            .clip(CapsuleShape)
             .background(trackColor)
             .pointerInput(checked, enabled) {
                 if (!enabled) return@pointerInput
@@ -122,14 +122,14 @@ fun IosSlider(
                 .fillMaxWidth()
                 .height(trackH)
                 .align(Alignment.Center)
-                .clip(RoundedCornerShape(99.dp))
+                .clip(CapsuleShape)
                 .background(Color(0xFF3A3A3C))
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth(frac.coerceAtLeast(0.001f))
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(99.dp))
+                    .clip(CapsuleShape)
                     .background(if (enabled) IosBlue else IosBlue.copy(alpha = 0.4f))
             )
         }
