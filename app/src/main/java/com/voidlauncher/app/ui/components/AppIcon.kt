@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -51,15 +52,22 @@ fun AppIcon(
         app.icon.toCachedBitmap(maxSize = 192, cornerRadiusRatio = 0.24f).asImageBitmap()
     }
 
+    // Edit mode: no gesture here — parent cell owns tap + long-press drag
+    val clickModifier = if (editMode) {
+        Modifier
+    } else {
+        Modifier.combinedClickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+            onClick = onClick,
+            onLongClick = onLongClick
+        )
+    }
+
     Column(
         modifier = modifier
             .width(80.dp)
-            .combinedClickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-                onLongClick = onLongClick
-            )
+            .then(clickModifier)
             .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp)

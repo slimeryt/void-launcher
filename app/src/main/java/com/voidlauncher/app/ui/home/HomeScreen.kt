@@ -157,6 +157,7 @@ fun HomeScreen(
         modifier = modifier
             .fillMaxSize()
             .pointerInput(state.isEditMode) {
+                if (state.isEditMode) return@pointerInput
                 detectTapGestures(onLongPress = { onEditModeChange(true) })
             }
             .pointerInput(state.isEditMode, state.isDrawerOpen) {
@@ -313,6 +314,25 @@ fun HomeScreen(
                                     )
                                     cellCenters = cellCenters + (index to c)
                                 }
+                                .pointerInput(state.isEditMode, page, index, item) {
+                                    if (!state.isEditMode) return@pointerInput
+                                    detectTapGestures(
+                                        onTap = {
+                                            when (item) {
+                                                is HomeItem.App -> {
+                                                    selectedKeys =
+                                                        if (item.key in selectedKeys) selectedKeys - item.key
+                                                        else selectedKeys + item.key
+                                                }
+                                                is HomeItem.Folder -> {
+                                                    selectedKeys =
+                                                        if (item.id in selectedKeys) selectedKeys - item.id
+                                                        else selectedKeys + item.id
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
                                 .pointerInput(state.isEditMode, page, index) {
                                     if (!state.isEditMode) return@pointerInput
                                     detectDragGesturesAfterLongPress(
@@ -387,20 +407,10 @@ fun HomeScreen(
                                             app = app,
                                             showLabel = state.showLabels,
                                             iconScale = state.iconScale,
-                                            onClick = {
-                                                if (state.isEditMode) {
-                                                    selectedKeys =
-                                                        if (item.key in selectedKeys) selectedKeys - item.key
-                                                        else selectedKeys + item.key
-                                                } else {
-                                                    onLaunchApp(app)
-                                                }
-                                            },
+                                            onClick = { onLaunchApp(app) },
                                             onLongClick = {
-                                                if (!state.isEditMode) {
-                                                    onEditModeChange(true)
-                                                    onAppLongClick(app)
-                                                }
+                                                onEditModeChange(true)
+                                                onAppLongClick(app)
                                             },
                                             editMode = state.isEditMode,
                                             selected = item.key in selectedKeys,
@@ -427,13 +437,7 @@ fun HomeScreen(
                                         iconScale = state.iconScale,
                                         editMode = state.isEditMode,
                                         selected = item.id in selectedKeys,
-                                        onClick = {
-                                            if (state.isEditMode) {
-                                                selectedKeys =
-                                                    if (item.id in selectedKeys) selectedKeys - item.id
-                                                    else selectedKeys + item.id
-                                            }
-                                        },
+                                        onClick = {},
                                         onLongClick = { onEditModeChange(true) },
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -467,7 +471,7 @@ fun HomeScreen(
                         offset <= -0.5f -> page - 1
                         else -> page
                     }.coerceIn(0, (pageCount - 1).coerceAtLeast(0))
-                    val showDots = pageCount > 1 && dominantPage > 0
+                    val showDots = pageCount > 1
                     val dotsWidth = (24 + pageCount * 14).dp
                     val pillWidth = if (showDots) dotsWidth.coerceAtLeast(56.dp) else 56.dp
                     GlassPanel(
@@ -658,9 +662,12 @@ private fun FolderIcon(
         modifier = modifier
             .width(80.dp)
             .padding(vertical = 6.dp)
-            .pointerInput(Unit) {
-                detectTapGestures(onLongPress = { onLongClick() }, onTap = { onClick() })
-            },
+            .then(
+                if (editMode) Modifier
+                else Modifier.pointerInput(Unit) {
+                    detectTapGestures(onLongPress = { onLongClick() }, onTap = { onClick() })
+                }
+            ),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
