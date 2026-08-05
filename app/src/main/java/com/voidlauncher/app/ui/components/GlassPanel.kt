@@ -301,21 +301,39 @@ fun GlassPanel(
                             style = Stroke(width = 1.2.dp.toPx())
                         )
                     } else {
-                        drawRect(Color.White.copy(alpha = if (strong) 0.22f else 0.14f))
+                        // No real wallpaper sample to blur/refract yet — still scale by the
+                        // settings so sliders/toggles are visibly alive, not a dead flat panel.
+                        val frost = frostAmount
+                        val blur = blurStrength
+                        drawRect(Color.White.copy(alpha = (if (strong) 0.22f else 0.14f) * frost))
                         drawRect(
                             brush = Brush.verticalGradient(
                                 colors = listOf(
-                                    Color.White.copy(alpha = if (strong) 0.26f else 0.16f),
-                                    Color.White.copy(alpha = if (strong) 0.14f else 0.08f),
-                                    Color.Black.copy(alpha = 0.08f)
+                                    Color.White.copy(alpha = (if (strong) 0.26f else 0.16f) * frost),
+                                    Color.White.copy(alpha = (if (strong) 0.14f else 0.08f) * frost),
+                                    Color.Black.copy(alpha = 0.08f * frost)
                                 )
                             )
                         )
                         if (tint.alpha > 0.01f) drawRect(tint)
+                        if (effectiveSheen) {
+                            val bandX = size.width * sheenShift
+                            drawRect(
+                                brush = Brush.linearGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color.White.copy(alpha = 0.14f),
+                                        Color.Transparent
+                                    ),
+                                    start = Offset(bandX - size.width * 0.2f, 0f),
+                                    end = Offset(bandX + size.width * 0.2f, size.height)
+                                )
+                            )
+                        }
                         drawRoundRect(
                             brush = Brush.linearGradient(
                                 colors = listOf(
-                                    Color.White.copy(alpha = 0.55f),
+                                    Color.White.copy(alpha = 0.55f * blur.coerceIn(0.5f, 1f)),
                                     VoidCyan.copy(alpha = 0.20f),
                                     Color.White.copy(alpha = 0.10f),
                                     Color.Black.copy(alpha = 0.25f)

@@ -68,6 +68,8 @@ private enum class SettingsPage { Root, LiquidGlass, HomeLayout, Updates, Genera
 fun SettingsContent(
     state: LauncherUiState,
     updateState: UpdateUiState,
+    hasWallpaperAccess: Boolean,
+    onGrantWallpaperAccess: () -> Unit,
     onShowLabelsChange: (Boolean) -> Unit,
     onGridColumnsChange: (Int) -> Unit,
     onIconScaleChange: (Float) -> Unit,
@@ -160,6 +162,8 @@ fun SettingsContent(
                     )
                     SettingsPage.LiquidGlass -> LiquidGlassPage(
                         state = state,
+                        hasWallpaperAccess = hasWallpaperAccess,
+                        onGrantWallpaperAccess = onGrantWallpaperAccess,
                         onGlassBlurChange = onGlassBlurChange,
                         onGlassFrostChange = onGlassFrostChange,
                         onGlassRefractionChange = onGlassRefractionChange,
@@ -285,11 +289,17 @@ private fun RootPage(
 @Composable
 private fun LiquidGlassPage(
     state: LauncherUiState,
+    hasWallpaperAccess: Boolean,
+    onGrantWallpaperAccess: () -> Unit,
     onGlassBlurChange: (Float) -> Unit,
     onGlassFrostChange: (Float) -> Unit,
     onGlassRefractionChange: (Boolean) -> Unit,
     onGlassSheenChange: (Boolean) -> Unit
 ) {
+    if (!hasWallpaperAccess) {
+        WallpaperAccessBanner(onGrantWallpaperAccess)
+    }
+
     // Live preview — settings apply immediately to this panel
     GlassPanel(
         modifier = Modifier
@@ -350,6 +360,43 @@ private fun LiquidGlassPage(
         color = VoidMuted,
         modifier = Modifier.padding(horizontal = 8.dp)
     )
+}
+
+@Composable
+private fun WallpaperAccessBanner(onGrantAccess: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(CardShape)
+            .background(SettingsCardBg)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(
+            text = "Wallpaper access needed",
+            style = MaterialTheme.typography.titleMedium,
+            color = VoidMist
+        )
+        Text(
+            text = "Polar needs permission to read your wallpaper so Liquid Glass can blur " +
+                "and refract it live. Without it, glass falls back to a flat look and these " +
+                "settings won't visibly change anything.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = VoidMuted
+        )
+        Text(
+            text = "Grant access",
+            style = MaterialTheme.typography.titleMedium,
+            color = IosBlue,
+            modifier = Modifier
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onGrantAccess
+                )
+                .padding(vertical = 4.dp)
+        )
+    }
 }
 
 @Composable

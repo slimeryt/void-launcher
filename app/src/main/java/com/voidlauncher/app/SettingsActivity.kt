@@ -18,6 +18,7 @@ import androidx.lifecycle.lifecycleScope
 import com.voidlauncher.app.glass.GlassSettings
 import com.voidlauncher.app.glass.LocalBlurredWallpaper
 import com.voidlauncher.app.glass.LocalGlassSettings
+import com.voidlauncher.app.glass.StoragePermission
 import com.voidlauncher.app.glass.WallpaperBlurController
 import com.voidlauncher.app.ui.settings.SettingsContent
 import com.voidlauncher.app.ui.theme.VoidInk
@@ -49,6 +50,7 @@ class SettingsActivity : ComponentActivity() {
             val state by viewModel.state.collectAsStateWithLifecycle()
             val updateState by updateViewModel.state.collectAsStateWithLifecycle()
             val blurredWallpaper by blurController.wallpaper.collectAsStateWithLifecycle()
+            val hasWallpaperAccess by blurController.hasAccess.collectAsStateWithLifecycle()
 
             DisposableEffect(Unit) {
                 blurController.start()
@@ -68,6 +70,8 @@ class SettingsActivity : ComponentActivity() {
                     SettingsContent(
                         state = state,
                         updateState = updateState,
+                        hasWallpaperAccess = hasWallpaperAccess,
+                        onGrantWallpaperAccess = { startActivity(StoragePermission.requestIntent(this)) },
                         onShowLabelsChange = viewModel::setShowLabels,
                         onGridColumnsChange = viewModel::setGridColumns,
                         onIconScaleChange = viewModel::setIconScale,

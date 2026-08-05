@@ -50,6 +50,10 @@ class WallpaperBlurController(
     private val _wallpaper = MutableStateFlow<BlurredWallpaper?>(null)
     val wallpaper: StateFlow<BlurredWallpaper?> = _wallpaper.asStateFlow()
 
+    private val _hasAccess = MutableStateFlow(false)
+    /** Whether we're actually allowed to read the real wallpaper bitmap right now. */
+    val hasAccess: StateFlow<Boolean> = _hasAccess.asStateFlow()
+
     private var loadJob: Job? = null
     private var receiverRegistered = false
 
@@ -83,12 +87,20 @@ class WallpaperBlurController(
 
     fun refresh() {
         loadJob?.cancel()
+        if (!StoragePermission.isGranted(context)) {
+            // Don't bother calling an API we know will throw — just report the gap.
+            _hasAccess.value = false
+            return
+        }
         loadJob = scope.launch {
             val result = withContext(Dispatchers.Default) {
                 captureAndBlur()
             }
             if (result != null) {
+                _hasAccess.value = true
                 _wallpaper.value = result
+            } else {
+                _hasAccess.value = false
             }
         }
     }
