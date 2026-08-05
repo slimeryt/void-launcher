@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -57,7 +58,8 @@ import com.voidlauncher.app.viewmodel.LauncherUiState
 private val SettingsCardBg = Color(0xFF1C1F26)
 private val SettingsChipBg = Color(0xFF2A2E38)
 private val SettingsDivider = Color(0x14FFFFFF)
-private val CardShape = SmoothCornerShape(radius = 14.dp, smoothing = 0.85f)
+/** Visible soft radius — not bubbly (36), not nearly-square. */
+private val CardShape = RoundedCornerShape(20.dp)
 
 private enum class SettingsPage { Root, LiquidGlass, HomeLayout, Updates, General }
 
@@ -657,7 +659,7 @@ private fun ActionChip(
         color = fg,
         textAlign = TextAlign.Center,
         modifier = modifier
-            .clip(SmoothCornerShape(radius = 12.dp, smoothing = 0.8f))
+            .clip(RoundedCornerShape(14.dp))
             .background(bg)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(vertical = 12.dp)
