@@ -12,8 +12,18 @@ android {
         applicationId = "com.voidlauncher.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
-        versionName = (project.findProperty("versionName") as String?) ?: "0.1.0"
+        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1002
+        versionName = (project.findProperty("versionName") as String?) ?: "0.1.2"
+    }
+
+    signingConfigs {
+        create("ota") {
+            // Shared OTA key — same cert for local + CI so Updates never conflict
+            storeFile = rootProject.file("signing/void-ota.jks")
+            storePassword = "void-ota-store"
+            keyAlias = "void"
+            keyPassword = "void-ota-store"
+        }
     }
 
     buildFeatures {
@@ -22,8 +32,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("ota")
+        }
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("ota")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

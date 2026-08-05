@@ -270,6 +270,13 @@ private fun UpdateCard(
                 color = VoidCyan
             )
         }
+
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(
+            text = "If install says “package conflicts”, uninstall Void once, then install this build. Later updates will work over-the-air.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = VoidMuted
+        )
     }
 }
 

@@ -53,17 +53,17 @@ jobs:
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
 
-      - name: Build debug APK
+      - name: Build signed APK
         run: |
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon \
+          ./gradlew :app:assembleRelease --no-daemon \
             -PversionName=${{ steps.ver.outputs.name }} \
             -PversionCode=${{ steps.ver.outputs.code }}
 
       - name: Stage APK
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk dist/VoidLauncher.apk
+          cp app/build/outputs/apk/release/app-release.apk dist/VoidLauncher.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

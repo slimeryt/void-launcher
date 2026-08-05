@@ -8,10 +8,10 @@ A minimal glass-aesthetic Android home screen launcher inspired by Void Launcher
 - **Live liquid glass** with wallpaper blur + lens refraction / chromatic CA
 - **Glass dock** with favorite apps
 - **Swipe-up app drawer** (swipe down to close) with search
-- **Long-press home** → edit mode → **Settings**
-- **Settings** opens as a normal Void app (solid black)
-- **Auto-updater** via GitHub Releases
+- **Long-press home** → edit mode → **Settings** (solid black activity)
+- **Settings** also has GitHub Releases auto-updater
 - Registers as a system **HOME** launcher
+- App icon opens the **launcher home** (not Settings)
 
 ## Updates (OTA)
 
@@ -30,13 +30,11 @@ Or run the **Release APK** GitHub Action manually. It uploads `VoidLauncher.apk`
 
 Release body should include `versionCode: N` (the workflow adds this automatically).
 
-## Build locally
+## Signing / OTA
 
-```powershell
-.\gradlew.bat :app:assembleDebug -PversionName=0.1.0 -PversionCode=1
-```
+All APKs are signed with `signing/void-ota.jks` (local + CI) so Updates can install over previous builds.
 
-APK: `app/build/outputs/apk/debug/app-debug.apk`
+If Android says the package conflicts, uninstall the old Void once, then install the new APK — after that, Settings → Updates works.
 
 ## Gestures
 
@@ -46,7 +44,8 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`
 | Swipe down in apps | Close drawer |
 | Long-press home | Edit mode → Settings |
 | Long-press icon | Favorite / hide / info |
-| Open Void app | Settings (black) |
+| Open Void app icon | Launcher home |
+| Long-press home → Settings | Solid-black settings + updater |
 
 ## Stack
 

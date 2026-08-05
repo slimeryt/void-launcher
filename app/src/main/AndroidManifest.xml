@@ -35,10 +35,14 @@
             android:launchMode="singleTask"
             android:clearTaskOnLaunch="true"
             android:stateNotNeeded="true"
-            android:excludeFromRecents="true"
             android:windowSoftInputMode="adjustNothing"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode"
             android:theme="@style/Theme.VoidLauncher">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -47,18 +51,14 @@
             </intent-filter>
         </activity>
 
+        <!-- Opened from Edit Home → Settings (solid black, not the app icon entry) -->
         <activity
             android:name=".SettingsActivity"
-            android:exported="true"
-            android:label="@string/app_name"
+            android:exported="false"
+            android:label="Void Settings"
             android:theme="@style/Theme.VoidSettings"
-            android:windowSoftInputMode="adjustResize">
-
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+            android:windowSoftInputMode="adjustResize"
+            android:parentActivityName=".MainActivity" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
