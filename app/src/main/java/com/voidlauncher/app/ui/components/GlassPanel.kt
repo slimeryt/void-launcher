@@ -13,7 +13,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -87,9 +86,10 @@ fun GlassPanel(
                 shape = shape
             )
     ) {
+        // matchParentSize = size to content, don't expand like fillMaxSize would
         Box(
             modifier = Modifier
-                .fillMaxSize()
+                .matchParentSize()
                 .drawBehind {
                     val panel = coords
                     val wp = blurred

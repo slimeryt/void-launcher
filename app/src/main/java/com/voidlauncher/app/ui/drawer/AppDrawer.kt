@@ -95,12 +95,7 @@ fun AppDrawer(
                     .fillMaxSize()
                     .statusBarsPadding()
                     .navigationBarsPadding()
-                    .padding(12.dp)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {} // consume taps so scrim doesn't close when tapping panel
-                    ),
+                    .padding(12.dp),
                 cornerRadius = 36.dp,
                 strong = true,
                 enableSheen = false,
@@ -169,7 +164,8 @@ fun AppDrawer(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                                .height(48.dp)
+                                .padding(horizontal = 14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
@@ -204,7 +200,9 @@ fun AppDrawer(
                     when {
                         state.isLoading -> {
                             Box(
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
                                 contentAlignment = Alignment.Center
                             ) {
                                 CircularProgressIndicator(color = VoidCyan)
@@ -212,7 +210,9 @@ fun AppDrawer(
                         }
                         state.filteredApps.isEmpty() -> {
                             Box(
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
@@ -229,7 +229,9 @@ fun AppDrawer(
                                 contentPadding = PaddingValues(bottom = 24.dp, top = 4.dp),
                                 verticalArrangement = Arrangement.spacedBy(4.dp),
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
                             ) {
                                 items(
                                     items = state.filteredApps,
