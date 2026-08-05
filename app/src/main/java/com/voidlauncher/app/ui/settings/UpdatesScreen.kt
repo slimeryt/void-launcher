@@ -358,14 +358,17 @@ private fun UpdateDropletActions(
     }
 }
 
+/**
+ * Android 16 / Material 3 style: active track + gap + inactive track (two pieces).
+ */
 @Composable
-private fun DropletProgressBar(progress: Float, segments: Int = 8) {
+private fun DropletProgressBar(progress: Float) {
     val indeterminate = rememberInfiniteTransition(label = "search-bar")
     val sweep by indeterminate.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = FastOutSlowInEasing),
+            animation = tween(1100, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "sweep"
@@ -374,32 +377,80 @@ private fun DropletProgressBar(progress: Float, segments: Int = 8) {
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
-            .height(5.dp)
+            .height(4.dp)
     ) {
-        val gap = 3.dp.toPx()
-        val segW = ((size.width - gap * (segments - 1)) / segments).coerceAtLeast(1f)
+        val gap = 4.dp.toPx()
         val r = size.height / 2f
-        val filled = if (progress >= 0f) {
-            (progress.coerceIn(0f, 1f) * segments).toInt().coerceIn(0, segments)
-        } else {
-            -1
-        }
-        val head = ((sweep * (segments + 3)).toInt())
+        val track = Color.White.copy(alpha = 0.28f)
+        val active = Color.White
 
-        for (i in 0 until segments) {
-            val x = i * (segW + gap)
-            val on = if (filled < 0) {
-                val d = (i - head + segments * 4) % (segments + 3)
-                d in 0..2
-            } else {
-                i < filled
+        if (progress < 0f) {
+            // Indeterminate: sliding active capsule with trailing track gap
+            val headW = (size.width * 0.32f).coerceAtLeast(size.height * 3f)
+            val travel = size.width + headW + gap
+            val headEnd = (sweep * travel) - gap
+            val headStart = headEnd - headW
+
+            // Left inactive (before gap before head)
+            val leftEnd = (headStart - gap).coerceAtMost(size.width)
+            if (leftEnd > 0f) {
+                drawRoundRect(
+                    color = track,
+                    topLeft = Offset.Zero,
+                    size = Size(leftEnd.coerceAtLeast(0f), size.height),
+                    cornerRadius = CornerRadius(r, r)
+                )
             }
-            drawRoundRect(
-                color = if (on) Color.White else Color.White.copy(alpha = 0.22f),
-                topLeft = Offset(x, 0f),
-                size = Size(segW, size.height),
-                cornerRadius = CornerRadius(r, r)
-            )
+            // Active head
+            val drawStart = headStart.coerceIn(0f, size.width)
+            val drawEnd = headEnd.coerceIn(0f, size.width)
+            if (drawEnd > drawStart) {
+                drawRoundRect(
+                    color = active,
+                    topLeft = Offset(drawStart, 0f),
+                    size = Size(drawEnd - drawStart, size.height),
+                    cornerRadius = CornerRadius(r, r)
+                )
+            }
+            // Right inactive (after gap after head)
+            val rightStart = (headEnd + gap).coerceAtLeast(0f)
+            if (rightStart < size.width) {
+                drawRoundRect(
+                    color = track,
+                    topLeft = Offset(rightStart, 0f),
+                    size = Size(size.width - rightStart, size.height),
+                    cornerRadius = CornerRadius(r, r)
+                )
+            }
+        } else {
+            val p = progress.coerceIn(0f, 1f)
+            if (p >= 0.999f) {
+                drawRoundRect(
+                    color = active,
+                    topLeft = Offset.Zero,
+                    size = Size(size.width, size.height),
+                    cornerRadius = CornerRadius(r, r)
+                )
+            } else {
+                val activeW = ((size.width - gap) * p).coerceAtLeast(0f)
+                if (activeW > 0.5f) {
+                    drawRoundRect(
+                        color = active,
+                        topLeft = Offset.Zero,
+                        size = Size(activeW, size.height),
+                        cornerRadius = CornerRadius(r, r)
+                    )
+                }
+                val restStart = activeW + gap
+                if (restStart < size.width) {
+                    drawRoundRect(
+                        color = track,
+                        topLeft = Offset(restStart, 0f),
+                        size = Size(size.width - restStart, size.height),
+                        cornerRadius = CornerRadius(r, r)
+                    )
+                }
+            }
         }
     }
 }

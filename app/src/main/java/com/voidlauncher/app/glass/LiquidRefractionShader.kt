@@ -6,11 +6,9 @@ import androidx.annotation.RequiresApi
 import androidx.compose.ui.geometry.Size
 
 /**
- * AGSL liquid glass — bezel refraction inspired by
- * https://kube.io/blog/liquid-glass-css-svg
- *
- * Squircle height profile on the rim + convex inward sampling,
- * flat center, chromatic aberration, rim specular.
+ * AGSL liquid-glass refraction (API 33+).
+ * Bezel convex warp + subtle full-panel liquid ripple so motion reads live.
+ * Profile inspired by https://kube.io/blog/liquid-glass-css-svg
  */
 object LiquidRefractionShader {
 
@@ -23,57 +21,39 @@ object LiquidRefractionShader {
         uniform float frost;
         uniform float bezel;
 
-        float squircleHeight(float x) {
-            // kube.io convex squircle: y = (1 - (1-x)^4)^(1/4)
-            float t = clamp(x, 0.0, 1.0);
-            float inner = 1.0 - pow(1.0 - t, 4.0);
-            return pow(max(inner, 0.0), 0.25);
-        }
-
-        float squircleSlope(float x) {
-            float d = 0.02;
-            return (squircleHeight(x + d) - squircleHeight(x - d)) / (2.0 * d);
-        }
-
         half4 main(float2 fragCoord) {
             float2 uv = fragCoord / resolution;
 
-            float edX = min(uv.x, 1.0 - uv.x);
-            float edY = min(uv.y, 1.0 - uv.y);
-            float edgeDist = min(edX, edY);
+            float ed = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
+            float bz = max(bezel, 0.08);
+            float t = clamp(ed / bz, 0.0, 1.0);
 
-            float bezelW = max(bezel, 0.06);
-            float t = clamp(edgeDist / bezelW, 0.0, 1.0);
-            float slope = abs(squircleSlope(t));
-            float rim = (1.0 - smoothstep(0.72, 1.0, t));
-            float breathe = 1.0 + 0.04 * sin(time * 1.15);
-            float mag = intensity * slope * rim * breathe;
+            float rim = 1.0 - t;
+            rim = rim * rim * (3.0 - 2.0 * rim);
+            float mid = 4.0 * t * (1.0 - t);
+            float weight = rim * (0.4 + 0.6 * mid);
 
-            float2 inward = float2(0.0, 0.0);
-            if (edX < edY) {
-                inward.x = uv.x < 0.5 ? 1.0 : -1.0;
-            } else {
-                inward.y = uv.y < 0.5 ? 1.0 : -1.0;
-            }
-            float2 toCenter = normalize(float2(0.5, 0.5) - uv + 1e-5);
-            float2 dir = normalize(mix(inward, toCenter, 0.55) + 1e-5);
+            float breathe = 1.0 + 0.12 * sin(time * 1.4);
+            float mag = intensity * weight * breathe;
 
-            // Convex: sample from outside the bezel so wallpaper bends inward
-            float2 base = uv - dir * mag * 0.24;
+            float2 toCenter = normalize(float2(0.5, 0.5) - uv + 0.0001);
+            // Full-panel ripple so refraction is obviously "live" even away from bezel
+            float ripple = sin(time * 2.2 + uv.x * 12.0 + uv.y * 9.0) * intensity * 0.045;
+            float2 base = uv - toCenter * mag + float2(ripple, -ripple * 0.7);
 
-            float ca = chromatic * rim * (0.55 + 0.45 * slope);
-            half4 cR = content.eval((base + dir * ca) * resolution);
+            float ca = chromatic * (weight + 0.35);
+            half4 cR = content.eval((base + toCenter * ca) * resolution);
             half4 cG = content.eval(base * resolution);
-            half4 cB = content.eval((base - dir * ca) * resolution);
+            half4 cB = content.eval((base - toCenter * ca) * resolution);
+
             half4 color = half4(cR.r, cG.g, cB.b, max(max(cR.a, cG.a), cB.a));
 
             if (frost > 0.001) {
-                half3 frostTint = half3(0.93, 0.96, 0.99);
-                color.rgb = mix(color.rgb, frostTint, half(frost) * 0.12);
+                color.rgb = mix(color.rgb, half3(0.94, 0.97, 1.0), half(frost) * 0.12);
             }
 
-            float spec = rim * slope * 0.24 * (0.55 + 0.45 * sin(time * 0.7 + uv.x * 6.0));
-            color.rgb += half3(spec, spec, spec * 1.05);
+            float spec = (weight + 0.15) * 0.16 * (0.55 + 0.45 * sin(time * 0.9 + uv.x * 7.0));
+            color.rgb += half3(spec, spec, spec);
 
             return color;
         }
@@ -86,11 +66,11 @@ object LiquidRefractionShader {
     fun update(
         shader: RuntimeShader,
         size: Size,
-        intensity: Float = 0.55f,
-        chromatic: Float = 0.014f,
-        frost: Float = 0f,
-        time: Float = 0f,
-        bezel: Float = 0.16f
+        intensity: Float,
+        chromatic: Float,
+        frost: Float,
+        time: Float,
+        bezel: Float
     ) {
         shader.setFloatUniform("resolution", size.width.coerceAtLeast(1f), size.height.coerceAtLeast(1f))
         shader.setFloatUniform("intensity", intensity)

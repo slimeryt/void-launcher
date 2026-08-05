@@ -19,9 +19,11 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -75,49 +77,41 @@ fun GlassPanel(
     val glass = LocalGlassSettings.current
     val effectiveRefraction = enableRefraction && glass.refractionEnabled
     val effectiveSheen = enableSheen && glass.sheenEnabled
+    // Hoist for snapshot invalidation of graphicsLayer / drawBehind
+    val blurStrength = glass.blurStrength
+    val frostAmount = glass.frostAmount
     var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val shape = RoundedCornerShape(cornerRadius)
 
-    val needsMotion = effectiveSheen || effectiveRefraction
-    val transition = if (needsMotion) {
-        rememberInfiniteTransition(label = "liquid")
-    } else {
-        null
-    }
-    val sheenShift by if (transition != null) {
-        transition.animateFloat(
-            initialValue = -0.15f,
-            targetValue = 1.15f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(6400, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "sheen"
-        )
-    } else {
-        remember { mutableStateOf(0.5f) }
-    }
-    val refractTime by if (transition != null) {
-        transition.animateFloat(
-            initialValue = 0f,
-            targetValue = (Math.PI * 2).toFloat(),
-            animationSpec = infiniteRepeatable(
-                animation = tween(5200, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "refract-time"
-        )
-    } else {
-        remember { mutableStateOf(0f) }
-    }
+    // Always remember — never conditional (breaks when toggling refraction/sheen)
+    val transition = rememberInfiniteTransition(label = "liquid")
+    val sheenShift by transition.animateFloat(
+        initialValue = -0.15f,
+        targetValue = 1.15f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(6400, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "sheen"
+    )
+    val refractTime by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = (Math.PI * 2).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(4200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "refract-time"
+    )
 
-    val runtimeShader = remember(effectiveRefraction) {
-        if (effectiveRefraction && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    val runtimeShader = remember {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             runCatching { LiquidRefractionShader.create() }.getOrNull()
         } else {
             null
         }
     }
+    val useShader = effectiveRefraction && runtimeShader != null
 
     Box(
         modifier = modifier
@@ -135,13 +129,25 @@ fun GlassPanel(
                 shape = shape
             )
     ) {
+        // Wallpaper sample as a child of graphicsLayer so AGSL RuntimeShader reliably samples it
         Box(
             modifier = Modifier
                 .matchParentSize()
                 .graphicsLayer {
                     compositingStrategy = CompositingStrategy.Offscreen
-                    val blurPx = (if (strong) 22f else 14f) * glass.blurStrength
-                    val blurEffect = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    // Read animated + settings values so this layer invalidates live
+                    val tick = refractTime
+                    val b = blurStrength
+                    val f = frostAmount
+                    val shaderOn = useShader
+
+                    // Keep GPU blur light when refracting so the warp stays readable
+                    val blurPx = if (shaderOn) {
+                        (if (strong) 8f else 5f) * b
+                    } else {
+                        (if (strong) 20f else 12f) * b
+                    }
+                    val blurEffect = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && blurPx >= 1f) {
                         AndroidRenderEffect.createBlurEffect(
                             blurPx,
                             blurPx,
@@ -151,22 +157,24 @@ fun GlassPanel(
                         null
                     }
                     val shaderEffect =
-                        if (runtimeShader != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        if (shaderOn && runtimeShader != null &&
+                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                            size.width > 1f && size.height > 1f
+                        ) {
                             LiquidRefractionShader.update(
                                 shader = runtimeShader,
                                 size = Size(size.width, size.height),
-                                intensity = (if (strong) 0.85f else 0.65f) *
-                                    glass.blurStrength.coerceIn(0.6f, 1.4f),
-                                chromatic = if (strong) 0.018f else 0.012f,
-                                frost = (if (strong) 0.35f else 0.22f) * glass.frostAmount,
-                                time = refractTime,
-                                bezel = if (strong) 0.18f else 0.14f
+                                intensity = (if (strong) 0.62f else 0.48f) * b.coerceIn(0.5f, 1.6f),
+                                chromatic = if (strong) 0.028f else 0.018f,
+                                frost = (if (strong) 0.22f else 0.12f) * f,
+                                time = tick,
+                                bezel = if (strong) 0.28f else 0.20f
                             )
                             AndroidRenderEffect.createRuntimeShaderEffect(runtimeShader, "content")
                         } else {
                             null
                         }
-                    // Blur backdrop first, then refract (so warp is visible)
+                    // Warp after a soft blur of the wallpaper sample
                     renderEffect = when {
                         shaderEffect != null && blurEffect != null ->
                             AndroidRenderEffect.createChainEffect(shaderEffect, blurEffect)
@@ -176,61 +184,46 @@ fun GlassPanel(
                         else -> null
                     }
                 }
-                .drawBehind {
-                    val panel = coords
-                    val wp = blurred
-                    if (wp == null || panel == null || !panel.isAttached || size.minDimension <= 2f) {
-                        return@drawBehind
-                    }
-                    val pos = panel.positionInWindow()
-                    val scaleX = wp.bitmapWidth.toFloat() / wp.screenWidth.toFloat()
-                    val scaleY = wp.bitmapHeight.toFloat() / wp.screenHeight.toFloat()
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val panel = coords
+                val wp = blurred
+                // Touch animated time so Canvas redraws with the CPU fallback / layout
+                val tick = refractTime
+                if (wp == null || panel == null || !panel.isAttached || size.minDimension <= 2f) {
+                    return@Canvas
+                }
+                val pos = panel.positionInWindow()
+                val scaleX = wp.bitmapWidth.toFloat() / wp.screenWidth.toFloat()
+                val scaleY = wp.bitmapHeight.toFloat() / wp.screenHeight.toFloat()
 
-                    val pad = if (effectiveRefraction) 0.18f else 0.02f
-                    val srcX = ((pos.x - size.width * pad) * scaleX).roundToInt()
-                        .coerceIn(0, (wp.bitmapWidth - 1).coerceAtLeast(0))
-                    val srcY = ((pos.y - size.height * pad) * scaleY).roundToInt()
-                        .coerceIn(0, (wp.bitmapHeight - 1).coerceAtLeast(0))
-                    val srcW = ((size.width * (1f + pad * 2f)) * scaleX).roundToInt().coerceAtLeast(1)
-                        .coerceAtMost((wp.bitmapWidth - srcX).coerceAtLeast(1))
-                    val srcH = ((size.height * (1f + pad * 2f)) * scaleY).roundToInt().coerceAtLeast(1)
-                        .coerceAtMost((wp.bitmapHeight - srcY).coerceAtLeast(1))
+                val pad = if (effectiveRefraction) 0.22f else 0.02f
+                val srcX = ((pos.x - size.width * pad) * scaleX).roundToInt()
+                    .coerceIn(0, (wp.bitmapWidth - 1).coerceAtLeast(0))
+                val srcY = ((pos.y - size.height * pad) * scaleY).roundToInt()
+                    .coerceIn(0, (wp.bitmapHeight - 1).coerceAtLeast(0))
+                val srcW = ((size.width * (1f + pad * 2f)) * scaleX).roundToInt().coerceAtLeast(1)
+                    .coerceAtMost((wp.bitmapWidth - srcX).coerceAtLeast(1))
+                val srcH = ((size.height * (1f + pad * 2f)) * scaleY).roundToInt().coerceAtLeast(1)
+                    .coerceAtMost((wp.bitmapHeight - srcY).coerceAtLeast(1))
 
-                    val dst = IntSize(
-                        size.width.roundToInt().coerceAtLeast(1),
-                        size.height.roundToInt().coerceAtLeast(1)
-                    )
+                val dst = IntSize(
+                    size.width.roundToInt().coerceAtLeast(1),
+                    size.height.roundToInt().coerceAtLeast(1)
+                )
 
-                    if (effectiveRefraction && runtimeShader == null) {
-                        val breathe = 1.06f + 0.025f * sin(refractTime.toDouble()).toFloat()
-                        val ca = 2.8f + 1.2f * cos(refractTime.toDouble()).toFloat()
-                        withTransform({ scale(breathe, breathe, pivot = center) }) {
-                            drawImage(
-                                image = wp.image,
-                                srcOffset = IntOffset(srcX, srcY),
-                                srcSize = IntSize(srcW, srcH),
-                                dstOffset = IntOffset((-ca).roundToInt(), (-ca * 0.25f).roundToInt()),
-                                dstSize = dst,
-                                alpha = 0.35f
-                            )
-                            drawImage(
-                                image = wp.image,
-                                srcOffset = IntOffset(srcX, srcY),
-                                srcSize = IntSize(srcW, srcH),
-                                dstOffset = IntOffset.Zero,
-                                dstSize = dst,
-                                alpha = 1f
-                            )
-                            drawImage(
-                                image = wp.image,
-                                srcOffset = IntOffset(srcX, srcY),
-                                srcSize = IntSize(srcW, srcH),
-                                dstOffset = IntOffset(ca.roundToInt(), (ca * 0.25f).roundToInt()),
-                                dstSize = dst,
-                                alpha = 0.35f
-                            )
-                        }
-                    } else {
+                if (effectiveRefraction && !useShader) {
+                    val breathe = 1.08f + 0.04f * sin(tick.toDouble()).toFloat()
+                    val ca = 3.5f + 2.0f * cos(tick.toDouble()).toFloat()
+                    withTransform({ scale(breathe, breathe, pivot = center) }) {
+                        drawImage(
+                            image = wp.image,
+                            srcOffset = IntOffset(srcX, srcY),
+                            srcSize = IntSize(srcW, srcH),
+                            dstOffset = IntOffset((-ca).roundToInt(), (-ca * 0.3f).roundToInt()),
+                            dstSize = dst,
+                            alpha = 0.4f
+                        )
                         drawImage(
                             image = wp.image,
                             srcOffset = IntOffset(srcX, srcY),
@@ -239,9 +232,27 @@ fun GlassPanel(
                             dstSize = dst,
                             alpha = 1f
                         )
+                        drawImage(
+                            image = wp.image,
+                            srcOffset = IntOffset(srcX, srcY),
+                            srcSize = IntSize(srcW, srcH),
+                            dstOffset = IntOffset(ca.roundToInt(), (ca * 0.3f).roundToInt()),
+                            dstSize = dst,
+                            alpha = 0.4f
+                        )
                     }
+                } else {
+                    drawImage(
+                        image = wp.image,
+                        srcOffset = IntOffset(srcX, srcY),
+                        srcSize = IntSize(srcW, srcH),
+                        dstOffset = IntOffset.Zero,
+                        dstSize = dst,
+                        alpha = 1f
+                    )
                 }
-        )
+            }
+        }
 
         Box(
             modifier = Modifier
@@ -249,7 +260,7 @@ fun GlassPanel(
                 .drawBehind {
                     val hasWp = blurred != null && coords != null
                     if (hasWp) {
-                        val frost = glass.frostAmount
+                        val frost = frostAmount
                         // Light veil — keep refraction readable (was washing the warp out)
                         drawRect(Color.White.copy(alpha = (if (strong) 0.10f else 0.06f) * frost))
                         drawRect(

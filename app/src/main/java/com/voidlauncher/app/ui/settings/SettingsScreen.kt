@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.theme.IosBlue
 import com.voidlauncher.app.ui.theme.VoidInk
 import com.voidlauncher.app.ui.theme.VoidMist
@@ -289,6 +290,24 @@ private fun LiquidGlassPage(
     onGlassRefractionChange: (Boolean) -> Unit,
     onGlassSheenChange: (Boolean) -> Unit
 ) {
+    // Live preview — settings apply immediately to this panel
+    GlassPanel(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(120.dp),
+        cornerRadius = 28.dp,
+        strong = true,
+        enableSheen = state.glassSheen,
+        enableRefraction = state.glassRefraction
+    ) {
+        Text(
+            text = "Liquid Glass preview",
+            style = MaterialTheme.typography.titleMedium,
+            color = VoidMist,
+            modifier = Modifier.align(Alignment.Center)
+        )
+    }
+
     SettingsGroup(label = "Look") {
         ToggleRow(
             title = "Refraction",
@@ -326,7 +345,7 @@ private fun LiquidGlassPage(
     }
 
     Text(
-        text = "Changes apply live on the home screen dock, search pill, and folders.",
+        text = "Preview above updates live. Home dock / pills use the same settings.",
         style = MaterialTheme.typography.bodyMedium,
         color = VoidMuted,
         modifier = Modifier.padding(horizontal = 8.dp)
