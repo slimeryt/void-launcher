@@ -17,9 +17,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -39,13 +40,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.theme.IosBlue
 import com.voidlauncher.app.ui.theme.VoidInk
 import com.voidlauncher.app.ui.theme.VoidMist
 import com.voidlauncher.app.ui.theme.VoidMuted
 import com.voidlauncher.app.update.UpdateUiState
 import com.voidlauncher.app.viewmodel.LauncherUiState
+
+private val SettingsCardBg = Color(0xFF1C1F26)
+private val SettingsChipBg = Color(0xFF2A2E38)
 
 @Composable
 fun SettingsContent(
@@ -75,27 +78,24 @@ fun SettingsContent(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.padding(bottom = 4.dp)
         ) {
-            GlassPanel(
+            Box(
                 modifier = Modifier
                     .size(44.dp)
+                    .clip(CircleShape)
+                    .background(SettingsCardBg)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = onBack
                     ),
-                cornerRadius = 22.dp,
-                strong = true,
-                enableSheen = false,
-                enableRefraction = false
+                contentAlignment = Alignment.Center
             ) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Rounded.ArrowBack,
-                        contentDescription = "Back",
-                        tint = VoidMist,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = "Back",
+                    tint = VoidMist,
+                    modifier = Modifier.size(22.dp)
+                )
             }
             Column {
                 Text(
@@ -170,7 +170,7 @@ fun SettingsContent(
         )
 
         Text(
-            text = "Swipe up on home for apps · swipe down in apps to close · long-press home to edit",
+            text = "Swipe up on home for apps · long-press home to edit · drag to Remove to clear home icons",
             style = MaterialTheme.typography.bodyMedium,
             color = VoidMuted,
             modifier = Modifier.padding(horizontal = 8.dp)
@@ -305,38 +305,27 @@ private fun ActionChip(
     modifier: Modifier = Modifier,
     filled: Boolean = false
 ) {
-    GlassPanel(
-        modifier = modifier
-            .height(44.dp)
-            .clickable(
-                enabled = enabled,
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick
-            ),
-        cornerRadius = 14.dp,
-        strong = true,
-        enableSheen = false,
-        enableRefraction = false,
-        tint = when {
-            !enabled -> Color(0x33000000)
-            filled -> IosBlue.copy(alpha = 0.55f)
-            else -> Color.Transparent
-        }
-    ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.titleMedium,
-                color = when {
-                    !enabled -> VoidMuted
-                    filled -> VoidInk
-                    else -> VoidMist
-                },
-                textAlign = TextAlign.Center
-            )
-        }
+    val bg = when {
+        !enabled -> SettingsChipBg.copy(alpha = 0.5f)
+        filled -> IosBlue
+        else -> SettingsChipBg
     }
+    val fg = when {
+        !enabled -> VoidMuted
+        filled -> Color.White
+        else -> VoidMist
+    }
+    Text(
+        text = label,
+        style = MaterialTheme.typography.titleMedium,
+        color = fg,
+        textAlign = TextAlign.Center,
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(bg)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(vertical = 12.dp)
+    )
 }
 
 @Composable
@@ -344,25 +333,19 @@ private fun SettingCard(
     title: String,
     content: @Composable () -> Unit
 ) {
-    GlassPanel(
-        modifier = Modifier.fillMaxWidth(),
-        cornerRadius = 22.dp,
-        strong = true,
-        enableSheen = false,
-        enableRefraction = false
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(SettingsCardBg)
+            .padding(16.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = VoidMist
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            content()
-        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = VoidMist
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        content()
     }
 }

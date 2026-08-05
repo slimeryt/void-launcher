@@ -63,6 +63,7 @@ fun LauncherRoot(
             state = state,
             onLaunchApp = onLaunchApp,
             onAppLongClick = { actionApp = it },
+            onAddAppToHome = onAddAppToHome,
             onSearchQueryChange = onSearchQueryChange,
             onClose = { onDrawerOpenChange(false) },
             modifier = Modifier.fillMaxSize()

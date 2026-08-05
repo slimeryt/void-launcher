@@ -3,6 +3,7 @@ package com.voidlauncher.app.ui.components
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -14,7 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -31,6 +32,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voidlauncher.app.data.AppInfo
+import com.voidlauncher.app.ui.theme.IosBlue
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -42,7 +44,7 @@ fun AppIcon(
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
     editMode: Boolean = false,
-    onRemove: (() -> Unit)? = null
+    selected: Boolean = false
 ) {
     val iconSize = (58 * iconScale).dp
     val imageBitmap = remember(app.key) {
@@ -72,27 +74,29 @@ fun AppIcon(
                     .size(iconSize)
                     .clip(AppIconShape)
             )
-            if (editMode && onRemove != null) {
+            if (editMode) {
                 Box(
                     modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .offset(x = (-4).dp, y = (-4).dp)
-                        .size(20.dp)
+                        .align(Alignment.TopEnd)
+                        .offset(x = 4.dp, y = (-4).dp)
+                        .size(22.dp)
                         .clip(CircleShape)
-                        .background(Color(0xE6FFFFFF))
-                        .combinedClickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = onRemove
+                        .background(if (selected) IosBlue else Color(0xE6FFFFFF))
+                        .border(
+                            width = 1.5.dp,
+                            color = if (selected) IosBlue else Color(0x66FFFFFF),
+                            shape = CircleShape
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = "Remove",
-                        tint = Color.Black,
-                        modifier = Modifier.size(14.dp)
-                    )
+                    if (selected) {
+                        Icon(
+                            imageVector = Icons.Rounded.Check,
+                            contentDescription = "Selected",
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
                 }
             }
         }

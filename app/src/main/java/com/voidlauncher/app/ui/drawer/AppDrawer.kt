@@ -66,6 +66,7 @@ fun AppDrawer(
     state: LauncherUiState,
     onLaunchApp: (AppInfo) -> Unit,
     onAppLongClick: (AppInfo) -> Unit,
+    onAddAppToHome: (AppInfo) -> Unit = {},
     onSearchQueryChange: (String) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
@@ -168,6 +169,15 @@ fun AppDrawer(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
+                    if (state.isEditMode) {
+                        Text(
+                            text = "Long-press an app to add it back to Home",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = VoidMuted,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+
                     GlassPanel(
                         modifier = Modifier.fillMaxWidth(),
                         cornerRadius = 20.dp,
@@ -257,8 +267,15 @@ fun AppDrawer(
                                         app = app,
                                         showLabel = state.showLabels,
                                         iconScale = state.iconScale,
-                                        onClick = { onLaunchApp(app) },
-                                        onLongClick = { onAppLongClick(app) },
+                                        onClick = {
+                                            if (state.isEditMode) onAddAppToHome(app)
+                                            else onLaunchApp(app)
+                                        },
+                                        onLongClick = {
+                                            if (state.isEditMode) onAddAppToHome(app)
+                                            else onAppLongClick(app)
+                                        },
+                                        editMode = state.isEditMode,
                                         modifier = Modifier.fillMaxWidth()
                                     )
                                 }
