@@ -1,11 +1,20 @@
 package com.voidlauncher.app
 
+import android.app.WallpaperManager
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Shader
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -17,6 +26,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -28,9 +39,11 @@ import com.voidlauncher.app.ui.LauncherRoot
 import com.voidlauncher.app.ui.theme.VoidTheme
 import com.voidlauncher.app.util.LauncherWindow
 import com.voidlauncher.app.viewmodel.LauncherViewModel
+import com.voidlauncher.app.wallpaper.LocalWallpaperApi
+import com.voidlauncher.app.wallpaper.WallpaperApi
 import com.voidlauncher.app.widget.LocalWidgetHostApi
 import com.voidlauncher.app.widget.WidgetHostApi
-import java.util.ArrayList
+import kotlin.math.max
 
 private const val WIDGET_HOST_ID = 1988
 
@@ -42,15 +55,17 @@ class MainActivity : ComponentActivity() {
     private lateinit var appWidgetManager: AppWidgetManager
     private lateinit var appWidgetHost: AppWidgetHost
     private var pendingWidgetId: Int = -1
+    private var pendingProvider: AppWidgetProviderInfo? = null
 
-    private val pickWidgetLauncher =
+    private val bindWidgetLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            handlePickResult(result)
+            handleBindResult(result)
         }
     private val configureWidgetLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val id = pendingWidgetId
             pendingWidgetId = -1
+            pendingProvider = null
             if (result.resultCode == RESULT_OK && id != -1) {
                 viewModel.addWidget(id)
             } else if (id != -1) {
@@ -90,10 +105,25 @@ class MainActivity : ComponentActivity() {
                 LocalWidgetHostApi provides WidgetHostApi(
                     host = appWidgetHost,
                     manager = appWidgetManager,
-                    onAddWidget = { startAddWidgetFlow() },
+                    onBindProvider = { bindProvider(it) },
                     onRemoveWidget = { id ->
                         viewModel.removeWidget(id)
                         appWidgetHost.deleteAppWidgetId(id)
+                    }
+                ),
+                LocalWallpaperApi provides WallpaperApi(
+                    onSetFromUri = { setWallpaperFromUri(it) },
+                    onSetSolidColor = { setWallpaperColor(it) },
+                    onSetGradient = { setWallpaperGradient(it) },
+                    onOpenSystemPicker = {
+                        runCatching {
+                            startActivity(
+                                Intent.createChooser(
+                                    Intent(Intent.ACTION_SET_WALLPAPER),
+                                    "System wallpapers"
+                                )
+                            )
+                        }
                     }
                 )
             ) {
@@ -139,46 +169,45 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun startAddWidgetFlow() {
+    private fun bindProvider(info: AppWidgetProviderInfo) {
         val id = appWidgetHost.allocateAppWidgetId()
         pendingWidgetId = id
-        val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_PICK).apply {
-            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
-            // A handful of OEM widget pickers NPE without these, even when empty.
-            putParcelableArrayListExtra(AppWidgetManager.EXTRA_CUSTOM_INFO, ArrayList())
-            putParcelableArrayListExtra(AppWidgetManager.EXTRA_CUSTOM_EXTRAS, ArrayList())
+        pendingProvider = info
+        val allowed = runCatching {
+            appWidgetManager.bindAppWidgetIdIfAllowed(id, info.provider)
+        }.getOrDefault(false)
+
+        if (allowed) {
+            proceedAfterBind(id, info)
+            return
         }
-        runCatching { pickWidgetLauncher.launch(intent) }
+
+        val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_BIND).apply {
+            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+            putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, info.provider)
+        }
+        runCatching { bindWidgetLauncher.launch(intent) }
             .onFailure {
                 appWidgetHost.deleteAppWidgetId(id)
                 pendingWidgetId = -1
+                pendingProvider = null
+                Toast.makeText(this, "Could not bind widget", Toast.LENGTH_SHORT).show()
             }
     }
 
-    private fun handlePickResult(result: ActivityResult) {
+    private fun handleBindResult(result: ActivityResult) {
         val id = pendingWidgetId
-        if (result.resultCode != RESULT_OK) {
+        val info = pendingProvider
+        if (result.resultCode != RESULT_OK || id == -1 || info == null) {
             if (id != -1) appWidgetHost.deleteAppWidgetId(id)
             pendingWidgetId = -1
+            pendingProvider = null
             return
         }
-        val pickedId = result.data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1) ?: -1
-        if (pickedId == -1) {
-            if (id != -1) appWidgetHost.deleteAppWidgetId(id)
-            pendingWidgetId = -1
-            return
-        }
-        pendingWidgetId = pickedId
-        val info = appWidgetManager.getAppWidgetInfo(pickedId)
-        if (info == null) {
-            appWidgetHost.deleteAppWidgetId(pickedId)
-            pendingWidgetId = -1
-            return
-        }
-        proceedAfterPick(pickedId, info)
+        proceedAfterBind(id, info)
     }
 
-    private fun proceedAfterPick(id: Int, info: AppWidgetProviderInfo) {
+    private fun proceedAfterBind(id: Int, info: AppWidgetProviderInfo) {
         val configure = info.configure
         if (configure != null) {
             val configIntent = Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE).apply {
@@ -188,12 +217,80 @@ class MainActivity : ComponentActivity() {
             runCatching { configureWidgetLauncher.launch(configIntent) }
                 .onFailure {
                     pendingWidgetId = -1
+                    pendingProvider = null
                     viewModel.addWidget(id)
                 }
         } else {
             pendingWidgetId = -1
+            pendingProvider = null
             viewModel.addWidget(id)
         }
+    }
+
+    private fun setWallpaperFromUri(uri: Uri) {
+        runCatching {
+            contentResolver.openInputStream(uri)?.use { input ->
+                val decoded = BitmapFactory.decodeStream(input)
+                    ?: error("Could not decode image")
+                applyWallpaperBitmap(decoded)
+            } ?: error("Could not open image")
+        }.onFailure {
+            Toast.makeText(this, "Wallpaper failed: ${it.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun setWallpaperColor(color: Color) {
+        runCatching {
+            val (w, h) = wallpaperSize()
+            val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            bmp.eraseColor(color.toArgb())
+            applyWallpaperBitmap(bmp)
+        }.onFailure {
+            Toast.makeText(this, "Wallpaper failed: ${it.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun setWallpaperGradient(colors: List<Color>) {
+        if (colors.isEmpty()) return
+        if (colors.size == 1) {
+            setWallpaperColor(colors.first())
+            return
+        }
+        runCatching {
+            val (w, h) = wallpaperSize()
+            val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bmp)
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+            val stops = colors.map { it.toArgb() }.toIntArray()
+            paint.shader = LinearGradient(
+                0f, 0f, 0f, h.toFloat(),
+                stops, null, Shader.TileMode.CLAMP
+            )
+            canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), paint)
+            applyWallpaperBitmap(bmp)
+        }.onFailure {
+            Toast.makeText(this, "Wallpaper failed: ${it.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun applyWallpaperBitmap(bitmap: Bitmap) {
+        val wm = WallpaperManager.getInstance(this)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            wm.setBitmap(bitmap, null, true, WallpaperManager.FLAG_SYSTEM)
+        } else {
+            @Suppress("DEPRECATION")
+            wm.setBitmap(bitmap)
+        }
+        blurController.refresh()
+        Toast.makeText(this, "Wallpaper updated", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun wallpaperSize(): Pair<Int, Int> {
+        val dm = resources.displayMetrics
+        val w = max(dm.widthPixels, 1080)
+        val h = max(dm.heightPixels, 1920)
+        // Slightly wider than one screen so parallax still has room to breathe.
+        return (w * 2) to h
     }
 
     private fun enableSystemWindowBlur() {

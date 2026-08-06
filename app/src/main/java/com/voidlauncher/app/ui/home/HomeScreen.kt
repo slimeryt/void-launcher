@@ -96,6 +96,8 @@ import com.voidlauncher.app.ui.components.DockBar
 import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.components.HomeClock
 import com.voidlauncher.app.ui.components.toCachedBitmap
+import com.voidlauncher.app.ui.pickers.WallpaperPickerOverlay
+import com.voidlauncher.app.ui.pickers.WidgetPickerOverlay
 import com.voidlauncher.app.ui.theme.IosBlue
 import com.voidlauncher.app.ui.theme.IosBlueGlass
 import com.voidlauncher.app.ui.theme.VoidMist
@@ -163,7 +165,13 @@ fun HomeScreen(
     var openFolderSource by remember { mutableStateOf(Rect.Zero) }
     var folderClosing by remember { mutableStateOf(false) }
     var folderBounds by remember { mutableStateOf<Map<String, Rect>>(emptyMap()) }
+    var showWidgetPicker by remember { mutableStateOf(false) }
+    var showWallpaperPicker by remember { mutableStateOf(false) }
 
+    BackHandler(enabled = showWidgetPicker || showWallpaperPicker) {
+        showWidgetPicker = false
+        showWallpaperPicker = false
+    }
     BackHandler(enabled = openFolderId != null) {
         if (!folderClosing) folderClosing = true
     }
@@ -649,17 +657,12 @@ fun HomeScreen(
                     EditFooterButton(
                         icon = Icons.Rounded.Widgets,
                         contentDescription = "Widgets",
-                        onClick = { widgetApi.onAddWidget() }
+                        onClick = { showWidgetPicker = true }
                     )
                     EditFooterButton(
                         icon = Icons.Rounded.Wallpaper,
                         contentDescription = "Wallpaper",
-                        onClick = {
-                            val intent = Intent(Intent.ACTION_SET_WALLPAPER)
-                            runCatching {
-                                context.startActivity(Intent.createChooser(intent, "Set wallpaper"))
-                            }
-                        }
+                        onClick = { showWallpaperPicker = true }
                     )
                     EditFooterButton(
                         icon = Icons.Rounded.Settings,
@@ -690,6 +693,17 @@ fun HomeScreen(
                 )
             }
         }
+
+        val widgetApi = LocalWidgetHostApi.current
+        WidgetPickerOverlay(
+            visible = showWidgetPicker,
+            onDismiss = { showWidgetPicker = false },
+            onPick = { info -> widgetApi.onBindProvider(info) }
+        )
+        WallpaperPickerOverlay(
+            visible = showWallpaperPicker,
+            onDismiss = { showWallpaperPicker = false }
+        )
     }
     }
 }
