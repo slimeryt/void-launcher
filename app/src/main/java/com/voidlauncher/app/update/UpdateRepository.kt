@@ -51,7 +51,7 @@ class UpdateRepository(private val context: Context) {
             val release = fetchLatestForChannel(channel)
                 ?: return@withContext UpdateCheckResult.Error(
                     when (channel) {
-                        UpdateChannel.Off -> "No release found on GitHub"
+                        UpdateChannel.Off -> "No update available"
                         UpdateChannel.PublicBeta -> "No Public Beta release found"
                         UpdateChannel.Developer -> "No Developer release found"
                     }
@@ -285,7 +285,7 @@ class UpdateRepository(private val context: Context) {
         val code = connection.responseCode
         if (code == 403 || code == 429) {
             throw IllegalStateException(
-                "GitHub rate limit (API $code). Try again in a few minutes."
+                "Update rate limit. Try again in a few minutes."
             )
         }
         if (code != 200) {
@@ -297,7 +297,7 @@ class UpdateRepository(private val context: Context) {
             }.getOrNull()
             throw IllegalStateException(
                 buildString {
-                    append("GitHub API $code")
+                    append("Update server error ($code)")
                     if (!err.isNullOrBlank()) append(": ").append(err)
                 }
             )
@@ -350,7 +350,7 @@ class UpdateRepository(private val context: Context) {
         val msg = e.message.orEmpty()
         return when {
             "403" in msg || "429" in msg || msg.contains("rate limit", ignoreCase = true) ->
-                "GitHub rate limit — wait a bit, then Check again"
+                "Update rate limit — wait a bit, then Check again"
             msg.isNotBlank() -> msg
             else -> "Update check failed"
         }

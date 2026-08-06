@@ -21,5 +21,5 @@ object UpdateConfig {
 
     /** GitHub requires a descriptive UA; bare names often get 403. */
     const val USER_AGENT =
-        "Polar-Updater/1.0 (+https://github.com/slimeryt/void-launcher)"
+        "Polar-Updater/1.0"
 }

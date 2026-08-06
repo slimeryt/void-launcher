@@ -116,7 +116,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                 it.copy(
                     checking = true,
                     error = null,
-                    statusMessage = if (silent) it.statusMessage else "Checking GitHub…"
+                    statusMessage = if (silent) it.statusMessage else "Checking for updates…"
                 )
             }
             when (val result = repo.checkForUpdate(channel)) {

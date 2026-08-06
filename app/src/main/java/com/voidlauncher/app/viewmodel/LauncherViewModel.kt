@@ -32,6 +32,11 @@ data class LauncherUiState(
     val showLabels: Boolean = true,
     val gridColumns: Int = 4,
     val iconScale: Float = 1f,
+    val iconTheme: String = "standard",
+    val iconCornerRadiusPercent: Float = 24f,
+    val iconTintHue: Float = 210f,
+    val iconTintAlpha: Float = 0.55f,
+    val iconEditorOpen: Boolean = false,
     val hiddenCount: Int = 0,
     val glassBlurStrength: Float = 1f,
     val glassFrostAmount: Float = 1f,
@@ -54,18 +59,21 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val drawerFocusSearch = MutableStateFlow(false)
     private val isEditMode = MutableStateFlow(false)
     private val isLoading = MutableStateFlow(true)
+    private val iconEditorOpen = MutableStateFlow(false)
 
     val state: StateFlow<LauncherUiState> = combine(
         combine(allApps, searchQuery, isDrawerOpen) { a, q, d -> Triple(a, q, d) },
         combine(drawerFocusSearch, isEditMode, isLoading) { f, e, l -> Triple(f, e, l) },
-        prefsRepository.preferences
-    ) { t1, t2, prefs ->
+        combine(iconEditorOpen, prefsRepository.preferences) { editor, prefs -> editor to prefs }
+    ) { t1, t2, editorPrefs ->
         val apps = t1.first
         val query = t1.second
         val drawerOpen = t1.third
         val focusSearch = t2.first
         val editMode = t2.second
         val loading = t2.third
+        val editorOpen = editorPrefs.first
+        val prefs = editorPrefs.second
 
         val visible = apps.filterNot { it.key in prefs.hidden }
         val byKey = visible.associateBy { it.key }
@@ -92,6 +100,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             showLabels = prefs.showLabels,
             gridColumns = prefs.gridColumns,
             iconScale = prefs.iconScale,
+            iconTheme = prefs.iconTheme,
+            iconCornerRadiusPercent = prefs.iconCornerRadiusPercent,
+            iconTintHue = prefs.iconTintHue,
+            iconTintAlpha = prefs.iconTintAlpha,
+            iconEditorOpen = editorOpen,
             hiddenCount = prefs.hidden.size,
             glassBlurStrength = prefs.glassBlurStrength,
             glassFrostAmount = prefs.glassFrostAmount,
@@ -203,6 +216,26 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun setIconScale(scale: Float) {
         viewModelScope.launch { prefsRepository.setIconScale(scale) }
+    }
+
+    fun setIconAppearance(
+        theme: String,
+        cornerRadiusPercent: Float,
+        tintHue: Float,
+        tintAlpha: Float,
+        scale: Float
+    ) {
+        viewModelScope.launch {
+            prefsRepository.setIconAppearance(theme, cornerRadiusPercent, tintHue, tintAlpha, scale)
+        }
+    }
+
+    fun setIconEditorOpen(open: Boolean) {
+        iconEditorOpen.value = open
+        if (open) {
+            isDrawerOpen.value = false
+            isEditMode.value = false
+        }
     }
 
     fun setGlassBlurStrength(value: Float) {

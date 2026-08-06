@@ -3,10 +3,8 @@ package com.voidlauncher.app.ui.components
 import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Paint as AndroidPaint
-import android.graphics.Path as AndroidPath
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
-import android.graphics.RectF
 import android.graphics.RenderEffect as AndroidRenderEffect
 import android.graphics.Shader
 import android.graphics.drawable.AdaptiveIconDrawable
@@ -439,10 +437,12 @@ fun Drawable.toCachedBitmap(maxSize: Int = 192, cornerRadiusRatio: Float = 0.22f
     val out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val outCanvas = AndroidCanvas(out)
     val paint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG)
-    val path = AndroidPath().apply {
-        val r = size * cornerRadiusRatio
-        addRoundRect(RectF(0f, 0f, size.toFloat(), size.toFloat()), r, r, AndroidPath.Direction.CW)
-    }
+    // Continuous corners — same path family as SmoothCornerShape / AppIconShape
+    val path = continuousRoundedRectPath(
+        width = size.toFloat(),
+        height = size.toFloat(),
+        cornerRadius = size * cornerRadiusRatio.coerceIn(0f, 0.5f)
+    )
     outCanvas.drawPath(path, paint)
     paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
     outCanvas.drawBitmap(raw, 0f, 0f, paint)

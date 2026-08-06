@@ -88,6 +88,7 @@ fun SettingsContent(
     onRequestEnroll: () -> Unit,
     onAccountRefresh: () -> Unit,
     onBack: () -> Unit,
+    onOpenAppIcons: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var page by remember { mutableStateOf(SettingsPage.Root) }
@@ -185,7 +186,8 @@ fun SettingsContent(
                         onOpen = {
                             searchQuery = ""
                             page = it
-                        }
+                        },
+                        onOpenAppIcons = onOpenAppIcons
                     )
                     SettingsPage.LiquidGlass -> LiquidGlassPage(
                         state = state,
@@ -228,7 +230,8 @@ private fun RootPage(
     updateState: UpdateUiState,
     accountState: AccountUiState,
     searchQuery: String,
-    onOpen: (SettingsPage) -> Unit
+    onOpen: (SettingsPage) -> Unit,
+    onOpenAppIcons: () -> Unit
 ) {
     val q = searchQuery.trim().lowercase()
     fun matches(vararg parts: String): Boolean =
@@ -251,7 +254,8 @@ private fun RootPage(
     }
     val showAccount = matches("Account", accountSubtitle, "sign in", "developer")
     val showLiquid = matches("Liquid Glass", "Blur", "frost", "refraction", "Appearance")
-    val showHome = matches("Home Screen", "Icons", "labels", "grid", "Appearance")
+    val showIcons = matches("App Icons", "Icons", "theme", "tint", "Appearance")
+    val showHome = matches("Home Screen", "labels", "grid", "Appearance")
     val updatesSubtitle = "v${updateState.currentVersion}" +
         (updateState.available?.let { " · ${it.versionName} available" } ?: "")
     val showUpdates = matches("Updates", updatesSubtitle, "System")
@@ -269,20 +273,28 @@ private fun RootPage(
         }
     }
 
-    if (showLiquid || showHome) {
+    if (showLiquid || showIcons || showHome) {
         SettingsGroup(label = "Appearance") {
             if (showLiquid) {
                 NavRow(
                     title = "Liquid Glass",
                     subtitle = "Blur, frost, refraction",
                     onClick = { onOpen(SettingsPage.LiquidGlass) },
+                    showDivider = showIcons || showHome
+                )
+            }
+            if (showIcons) {
+                NavRow(
+                    title = "App Icons",
+                    subtitle = "Theme, radius, tint",
+                    onClick = onOpenAppIcons,
                     showDivider = showHome
                 )
             }
             if (showHome) {
                 NavRow(
                     title = "Home Screen",
-                    subtitle = "Icons, labels, grid",
+                    subtitle = "Labels & grid",
                     onClick = { onOpen(SettingsPage.HomeLayout) },
                     showDivider = false
                 )

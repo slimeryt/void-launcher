@@ -96,7 +96,7 @@ fun AppDrawer(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xCC05060A))
+                    .background(Color(0x6605060A))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -112,8 +112,8 @@ fun AppDrawer(
                     .padding(12.dp),
                 cornerRadius = 36.dp,
                 strong = true,
-                enableSheen = false,
-                enableRefraction = false
+                enableSheen = true,
+                enableRefraction = true
             ) {
                 Column(
                     modifier = Modifier
@@ -180,9 +180,10 @@ fun AppDrawer(
 
                     GlassPanel(
                         modifier = Modifier.fillMaxWidth(),
-                        cornerRadius = 20.dp,
-                        enableSheen = false,
-                        enableRefraction = false
+                        cornerRadius = 24.dp,
+                        strong = true,
+                        enableSheen = true,
+                        enableRefraction = true
                     ) {
                         Row(
                             modifier = Modifier

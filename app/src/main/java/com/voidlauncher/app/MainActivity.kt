@@ -49,6 +49,10 @@ private const val WIDGET_HOST_ID = 1988
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        const val EXTRA_OPEN_ICON_EDITOR = "open_icon_editor"
+    }
+
     private val viewModel: LauncherViewModel by viewModels()
     private lateinit var blurController: WallpaperBlurController
 
@@ -84,6 +88,7 @@ class MainActivity : ComponentActivity() {
         blurController = WallpaperBlurController(applicationContext, lifecycleScope)
         appWidgetManager = AppWidgetManager.getInstance(this)
         appWidgetHost = AppWidgetHost(this, WIDGET_HOST_ID)
+        handleIconEditorIntent(intent)
 
         setContent {
             val state by viewModel.state.collectAsStateWithLifecycle()
@@ -145,10 +150,33 @@ class MainActivity : ComponentActivity() {
                         onCreateFolder = viewModel::createFolderFromDrop,
                         onAddAppToFolder = viewModel::addAppToFolderFromDrop,
                         onAddPage = viewModel::addPage,
+                        onApplyIconAppearance = { appearance ->
+                            viewModel.setIconAppearance(
+                                theme = appearance.theme.key,
+                                cornerRadiusPercent = appearance.cornerRadiusPercent,
+                                tintHue = appearance.tintHue,
+                                tintAlpha = appearance.tintAlpha,
+                                scale = appearance.scale
+                            )
+                        },
+                        onIconEditorOpenChange = viewModel::setIconEditorOpen,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIconEditorIntent(intent)
+    }
+
+    private fun handleIconEditorIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_ICON_EDITOR, false) == true) {
+            viewModel.setIconEditorOpen(true)
+            intent.removeExtra(EXTRA_OPEN_ICON_EDITOR)
         }
     }
 

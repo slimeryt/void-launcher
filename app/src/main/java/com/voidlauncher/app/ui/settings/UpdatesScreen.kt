@@ -57,6 +57,7 @@ import com.voidlauncher.app.BuildConfig
 import com.voidlauncher.app.R
 import com.voidlauncher.app.account.AccountUiState
 import com.voidlauncher.app.ui.components.CapsuleShape
+import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.components.SmoothCornerShape
 import com.voidlauncher.app.ui.theme.IosBlue
 import com.voidlauncher.app.ui.theme.VoidInk
@@ -68,8 +69,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
 private val UpdatesCardBg = SettingsCardBg
-private val CancelGrey = Color(0xFF3A3A3C)
-private val ButtonShape = SmoothCornerShape(28.dp)
 private val CardShape = SettingsCardShape
 
 @Composable
@@ -585,7 +584,7 @@ private fun UpdateDropletActions(
         horizontalArrangement = Arrangement.spacedBy(gap),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
+        GlassPanel(
             modifier = Modifier
                 .weight(cancelWeight)
                 .fillMaxSize()
@@ -595,22 +594,28 @@ private fun UpdateDropletActions(
                     scaleY = 0.92f + 0.08f * split
                     alpha = split
                 }
-                .clip(ButtonShape)
-                .background(CancelGrey)
                 .clickable(enabled = split > 0.85f && busy) { onCancel() },
-            contentAlignment = Alignment.Center
+            cornerRadius = 28.dp,
+            strong = true,
+            enableSheen = true,
+            enableRefraction = true
         ) {
-            if (split > 0.35f) {
-                Text(
-                    text = "Cancel",
-                    color = VoidMist,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1
-                )
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                if (split > 0.35f) {
+                    Text(
+                        text = "Cancel",
+                        color = VoidMist,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1
+                    )
+                }
             }
         }
 
-        Box(
+        GlassPanel(
             modifier = Modifier
                 .weight(primaryWeight)
                 .fillMaxSize()
@@ -618,8 +623,6 @@ private fun UpdateDropletActions(
                     val stretch = if (split < 0.5f) 1f + (0.5f - split) * 0.06f else 1f
                     scaleX = stretch
                 }
-                .clip(ButtonShape)
-                .background(IosBlue)
                 .clickable(enabled = !busy) {
                     when {
                         updateState.downloadedApk != null -> onInstall()
@@ -627,34 +630,43 @@ private fun UpdateDropletActions(
                         else -> onCheck()
                     }
                 },
-            contentAlignment = Alignment.Center
+            cornerRadius = 28.dp,
+            strong = true,
+            enableSheen = true,
+            enableRefraction = true,
+            tint = IosBlue.copy(alpha = 0.55f)
         ) {
-            if (busy) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                if (busy) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    ) {
+                        Text(
+                            text = primaryLabel,
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1
+                        )
+                        val progress = when {
+                            updateState.downloading -> updateState.progress.coerceIn(0.02f, 1f)
+                            else -> -1f
+                        }
+                        DropletProgressBar(progress = progress)
+                    }
+                } else {
                     Text(
                         text = primaryLabel,
                         color = Color.White,
                         style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
                         maxLines = 1
                     )
-                    val progress = when {
-                        updateState.downloading -> updateState.progress.coerceIn(0.02f, 1f)
-                        else -> -1f
-                    }
-                    DropletProgressBar(progress = progress)
                 }
-            } else {
-                Text(
-                    text = primaryLabel,
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1
-                )
             }
         }
     }

@@ -36,6 +36,10 @@ data class LauncherPreferences(
     val showLabels: Boolean = true,
     val gridColumns: Int = 4,
     val iconScale: Float = 1f,
+    val iconTheme: String = "standard",
+    val iconCornerRadiusPercent: Float = 24f,
+    val iconTintHue: Float = 210f,
+    val iconTintAlpha: Float = 0.55f,
     /** Each page is an ordered list of home items. */
     val pages: List<List<HomeItem>> = listOf(emptyList()),
     val folders: Map<String, HomeFolder> = emptyMap(),
@@ -70,6 +74,10 @@ class PreferencesRepository(private val context: Context) {
         val ShowLabels = booleanPreferencesKey("show_labels")
         val GridColumns = intPreferencesKey("grid_columns")
         val IconScale = floatPreferencesKey("icon_scale")
+        val IconTheme = stringPreferencesKey("icon_theme")
+        val IconCornerRadius = floatPreferencesKey("icon_corner_radius_pct")
+        val IconTintHue = floatPreferencesKey("icon_tint_hue")
+        val IconTintAlpha = floatPreferencesKey("icon_tint_alpha")
         val PagesJson = stringPreferencesKey("home_pages_json")
         val FoldersJson = stringPreferencesKey("home_folders_json")
         val GlassBlur = floatPreferencesKey("glass_blur")
@@ -95,6 +103,10 @@ class PreferencesRepository(private val context: Context) {
             showLabels = prefs[Keys.ShowLabels] ?: true,
             gridColumns = prefs[Keys.GridColumns] ?: 4,
             iconScale = prefs[Keys.IconScale] ?: 1f,
+            iconTheme = prefs[Keys.IconTheme] ?: "standard",
+            iconCornerRadiusPercent = prefs[Keys.IconCornerRadius] ?: 24f,
+            iconTintHue = prefs[Keys.IconTintHue] ?: 210f,
+            iconTintAlpha = prefs[Keys.IconTintAlpha] ?: 0.55f,
             pages = decodePages(prefs[Keys.PagesJson]),
             folders = decodeFolders(prefs[Keys.FoldersJson]),
             glassBlurStrength = prefs[Keys.GlassBlur] ?: 1f,
@@ -132,6 +144,22 @@ class PreferencesRepository(private val context: Context) {
 
     suspend fun setIconScale(value: Float) {
         context.dataStore.edit { it[Keys.IconScale] = value.coerceIn(0.7f, 1.3f) }
+    }
+
+    suspend fun setIconAppearance(
+        theme: String,
+        cornerRadiusPercent: Float,
+        tintHue: Float,
+        tintAlpha: Float,
+        scale: Float
+    ) {
+        context.dataStore.edit {
+            it[Keys.IconTheme] = theme
+            it[Keys.IconCornerRadius] = cornerRadiusPercent.coerceIn(0f, 50f)
+            it[Keys.IconTintHue] = tintHue.mod(360f)
+            it[Keys.IconTintAlpha] = tintAlpha.coerceIn(0.1f, 1f)
+            it[Keys.IconScale] = scale.coerceIn(0.7f, 1.3f)
+        }
     }
 
     suspend fun setGlassBlurStrength(value: Float) {

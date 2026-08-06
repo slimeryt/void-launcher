@@ -4,7 +4,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -36,6 +35,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voidlauncher.app.data.AppInfo
+import com.voidlauncher.app.ui.icons.LocalIconAppearance
 import com.voidlauncher.app.ui.theme.IosBlue
 import com.voidlauncher.app.util.PendingLaunchBounds
 import kotlin.math.roundToInt
@@ -52,16 +52,22 @@ fun AppIcon(
     editMode: Boolean = false,
     selected: Boolean = false
 ) {
-    val iconSize = (58 * iconScale).dp
-    val imageBitmap = remember(app.key) {
-        app.icon.toCachedBitmap(maxSize = 192, cornerRadiusRatio = 0.24f).asImageBitmap()
+    val appearance = LocalIconAppearance.current
+    val effectiveScale = appearance.scale
+    val iconSize = (58 * effectiveScale).dp
+    val radiusRatio = appearance.cornerRadiusRatio
+    val shape = remember(appearance.shapePercent) {
+        SmoothCornerShape(percent = appearance.shapePercent.coerceAtLeast(1))
+    }
+    val imageBitmap = remember(app.key, radiusRatio) {
+        app.icon.toCachedBitmap(maxSize = 192, cornerRadiusRatio = radiusRatio).asImageBitmap()
+    }
+    val colorFilter = remember(appearance.theme, appearance.tintHue, appearance.tintAlpha) {
+        appearance.colorFilter()
     }
 
-    // Own on-screen bounds, so a tap can report exactly where the launched app's
-    // open animation should scale up from — regardless of which screen hosts this icon.
     val boundsHolder = remember { mutableStateOf<android.graphics.Rect?>(null) }
 
-    // Edit mode: no gesture here — parent cell owns tap + long-press drag
     val clickModifier = if (editMode) {
         Modifier
     } else {
@@ -99,9 +105,10 @@ fun AppIcon(
                 contentDescription = app.label,
                 contentScale = ContentScale.Crop,
                 filterQuality = FilterQuality.High,
+                colorFilter = colorFilter,
                 modifier = Modifier
                     .size(iconSize)
-                    .clip(AppIconShape)
+                    .clip(shape)
             )
             if (editMode) {
                 Box(

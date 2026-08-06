@@ -1,7 +1,5 @@
 package com.voidlauncher.app.ui.settings
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,7 +23,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.voidlauncher.app.BuildConfig
@@ -43,19 +40,18 @@ fun AboutScreen(
     modifier: Modifier = Modifier
 ) {
     var doc by remember { mutableStateOf(AboutDoc.None) }
-    val context = LocalContext.current
 
     if (doc != AboutDoc.None) {
         AboutDocumentScreen(
             title = when (doc) {
                 AboutDoc.Privacy -> "Privacy Policy"
-                AboutDoc.Licenses -> "Open Source Licenses"
+                AboutDoc.Licenses -> "Licenses"
                 AboutDoc.Acknowledgments -> "Acknowledgments"
                 AboutDoc.None -> ""
             },
             body = when (doc) {
                 AboutDoc.Privacy -> PrivacyPolicyText
-                AboutDoc.Licenses -> OpenSourceLicensesText
+                AboutDoc.Licenses -> LicensesText
                 AboutDoc.Acknowledgments -> AcknowledgmentsText
                 AboutDoc.None -> ""
             },
@@ -112,42 +108,13 @@ fun AboutScreen(
                     showDivider = true
                 )
                 AboutLinkRow(
-                    title = "Open Source Licenses",
+                    title = "Licenses",
                     onClick = { doc = AboutDoc.Licenses },
                     showDivider = true
                 )
                 AboutLinkRow(
                     title = "Acknowledgments",
                     onClick = { doc = AboutDoc.Acknowledgments },
-                    showDivider = false
-                )
-            }
-
-            SettingsGroup(label = "Links") {
-                AboutLinkRow(
-                    title = "GitHub",
-                    subtitle = "slimeryt/void-launcher",
-                    onClick = {
-                        context.startActivity(
-                            Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse("https://github.com/slimeryt/void-launcher")
-                            )
-                        )
-                    },
-                    showDivider = true
-                )
-                AboutLinkRow(
-                    title = "Releases",
-                    subtitle = "Download updates",
-                    onClick = {
-                        context.startActivity(
-                            Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse("https://github.com/slimeryt/void-launcher/releases")
-                            )
-                        )
-                    },
                     showDivider = false
                 )
             }
@@ -278,7 +245,7 @@ Polar (“the app”) is a home-screen launcher for Android.
 
 Information we process
 • Account data you provide (email, display name, password) is sent to our accounts service so you can sign in, request a Developer Account, and enroll in Developer Beta.
-• Update checks contact GitHub Releases to see if a newer Polar build is available. This may expose a standard network request (IP address, user agent) to GitHub.
+• Update checks contact Polar’s update service to see if a newer build is available. This may expose a standard network request (IP address, user agent) to that service.
 • Wallpaper, widgets, and launcher layout stay on your device unless you choose otherwise.
 
 What we don’t do
@@ -291,13 +258,10 @@ Developer features
 Your choices
 • You can sign out and clear the local session anytime in Settings → Account.
 • You can leave Public Beta or Developer channels in Settings → Updates → Beta Updates.
-
-Contact
-• Project: https://github.com/slimeryt/void-launcher
 """.trimIndent()
 
-private val OpenSourceLicensesText = """
-Polar uses open-source components. Key dependencies:
+private val LicensesText = """
+Polar includes third-party libraries under their respective licenses:
 
 AndroidX Core / Activity / Lifecycle
 License: Apache License 2.0
@@ -314,10 +278,8 @@ License: Apache License 2.0
 Kotlin standard library & coroutines
 License: Apache License 2.0
 
-Full license texts for Apache License 2.0 are available at:
+Full Apache License 2.0 text:
 https://www.apache.org/licenses/LICENSE-2.0
-
-Polar itself is distributed for personal use via GitHub Releases. See the repository for source availability and contribution details.
 """.trimIndent()
 
 private val AcknowledgmentsText = """
@@ -325,8 +287,5 @@ Thanks for using Polar.
 
 Built with Jetpack Compose and inspired by the clarity of modern system settings UIs.
 
-Wallpaper blur, liquid glass, and OTA updates are maintained as part of the Polar / void-launcher project.
-
-If you ship feedback or bug reports, open an issue on GitHub:
-https://github.com/slimeryt/void-launcher/issues
+Wallpaper blur, liquid glass, and software updates are maintained as part of Polar.
 """.trimIndent()

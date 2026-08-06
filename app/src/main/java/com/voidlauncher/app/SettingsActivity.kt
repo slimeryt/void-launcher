@@ -1,5 +1,6 @@
 package com.voidlauncher.app
 
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -116,6 +117,18 @@ class SettingsActivity : ComponentActivity() {
                             ApkInstaller.installApk(this, apk)
                         },
                         onBack = { finish() },
+                        onOpenAppIcons = {
+                            startActivity(
+                                Intent(this, MainActivity::class.java).apply {
+                                    addFlags(
+                                        Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+                                            Intent.FLAG_ACTIVITY_SINGLE_TOP
+                                    )
+                                    putExtra(MainActivity.EXTRA_OPEN_ICON_EDITOR, true)
+                                }
+                            )
+                            finish()
+                        },
                         modifier = Modifier
                             .fillMaxSize()
                             .background(VoidInk)

@@ -95,7 +95,9 @@ import com.voidlauncher.app.ui.components.CapsuleShape
 import com.voidlauncher.app.ui.components.DockBar
 import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.components.HomeClock
+import com.voidlauncher.app.ui.components.SmoothCornerShape
 import com.voidlauncher.app.ui.components.toCachedBitmap
+import com.voidlauncher.app.ui.icons.LocalIconAppearance
 import com.voidlauncher.app.ui.pickers.WallpaperPickerOverlay
 import com.voidlauncher.app.ui.pickers.WidgetPickerOverlay
 import com.voidlauncher.app.ui.theme.IosBlue
@@ -609,7 +611,7 @@ fun HomeScreen(
                             ),
                         cornerRadius = 99.dp,
                         strong = true,
-                        enableSheen = false,
+                        enableSheen = true,
                         enableRefraction = true
                     ) {
                         Box(
@@ -828,9 +830,18 @@ private fun FolderIcon(
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val size = (56 * iconScale).dp
-    val previews = remember(apps.map { it.key }) {
-        apps.take(9).map { it.icon.toCachedBitmap(64, cornerRadiusRatio = 0.24f).asImageBitmap() }
+    val appearance = LocalIconAppearance.current
+    val effectiveScale = appearance.scale
+    val size = (56 * effectiveScale).dp
+    val radiusRatio = appearance.cornerRadiusRatio
+    val shape = remember(appearance.shapePercent) {
+        SmoothCornerShape(percent = appearance.shapePercent.coerceAtLeast(1))
+    }
+    val colorFilter = remember(appearance.theme, appearance.tintHue, appearance.tintAlpha) {
+        appearance.colorFilter()
+    }
+    val previews = remember(apps.map { it.key }, radiusRatio) {
+        apps.take(9).map { it.icon.toCachedBitmap(64, cornerRadiusRatio = radiusRatio).asImageBitmap() }
     }
     val pad = 5.dp
     val gap = 2.dp
@@ -853,7 +864,7 @@ private fun FolderIcon(
             Box(
                 modifier = Modifier
                     .size(size)
-                    .clip(AppIconShape)
+                    .clip(shape)
                     .background(Color(0x66FFFFFF))
                     .padding(pad)
             ) {
@@ -869,9 +880,10 @@ private fun FolderIcon(
                                         contentDescription = null,
                                         contentScale = ContentScale.Crop,
                                         filterQuality = FilterQuality.Low,
+                                        colorFilter = colorFilter,
                                         modifier = Modifier
                                             .size(cell)
-                                            .clip(AppIconShape)
+                                            .clip(shape)
                                     )
                                 } else {
                                     // Empty slot — no placeholder wrapper

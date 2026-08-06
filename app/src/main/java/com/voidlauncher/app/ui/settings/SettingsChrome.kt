@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,17 +21,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
-import com.voidlauncher.app.ui.components.CapsuleShape
+import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.components.SmoothCornerShape
 import com.voidlauncher.app.ui.theme.IosBlue
 import com.voidlauncher.app.ui.theme.VoidMist
 import com.voidlauncher.app.ui.theme.VoidMuted
 
-/** Dark charcoal gray used for settings cards and chrome. */
+/** Dark charcoal gray used for settings cards (non-glass surfaces). */
 val SettingsCardBg = Color(0xFF2C2C2E)
 val SettingsChipBg = Color(0xFF3A3A3C)
 val SettingsDivider = Color(0x14FFFFFF)
@@ -42,30 +42,36 @@ fun SettingsBackButton(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-        modifier = modifier
-            .clip(CapsuleShape)
-            .background(SettingsCardBg)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onBack
-            )
-            .padding(start = 6.dp, end = 14.dp, top = 8.dp, bottom = 8.dp)
+    GlassPanel(
+        modifier = modifier,
+        cornerRadius = 22.dp,
+        strong = true,
+        enableSheen = true,
+        enableRefraction = true
     ) {
-        Icon(
-            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
-            contentDescription = null,
-            tint = IosBlue,
-            modifier = Modifier.size(26.dp)
-        )
-        Text(
-            text = "Back",
-            style = MaterialTheme.typography.titleMedium,
-            color = IosBlue
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onBack
+                )
+                .padding(start = 6.dp, end = 14.dp, top = 8.dp, bottom = 8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
+                contentDescription = null,
+                tint = IosBlue,
+                modifier = Modifier.size(26.dp)
+            )
+            Text(
+                text = "Back",
+                style = MaterialTheme.typography.titleMedium,
+                color = IosBlue
+            )
+        }
     }
 }
 
@@ -90,40 +96,53 @@ fun SettingsSearchBar(
     onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 10.dp)
-            .clip(CapsuleShape)
-            .background(SettingsCardBg)
-            .height(48.dp)
-            .padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Icon(
-            imageVector = Icons.Rounded.Search,
-            contentDescription = null,
-            tint = VoidMuted,
-            modifier = Modifier.size(22.dp)
-        )
-        BasicTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            singleLine = true,
-            cursorBrush = SolidColor(IosBlue),
-            textStyle = MaterialTheme.typography.bodyLarge.copy(color = VoidMist),
-            modifier = Modifier.weight(1f),
-            decorationBox = { inner ->
-                if (query.isEmpty()) {
-                    Text(
-                        text = "Search settings",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = VoidMuted
-                    )
-                }
-                inner()
+        GlassPanel(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp),
+            cornerRadius = 24.dp,
+            strong = true,
+            enableSheen = true,
+            enableRefraction = true
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Search,
+                    contentDescription = null,
+                    tint = VoidMuted,
+                    modifier = Modifier.size(22.dp)
+                )
+                BasicTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    singleLine = true,
+                    cursorBrush = SolidColor(IosBlue),
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = VoidMist),
+                    modifier = Modifier.weight(1f),
+                    decorationBox = { inner ->
+                        if (query.isEmpty()) {
+                            Text(
+                                text = "Search settings",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = VoidMuted
+                            )
+                        }
+                        inner()
+                    }
+                )
             }
-        )
+        }
     }
 }

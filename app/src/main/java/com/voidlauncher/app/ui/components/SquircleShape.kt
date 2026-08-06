@@ -125,3 +125,37 @@ private fun RoundedPolygon.toComposePath(): Path {
     toPath(ag)
     return ag.asComposePath()
 }
+
+/**
+ * Continuous (Figma-style) rounded rect as an Android [android.graphics.Path],
+ * matching [SmoothCornerShape] so bitmap icon masks match Compose clips.
+ */
+fun continuousRoundedRectPath(
+    width: Float,
+    height: Float,
+    cornerRadius: Float,
+    smoothing: Float = DefaultCornerSmoothing
+): android.graphics.Path {
+    val path = android.graphics.Path()
+    if (width <= 0f || height <= 0f) return path
+
+    val maxR = minOf(width, height) / 2f
+    val r = cornerRadius.coerceIn(0f, maxR)
+    val sm = smoothing.coerceIn(0f, 1f)
+
+    if (r <= 0.5f) {
+        path.addRect(0f, 0f, width, height, android.graphics.Path.Direction.CW)
+        return path
+    }
+
+    val polygon = RoundedPolygon.rectangle(
+        width = width,
+        height = height,
+        rounding = CornerRounding(r, sm),
+        centerX = width / 2f,
+        centerY = height / 2f
+    )
+    polygon.toPath(path)
+    return path
+}
+
