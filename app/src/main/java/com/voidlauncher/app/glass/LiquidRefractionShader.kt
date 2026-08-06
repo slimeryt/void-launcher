@@ -6,11 +6,17 @@ import androidx.annotation.RequiresApi
 import androidx.compose.ui.geometry.Size
 
 /**
- * AGSL liquid-glass refraction (API 33+).
- * Static bezel convex warp — a fixed lens shape, like real glass. It does NOT
- * animate on its own when idle; only the separate sheen highlight (driven from
- * GlassPanel) moves, matching how physical/Apple-style Liquid Glass behaves.
- * Profile inspired by https://kube.io/blog/liquid-glass-css-svg
+ * AGSL liquid-glass edge treatment (API 33+).
+ *
+ * Deliberately does NOT displace/magnify content. An earlier version warped UVs
+ * near the edge to fake a convex lens bulge; on any wallpaper whose color changes
+ * within a bezel's width of the panel edge (which is most wallpapers, most of the
+ * time), that displacement visibly drags unrelated content in and stretches it —
+ * reading as "the wallpaper got zoomed/pushed outward," not glass. Real glass at
+ * normal viewing distance mostly reads via blur + a soft rim highlight + a
+ * whisper-thin color fringe right at the boundary — not moved pixels. So: fixed,
+ * tiny (~1-2px) chromatic fringe confined to a thin edge ring, plus rim brightening.
+ * No animation; only the separate sheen highlight (driven from GlassPanel) moves.
  */
 object LiquidRefractionShader {
 
@@ -27,35 +33,34 @@ object LiquidRefractionShader {
             float2 uv = fragCoord / resolution;
 
             float ed = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
-            float bz = max(bezel, 0.08);
+            float bz = max(bezel, 0.04);
             float t = clamp(ed / bz, 0.0, 1.0);
 
-            float rimRaw = 1.0 - t;
-            float rim = rimRaw * rimRaw * (3.0 - 2.0 * rimRaw);
-            float mid = 4.0 * t * (1.0 - t);
-            float weight = rim * (0.4 + 0.6 * mid);
+            // Ring-shaped weight: 0 right at the true edge and well before the
+            // interior, peaking mid-bezel. Only used to fade the fringe/highlight —
+            // never to move sample coordinates.
+            float rise = smoothstep(0.0, 0.4, t);
+            float fall = 1.0 - smoothstep(0.6, 1.0, t);
+            float weight = rise * fall;
 
-            // Static magnitude — a fixed lens shape, not a breathing/rippling one.
-            float mag = intensity * weight;
-
-            float2 toCenter = normalize(float2(0.5, 0.5) - uv + 0.0001);
-            // Clamp so the sample never pulls from past the panel's own content —
-            // avoids black/undefined edges without needing an oversampled buffer.
-            float2 base = clamp(uv - toCenter * mag, float2(0.002), float2(0.998));
-
-            float ca = chromatic * (weight + 0.35);
-            half4 cR = content.eval((base + toCenter * ca) * resolution);
-            half4 cG = content.eval(base * resolution);
-            half4 cB = content.eval((base - toCenter * ca) * resolution);
+            // Chromatic uniform is a PIXEL offset now (not a UV fraction), so it can
+            // never pull content from meaningfully outside the true edge no matter
+            // what's in the source image.
+            float caPx = chromatic * weight;
+            float2 dir = normalize(uv - float2(0.5, 0.5) + 0.0001);
+            half4 cR = content.eval(fragCoord + dir * caPx);
+            half4 cG = content.eval(fragCoord);
+            half4 cB = content.eval(fragCoord - dir * caPx);
 
             half3 rgb = half3(cR.r, cG.g, cB.b);
-            half a = max(max(cR.a, cG.a), cB.a);
+            half a = cG.a;
 
             half3 frosted = mix(rgb, half3(0.94, 0.97, 1.0), half(frost) * 0.12);
             rgb = frost > 0.001 ? frosted : rgb;
 
             // Static rim highlight — brightest at the bezel, no time-based shimmer.
-            half spec = half((weight + 0.15) * 0.16);
+            // `intensity` now controls rim brightness strength, not displacement.
+            half spec = half((weight + 0.15) * intensity);
             rgb = rgb + half3(spec, spec, spec);
 
             return half4(rgb, a);

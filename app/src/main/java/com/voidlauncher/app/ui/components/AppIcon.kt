@@ -21,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,11 +30,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voidlauncher.app.data.AppInfo
 import com.voidlauncher.app.ui.theme.IosBlue
+import com.voidlauncher.app.util.PendingLaunchBounds
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -52,6 +57,10 @@ fun AppIcon(
         app.icon.toCachedBitmap(maxSize = 192, cornerRadiusRatio = 0.24f).asImageBitmap()
     }
 
+    // Own on-screen bounds, so a tap can report exactly where the launched app's
+    // open animation should scale up from — regardless of which screen hosts this icon.
+    val boundsHolder = remember { mutableStateOf<android.graphics.Rect?>(null) }
+
     // Edit mode: no gesture here — parent cell owns tap + long-press drag
     val clickModifier = if (editMode) {
         Modifier
@@ -59,7 +68,10 @@ fun AppIcon(
         Modifier.combinedClickable(
             interactionSource = remember { MutableInteractionSource() },
             indication = null,
-            onClick = onClick,
+            onClick = {
+                PendingLaunchBounds.rect = boundsHolder.value
+                onClick()
+            },
             onLongClick = onLongClick
         )
     }
@@ -67,6 +79,15 @@ fun AppIcon(
     Column(
         modifier = modifier
             .width(80.dp)
+            .onGloballyPositioned { coords ->
+                val pos = coords.positionInWindow()
+                boundsHolder.value = android.graphics.Rect(
+                    pos.x.roundToInt(),
+                    pos.y.roundToInt(),
+                    (pos.x + coords.size.width).roundToInt(),
+                    (pos.y + coords.size.height).roundToInt()
+                )
+            }
             .then(clickModifier)
             .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

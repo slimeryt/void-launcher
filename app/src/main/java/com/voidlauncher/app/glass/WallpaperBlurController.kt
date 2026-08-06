@@ -10,7 +10,6 @@ import android.graphics.Canvas
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
-import android.graphics.Rect
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
@@ -33,15 +32,28 @@ import kotlin.math.roundToInt
 
 data class BlurredWallpaper(
     val image: ImageBitmap,
-    /** Pixel size of the bitmap (blur buffer). */
+    /** Pixel size of the bitmap (blur buffer). May be wider than one screen if the
+     *  system wallpaper spans multiple home pages (parallax). */
     val bitmapWidth: Int,
     val bitmapHeight: Int,
-    /** Logical screen size the bitmap is mapped to. */
+    /** One home page's logical screen size. */
     val screenWidth: Int,
-    val screenHeight: Int
+    val screenHeight: Int,
+    /** True pixel size of the source wallpaper before downscaling — needed to convert
+     *  a page-scroll fraction into an offset within [bitmapWidth]. Equals screenWidth/
+     *  screenHeight for a single-page (non-parallax) wallpaper. */
+    val fullWidthPx: Int,
+    val fullHeightPx: Int
 )
 
 val LocalBlurredWallpaper = staticCompositionLocalOf<BlurredWallpaper?> { null }
+
+/**
+ * Current home-pager scroll progress as a 0..1 fraction across the *whole* wallpaper
+ * width, mirroring what we tell [android.app.WallpaperManager.setWallpaperOffsets].
+ * Defaults to 0.5 (dead-center) for windows that don't own paging, e.g. Settings.
+ */
+val LocalWallpaperXOffset = staticCompositionLocalOf { 0.5f }
 
 class WallpaperBlurController(
     private val context: Context,
@@ -123,28 +135,40 @@ class WallpaperBlurController(
         if (screenW <= 0 || screenH <= 0) return null
 
         val drawable = loadWallpaperDrawable() ?: return null
-        val source = drawableToBitmap(drawable, screenW, screenH) ?: return null
+        // Keep the FULL wallpaper width — system wallpapers are commonly 2-5x screen
+        // width for home-page parallax scrolling. Center-cropping this away meant we
+        // always sampled the dead-center page slice no matter which page was really
+        // on screen, so glass panels would show unrelated wallpaper content (wrong
+        // colors/edges) whenever the visible page wasn't exactly the middle one.
+        val source = drawableToWideBitmap(drawable, screenW, screenH) ?: return null
+        val fullWidthPx = source.width
+        val fullHeightPx = source.height
 
-        // Work at ~1/2–1/3 res for speed; soft upscale reads as deeper frost.
-        val targetW = (screenW / 2.5f).roundToInt().coerceIn(240, 900)
-        val targetH = (screenH * (targetW.toFloat() / screenW)).roundToInt().coerceAtLeast(240)
+        // Downscale only for perf/memory -- this buffer must stay a clean, accurate
+        // copy of the real wallpaper. All visual blur/frost is applied live by
+        // GlassPanel from the user's actual slider values; baking a fixed blur or
+        // tint in here made "0%" never really mean "clear," regardless of settings.
+        // The old 900px cap silently forced a ~3x downscale (instead of the intended
+        // ~1.5x) on any screen taller than 1350px -- that coarse buffer then gets
+        // stretched back up to full screen size, and *again* when a small panel crops
+        // into it, so wallpaper features looked artificially enlarged/blocky ("zoomed
+        // in"), independent of any shader math.
+        val targetH = (screenH / 1.5f).roundToInt().coerceIn(400, 2000)
+        val targetW = (fullWidthPx * (targetH.toFloat() / fullHeightPx)).roundToInt().coerceAtLeast(400)
         val scaled = Bitmap.createScaledBitmap(source, targetW, targetH, true)
         if (scaled !== source) source.recycle()
 
         val vibrancy = applyVibrancy(scaled)
         if (vibrancy !== scaled) scaled.recycle()
 
-        // Deep frost buffer — glass reads milky, not a sharp wallpaper crop
-        val blurRadius = (minOf(targetW, targetH) * 0.34f).roundToInt().coerceIn(28, 180)
-        val blurred = StackBlur.blur(vibrancy, radius = blurRadius)
-        if (blurred !== vibrancy) vibrancy.recycle()
-
         return BlurredWallpaper(
-            image = blurred.asImageBitmap(),
-            bitmapWidth = blurred.width,
-            bitmapHeight = blurred.height,
+            image = vibrancy.asImageBitmap(),
+            bitmapWidth = vibrancy.width,
+            bitmapHeight = vibrancy.height,
             screenWidth = screenW,
-            screenHeight = screenH
+            screenHeight = screenH,
+            fullWidthPx = fullWidthPx,
+            fullHeightPx = fullHeightPx
         )
     }
 
@@ -155,60 +179,43 @@ class WallpaperBlurController(
         }.getOrNull()
     }
 
-    private fun drawableToBitmap(drawable: Drawable, screenW: Int, screenH: Int): Bitmap? {
-        if (drawable is BitmapDrawable && drawable.bitmap != null && !drawable.bitmap.isRecycled) {
-            val src = drawable.bitmap
-            // Center-crop to screen aspect
-            return centerCrop(src, screenW, screenH)
+    /** Scales to match screen height exactly (standard for wallpapers) but never crops
+     *  width, so any parallax-scroll width beyond one screen is preserved for correct
+     *  per-page offset sampling later. */
+    private fun drawableToWideBitmap(drawable: Drawable, screenW: Int, screenH: Int): Bitmap? {
+        val src = if (drawable is BitmapDrawable && drawable.bitmap != null && !drawable.bitmap.isRecycled) {
+            drawable.bitmap
+        } else {
+            val intrinsicW = drawable.intrinsicWidth.takeIf { it > 0 } ?: screenW
+            val intrinsicH = drawable.intrinsicHeight.takeIf { it > 0 } ?: screenH
+            val bmp = Bitmap.createBitmap(max(intrinsicW, 1), max(intrinsicH, 1), Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bmp)
+            drawable.setBounds(0, 0, canvas.width, canvas.height)
+            drawable.draw(canvas)
+            bmp
         }
 
-        val intrinsicW = drawable.intrinsicWidth.takeIf { it > 0 } ?: screenW
-        val intrinsicH = drawable.intrinsicHeight.takeIf { it > 0 } ?: screenH
-        val bmp = Bitmap.createBitmap(
-            max(intrinsicW, 1),
-            max(intrinsicH, 1),
-            Bitmap.Config.ARGB_8888
-        )
-        val canvas = Canvas(bmp)
-        drawable.setBounds(0, 0, canvas.width, canvas.height)
-        drawable.draw(canvas)
-        return centerCrop(bmp, screenW, screenH).also {
-            if (it !== bmp) bmp.recycle()
-        }
-    }
-
-    private fun centerCrop(src: Bitmap, targetW: Int, targetH: Int): Bitmap {
-        val scale = max(targetW.toFloat() / src.width, targetH.toFloat() / src.height)
+        val scale = screenH.toFloat() / src.height
         val scaledW = (src.width * scale).roundToInt().coerceAtLeast(1)
-        val scaledH = (src.height * scale).roundToInt().coerceAtLeast(1)
+        val scaledH = screenH
+        if (scaledW == src.width && scaledH == src.height) return src
         val scaled = Bitmap.createScaledBitmap(src, scaledW, scaledH, true)
-        val x = ((scaledW - targetW) / 2).coerceAtLeast(0)
-        val y = ((scaledH - targetH) / 2).coerceAtLeast(0)
-        val w = targetW.coerceAtMost(scaledW)
-        val h = targetH.coerceAtMost(scaledH)
-        val cropped = Bitmap.createBitmap(scaled, x, y, w, h)
-        if (scaled !== src && scaled !== cropped) scaled.recycle()
-        return cropped
+        if (scaled !== src) src.recycle()
+        return scaled
     }
 
-    /** Slight saturation boost so glass feels “alive” over muted wallpapers. */
+    /** Slight saturation boost so glass feels "alive" over muted wallpapers — no tint/wash here;
+     *  frost is entirely GlassPanel's job, driven by the live frostAmount setting. */
     private fun applyVibrancy(src: Bitmap): Bitmap {
         val out = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
         val matrix = ColorMatrix().apply {
-            setSaturation(1.25f)
+            setSaturation(1.1f)
         }
         val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG).apply {
             colorFilter = ColorMatrixColorFilter(matrix)
         }
         canvas.drawBitmap(src, 0f, 0f, paint)
-        // Heavier frost wash baked into blur buffer (less transparency through glass)
-        canvas.drawRect(
-            Rect(0, 0, src.width, src.height),
-            Paint().apply {
-                color = 0x48FFFFFF
-            }
-        )
         return out
     }
 }

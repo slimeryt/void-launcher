@@ -44,7 +44,9 @@ data class LauncherPreferences(
     val glassSheen: Boolean = true,
     val dockLabels: Boolean = false,
     val hapticFeedback: Boolean = true,
-    val autoCheckUpdates: Boolean = true
+    val autoCheckUpdates: Boolean = true,
+    /** Ids of home-screen widgets (AppWidgetManager appWidgetId), stacked above the app grid. */
+    val widgetIds: List<Int> = emptyList()
 )
 
 class PreferencesRepository(private val context: Context) {
@@ -64,6 +66,7 @@ class PreferencesRepository(private val context: Context) {
         val DockLabels = booleanPreferencesKey("dock_labels")
         val Haptic = booleanPreferencesKey("haptic_feedback")
         val AutoCheckUpdates = booleanPreferencesKey("auto_check_updates")
+        val WidgetIdsJson = stringPreferencesKey("widget_ids_json")
     }
 
     val preferences: Flow<LauncherPreferences> = context.dataStore.data.map { prefs ->
@@ -81,7 +84,8 @@ class PreferencesRepository(private val context: Context) {
             glassSheen = prefs[Keys.GlassSheen] ?: true,
             dockLabels = prefs[Keys.DockLabels] ?: false,
             hapticFeedback = prefs[Keys.Haptic] ?: true,
-            autoCheckUpdates = prefs[Keys.AutoCheckUpdates] ?: true
+            autoCheckUpdates = prefs[Keys.AutoCheckUpdates] ?: true,
+            widgetIds = decodeWidgetIds(prefs[Keys.WidgetIdsJson])
         )
     }
 
@@ -133,6 +137,18 @@ class PreferencesRepository(private val context: Context) {
 
     suspend fun setAutoCheckUpdates(value: Boolean) {
         context.dataStore.edit { it[Keys.AutoCheckUpdates] = value }
+    }
+
+    suspend fun setWidgetIds(ids: List<Int>) {
+        context.dataStore.edit { it[Keys.WidgetIdsJson] = JSONArray(ids).toString() }
+    }
+
+    private fun decodeWidgetIds(json: String?): List<Int> {
+        if (json.isNullOrBlank()) return emptyList()
+        return runCatching {
+            val arr = JSONArray(json)
+            buildList { for (i in 0 until arr.length()) add(arr.getInt(i)) }
+        }.getOrElse { emptyList() }
     }
 
     suspend fun setHomeLayout(pages: List<List<HomeItem>>, folders: Map<String, HomeFolder>) {

@@ -1,9 +1,12 @@
 package com.voidlauncher.app.data
 
+import android.app.ActivityOptions
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import com.voidlauncher.app.util.LauncherWindow
+import com.voidlauncher.app.util.PendingLaunchBounds
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -42,7 +45,24 @@ class AppRepository(private val context: Context) {
             setClassName(app.packageName, app.activityName)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
         }
-        context.startActivity(intent)
+        context.startActivity(intent, buildLaunchOptions())
+    }
+
+    /** iOS-style scale-up from the tapped icon's on-screen position, when available. */
+    private fun buildLaunchOptions(): android.os.Bundle? {
+        val bounds = PendingLaunchBounds.rect ?: return null
+        PendingLaunchBounds.rect = null
+        val decor = LauncherWindow.decorView ?: return null
+        if (bounds.width() <= 0 || bounds.height() <= 0) return null
+        return runCatching {
+            ActivityOptions.makeScaleUpAnimation(
+                decor,
+                bounds.left,
+                bounds.top,
+                bounds.width(),
+                bounds.height()
+            ).toBundle()
+        }.getOrNull()
     }
 
     fun openAppInfo(packageName: String) {

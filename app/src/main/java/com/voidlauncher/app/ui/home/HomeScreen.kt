@@ -49,8 +49,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Wallpaper
+import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -98,6 +101,8 @@ import com.voidlauncher.app.ui.theme.IosBlueGlass
 import com.voidlauncher.app.ui.theme.VoidMist
 import com.voidlauncher.app.ui.theme.VoidMuted
 import com.voidlauncher.app.viewmodel.LauncherUiState
+import com.voidlauncher.app.widget.LocalWidgetHostApi
+import com.voidlauncher.app.widget.WidgetView
 import kotlinx.coroutines.launch
 import kotlin.math.hypot
 import kotlin.math.roundToInt
@@ -124,6 +129,27 @@ fun HomeScreen(
     val density = LocalDensity.current
     val pageCount = state.pages.size.coerceAtLeast(1)
     val pagerState = rememberPagerState(pageCount = { pageCount })
+    val view = androidx.compose.ui.platform.LocalView.current
+
+    // 0..1 progress across the *whole* wallpaper width, matching what we tell the
+    // system via setWallpaperOffsets, so our own glass sampling and the real
+    // system-drawn wallpaper behind us always agree on which slice is visible.
+    val wallpaperXOffset by remember(pageCount) {
+        androidx.compose.runtime.derivedStateOf {
+            if (pageCount <= 1) {
+                0.5f
+            } else {
+                ((pagerState.currentPage + pagerState.currentPageOffsetFraction) /
+                    (pageCount - 1).toFloat()).coerceIn(0f, 1f)
+            }
+        }
+    }
+    LaunchedEffect(wallpaperXOffset) {
+        runCatching {
+            android.app.WallpaperManager.getInstance(context)
+                .setWallpaperOffsets(view.windowToken, wallpaperXOffset, 0.5f)
+        }
+    }
 
     var dragIndex by remember { mutableIntStateOf(-1) }
     var dragPage by remember { mutableIntStateOf(-1) }
@@ -167,6 +193,9 @@ fun HomeScreen(
     )
     val isDragging = dragIndex >= 0
 
+    androidx.compose.runtime.CompositionLocalProvider(
+        com.voidlauncher.app.glass.LocalWallpaperXOffset provides wallpaperXOffset
+    ) {
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -289,6 +318,61 @@ fun HomeScreen(
                 } else {
                     Spacer(modifier = Modifier.height(8.dp))
                 }
+            }
+
+            val widgetApi = LocalWidgetHostApi.current
+            if (state.widgetIds.isNotEmpty()) {
+                val host = widgetApi.host
+                val manager = widgetApi.manager
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .graphicsLayer {
+                            scaleX = editScale
+                            scaleY = editScale
+                        },
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    state.widgetIds.forEach { widgetId ->
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            if (host != null && manager != null) {
+                                GlassPanel(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    cornerRadius = 22.dp,
+                                    enableSheen = false,
+                                    enableRefraction = false
+                                ) {
+                                    WidgetView(host = host, manager = manager, widgetId = widgetId)
+                                }
+                            }
+                            if (state.isEditMode) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .offset(x = 6.dp, y = (-6).dp)
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xE6FFFFFF))
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                            onClick = { widgetApi.onRemoveWidget(widgetId) }
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Close,
+                                        contentDescription = "Remove widget",
+                                        tint = Color.Black,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
             }
 
             HorizontalPager(
@@ -427,10 +511,7 @@ fun HomeScreen(
                                             showLabel = state.showLabels,
                                             iconScale = state.iconScale,
                                             onClick = { onLaunchApp(app) },
-                                            onLongClick = {
-                                                onEditModeChange(true)
-                                                onAppLongClick(app)
-                                            },
+                                            onLongClick = { onAppLongClick(app) },
                                             editMode = state.isEditMode,
                                             selected = item.key in selectedKeys,
                                             modifier = Modifier
@@ -554,40 +635,39 @@ fun HomeScreen(
                     iconScale = state.iconScale,
                     showLabels = state.dockLabels,
                     onAppClick = onLaunchApp,
-                    onAppLongClick = { app ->
-                        onEditModeChange(true)
-                        onAppLongClick(app)
-                    },
+                    onAppLongClick = onAppLongClick,
                     modifier = Modifier.padding(bottom = 20.dp)
                 )
             } else {
-                Box(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 28.dp),
-                    contentAlignment = Alignment.Center
+                    horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    GlassPanel(
-                        modifier = Modifier.size(56.dp),
-                        cornerRadius = 28.dp,
-                        strong = true,
-                        enableSheen = false,
-                        enableRefraction = false
-                    ) {
-                        IconButton(
-                            onClick = {
-                                context.startActivity(Intent(context, SettingsActivity::class.java))
-                            },
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Settings,
-                                contentDescription = "Settings",
-                                tint = VoidMist,
-                                modifier = Modifier.size(26.dp)
-                            )
+                    EditFooterButton(
+                        icon = Icons.Rounded.Widgets,
+                        contentDescription = "Widgets",
+                        onClick = { widgetApi.onAddWidget() }
+                    )
+                    EditFooterButton(
+                        icon = Icons.Rounded.Wallpaper,
+                        contentDescription = "Wallpaper",
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_SET_WALLPAPER)
+                            runCatching {
+                                context.startActivity(Intent.createChooser(intent, "Set wallpaper"))
+                            }
                         }
-                    }
+                    )
+                    EditFooterButton(
+                        icon = Icons.Rounded.Settings,
+                        contentDescription = "Settings",
+                        onClick = {
+                            context.startActivity(Intent(context, SettingsActivity::class.java))
+                        }
+                    )
                 }
             }
         }
@@ -610,6 +690,7 @@ fun HomeScreen(
                 )
             }
         }
+    }
     }
 }
 
@@ -668,6 +749,31 @@ private fun EditPillButton(
                 text = label,
                 style = MaterialTheme.typography.labelLarge,
                 color = VoidMist
+            )
+        }
+    }
+}
+
+@Composable
+private fun EditFooterButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    GlassPanel(
+        modifier = modifier.size(56.dp),
+        cornerRadius = 28.dp,
+        strong = true,
+        enableSheen = false,
+        enableRefraction = false
+    ) {
+        IconButton(onClick = onClick, modifier = Modifier.fillMaxSize()) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = VoidMist,
+                modifier = Modifier.size(26.dp)
             )
         }
     }

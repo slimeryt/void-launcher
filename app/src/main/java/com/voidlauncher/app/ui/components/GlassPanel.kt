@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -41,7 +42,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import com.voidlauncher.app.glass.LiquidRefractionShader
 import com.voidlauncher.app.glass.LocalBlurredWallpaper
 import com.voidlauncher.app.glass.LocalGlassSettings
+import com.voidlauncher.app.glass.LocalWallpaperXOffset
 import com.voidlauncher.app.ui.theme.VoidCyan
 import com.voidlauncher.app.ui.theme.VoidGlassBorder
 import kotlin.math.roundToInt
@@ -73,6 +74,7 @@ fun GlassPanel(
 ) {
     val blurred = LocalBlurredWallpaper.current
     val glass = LocalGlassSettings.current
+    val wallpaperXOffset = LocalWallpaperXOffset.current
     val effectiveRefraction = enableRefraction && glass.refractionEnabled
     val effectiveSheen = enableSheen && glass.sheenEnabled
     // Hoist for snapshot invalidation of graphicsLayer / drawBehind
@@ -105,15 +107,27 @@ fun GlassPanel(
 
     Box(
         modifier = modifier
+            // Soft contact shadow lifts the pane off the wallpaper — real glass always
+            // reads a touch of depth, it doesn't sit flush with the background.
+            .shadow(
+                elevation = if (strong) 18.dp else 10.dp,
+                shape = shape,
+                ambientColor = Color.Black.copy(alpha = 0.35f),
+                spotColor = Color.Black.copy(alpha = 0.45f),
+                clip = false
+            )
             .clip(shape)
             .onGloballyPositioned { coords = it }
             .border(
                 width = 1.dp,
+                // Neutral light-catch, not an accent tint — brightest where a top-left
+                // light source would hit, fading to a faint dark edge at the bottom-right.
                 brush = Brush.linearGradient(
                     colors = listOf(
+                        Color.White.copy(alpha = 0.85f),
                         VoidGlassBorder,
-                        Color(0x66FFFFFF),
-                        Color(0x22FFFFFF)
+                        Color.White.copy(alpha = 0.05f),
+                        Color.Black.copy(alpha = 0.18f)
                     )
                 ),
                 shape = shape
@@ -151,27 +165,30 @@ fun GlassPanel(
                             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                             size.width > 1f && size.height > 1f
                         ) {
-                            // Subtle lens bulge — real glass barely shifts pixels; the old
-                            // 0.48-0.62 intensity pulled a quarter of the panel's content
-                            // out of place near corners, showing unrelated wallpaper as
-                            // ugly blobs instead of a smooth bulge.
+                            // No content displacement (see LiquidRefractionShader) — just
+                            // a thin rim highlight + a 1-2px chromatic fringe, confined
+                            // to a narrow edge band. This can't drag in unrelated
+                            // wallpaper content no matter what's behind the panel.
                             LiquidRefractionShader.update(
                                 shader = runtimeShader,
                                 size = Size(size.width, size.height),
-                                intensity = (if (strong) 0.14f else 0.09f) * b.coerceIn(0.5f, 1.6f),
-                                chromatic = if (strong) 0.010f else 0.006f,
+                                intensity = (if (strong) 0.16f else 0.11f) * b.coerceIn(0.5f, 1.6f),
+                                chromatic = if (strong) 1.6f else 1.0f,
                                 frost = (if (strong) 0.22f else 0.12f) * f,
                                 time = 0f,
-                                bezel = if (strong) 0.30f else 0.22f
+                                bezel = if (strong) 0.09f else 0.06f
                             )
                             AndroidRenderEffect.createRuntimeShaderEffect(runtimeShader, "content")
                         } else {
                             null
                         }
-                    // Warp after a soft blur of the wallpaper sample
+                    // Warp the raw sample first, THEN blur — createChainEffect(outer, inner)
+                    // runs inner first. Blurring after the warp softens any edge artifact
+                    // instead of the warp stretching an already-blurred (low detail) image
+                    // into long streaks pulled in from far outside the panel.
                     renderEffect = when {
                         shaderEffect != null && blurEffect != null ->
-                            AndroidRenderEffect.createChainEffect(shaderEffect, blurEffect)
+                            AndroidRenderEffect.createChainEffect(blurEffect, shaderEffect)
                                 .asComposeRenderEffect()
                         shaderEffect != null -> shaderEffect.asComposeRenderEffect()
                         blurEffect != null -> blurEffect.asComposeRenderEffect()
@@ -188,8 +205,17 @@ fun GlassPanel(
                     return@Canvas
                 }
                 val pos = panel.positionInWindow()
-                val scaleX = wp.bitmapWidth.toFloat() / wp.screenWidth.toFloat()
-                val scaleY = wp.bitmapHeight.toFloat() / wp.screenHeight.toFloat()
+                val scaleX = wp.bitmapWidth.toFloat() / wp.fullWidthPx.toFloat()
+                val scaleY = wp.bitmapHeight.toFloat() / wp.fullHeightPx.toFloat()
+
+                // The wallpaper can be several screens wide (home-page parallax). Shift by
+                // the current page-scroll fraction across the *extra* width beyond one
+                // screen so we sample the same slice the system is actually showing —
+                // otherwise this always grabbed the dead-center page regardless of which
+                // page (or whether Settings/no paging at all) was really on screen.
+                val extraWidthPx = (wp.fullWidthPx - wp.screenWidth).coerceAtLeast(0)
+                val pageOffsetPx = wallpaperXOffset.coerceIn(0f, 1f) * extraWidthPx
+                val realX = pageOffsetPx + pos.x
 
                 // Keep the sample 1:1 with the real wallpaper behind the panel — any bigger pad
                 // here shrinks the source into the same dst size, i.e. zooms it out, which
@@ -197,7 +223,7 @@ fun GlassPanel(
                 // (see LiquidRefractionShader) handles the small edge margin instead, and the
                 // warp is subtle enough now that edge-clamping isn't visually obvious.
                 val pad = 0.02f
-                val srcX = ((pos.x - size.width * pad) * scaleX).roundToInt()
+                val srcX = ((realX - size.width * pad) * scaleX).roundToInt()
                     .coerceIn(0, (wp.bitmapWidth - 1).coerceAtLeast(0))
                 val srcY = ((pos.y - size.height * pad) * scaleY).roundToInt()
                     .coerceIn(0, (wp.bitmapHeight - 1).coerceAtLeast(0))
@@ -212,36 +238,34 @@ fun GlassPanel(
                 )
 
                 if (effectiveRefraction && !useShader) {
-                    // Static lens zoom + chromatic offset — no idle breathing/wobbling
-                    // (pre-API33 CPU fallback for devices without AGSL RuntimeShader).
-                    val breathe = 1.08f
-                    val ca = 3.5f
-                    withTransform({ scale(breathe, breathe, pivot = center) }) {
-                        drawImage(
-                            image = wp.image,
-                            srcOffset = IntOffset(srcX, srcY),
-                            srcSize = IntSize(srcW, srcH),
-                            dstOffset = IntOffset((-ca).roundToInt(), (-ca * 0.3f).roundToInt()),
-                            dstSize = dst,
-                            alpha = 0.4f
-                        )
-                        drawImage(
-                            image = wp.image,
-                            srcOffset = IntOffset(srcX, srcY),
-                            srcSize = IntSize(srcW, srcH),
-                            dstOffset = IntOffset.Zero,
-                            dstSize = dst,
-                            alpha = 1f
-                        )
-                        drawImage(
-                            image = wp.image,
-                            srcOffset = IntOffset(srcX, srcY),
-                            srcSize = IntSize(srcW, srcH),
-                            dstOffset = IntOffset(ca.roundToInt(), (ca * 0.3f).roundToInt()),
-                            dstSize = dst,
-                            alpha = 0.4f
-                        )
-                    }
+                    // No zoom at all here (pre-API33 CPU fallback for devices without AGSL
+                    // RuntimeShader) — a uniform scale reads as "pushing the wallpaper
+                    // outward," not glass. Just a ~1px chromatic fringe.
+                    val ca = 1f
+                    drawImage(
+                        image = wp.image,
+                        srcOffset = IntOffset(srcX, srcY),
+                        srcSize = IntSize(srcW, srcH),
+                        dstOffset = IntOffset((-ca).roundToInt(), (-ca * 0.3f).roundToInt()),
+                        dstSize = dst,
+                        alpha = 0.35f
+                    )
+                    drawImage(
+                        image = wp.image,
+                        srcOffset = IntOffset(srcX, srcY),
+                        srcSize = IntSize(srcW, srcH),
+                        dstOffset = IntOffset.Zero,
+                        dstSize = dst,
+                        alpha = 1f
+                    )
+                    drawImage(
+                        image = wp.image,
+                        srcOffset = IntOffset(srcX, srcY),
+                        srcSize = IntSize(srcW, srcH),
+                        dstOffset = IntOffset(ca.roundToInt(), (ca * 0.3f).roundToInt()),
+                        dstSize = dst,
+                        alpha = 0.35f
+                    )
                 } else {
                     drawImage(
                         image = wp.image,
@@ -274,13 +298,14 @@ fun GlassPanel(
                             )
                         )
                         if (tint.alpha > 0.01f) drawRect(tint)
+                        drawTopSpecular(strong)
                         if (effectiveSheen) {
                             val bandX = size.width * sheenShift
                             drawRect(
                                 brush = Brush.linearGradient(
                                     colors = listOf(
                                         Color.Transparent,
-                                        Color.White.copy(alpha = 0.14f),
+                                        Color.White.copy(alpha = 0.10f),
                                         Color.Transparent
                                     ),
                                     start = Offset(bandX - size.width * 0.2f, 0f),
@@ -291,10 +316,10 @@ fun GlassPanel(
                         drawRoundRect(
                             brush = Brush.linearGradient(
                                 colors = listOf(
-                                    Color.White.copy(alpha = 0.75f),
-                                    VoidCyan.copy(alpha = 0.22f),
-                                    Color.White.copy(alpha = 0.10f),
-                                    Color.Black.copy(alpha = 0.22f)
+                                    Color.White.copy(alpha = 0.65f),
+                                    Color.White.copy(alpha = 0.16f),
+                                    Color.White.copy(alpha = 0.06f),
+                                    Color.Black.copy(alpha = 0.20f)
                                 ),
                                 start = Offset.Zero,
                                 end = Offset(size.width, size.height)
@@ -318,13 +343,14 @@ fun GlassPanel(
                             )
                         )
                         if (tint.alpha > 0.01f) drawRect(tint)
+                        drawTopSpecular(strong)
                         if (effectiveSheen) {
                             val bandX = size.width * sheenShift
                             drawRect(
                                 brush = Brush.linearGradient(
                                     colors = listOf(
                                         Color.Transparent,
-                                        Color.White.copy(alpha = 0.14f),
+                                        Color.White.copy(alpha = 0.10f),
                                         Color.Transparent
                                     ),
                                     start = Offset(bandX - size.width * 0.2f, 0f),
@@ -335,10 +361,10 @@ fun GlassPanel(
                         drawRoundRect(
                             brush = Brush.linearGradient(
                                 colors = listOf(
-                                    Color.White.copy(alpha = 0.55f * blur.coerceIn(0.5f, 1f)),
-                                    VoidCyan.copy(alpha = 0.20f),
-                                    Color.White.copy(alpha = 0.10f),
-                                    Color.Black.copy(alpha = 0.25f)
+                                    Color.White.copy(alpha = 0.50f * blur.coerceIn(0.5f, 1f)),
+                                    Color.White.copy(alpha = 0.14f),
+                                    Color.White.copy(alpha = 0.06f),
+                                    Color.Black.copy(alpha = 0.22f)
                                 ),
                                 start = Offset.Zero,
                                 end = Offset(size.width, size.height)
@@ -352,6 +378,28 @@ fun GlassPanel(
 
         content()
     }
+}
+
+/**
+ * Static top light-catch: real glass/metal edges show a bright highlight where an
+ * overhead light source grazes the curvature, brightest at top-center, fading fast
+ * toward the sides and bottom. This replaces relying solely on the moving sheen band.
+ */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawTopSpecular(strong: Boolean) {
+    val peak = if (strong) 0.30f else 0.20f
+    drawOval(
+        brush = Brush.radialGradient(
+            colors = listOf(
+                Color.White.copy(alpha = peak),
+                Color.White.copy(alpha = peak * 0.35f),
+                Color.Transparent
+            ),
+            center = Offset(size.width * 0.5f, -size.height * 0.05f),
+            radius = size.width * 0.65f
+        ),
+        topLeft = Offset(-size.width * 0.15f, -size.height * 0.55f),
+        size = Size(size.width * 1.3f, size.height * 0.9f)
+    )
 }
 
 /** Force every icon into a rounded rectangle bitmap (no leftover circular masks). */

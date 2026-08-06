@@ -39,7 +39,8 @@ data class LauncherUiState(
     val glassSheen: Boolean = true,
     val dockLabels: Boolean = false,
     val hapticFeedback: Boolean = true,
-    val autoCheckUpdates: Boolean = true
+    val autoCheckUpdates: Boolean = true,
+    val widgetIds: List<Int> = emptyList()
 )
 
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
@@ -98,7 +99,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             glassSheen = prefs.glassSheen,
             dockLabels = prefs.dockLabels,
             hapticFeedback = prefs.hapticFeedback,
-            autoCheckUpdates = prefs.autoCheckUpdates
+            autoCheckUpdates = prefs.autoCheckUpdates,
+            widgetIds = prefs.widgetIds
         )
     }.stateIn(
         scope = viewModelScope,
@@ -335,6 +337,19 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun addPage() {
         viewModelScope.launch {
             prefsRepository.setHomeLayout(prefsCache.pages + listOf(emptyList()), prefsCache.folders)
+        }
+    }
+
+    fun addWidget(widgetId: Int) {
+        viewModelScope.launch {
+            if (widgetId in prefsCache.widgetIds) return@launch
+            prefsRepository.setWidgetIds(prefsCache.widgetIds + widgetId)
+        }
+    }
+
+    fun removeWidget(widgetId: Int) {
+        viewModelScope.launch {
+            prefsRepository.setWidgetIds(prefsCache.widgetIds - widgetId)
         }
     }
 
