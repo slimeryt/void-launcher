@@ -20,3 +20,6 @@ out/
 .tools/
 
 dist/
+workers/**/node_modules/
+workers/**/.wrangler/
+

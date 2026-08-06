@@ -7,13 +7,22 @@ on:
   workflow_dispatch:
     inputs:
       version_name:
-        description: "Version name (e.g. 0.1.0)"
+        description: "Version name (e.g. 0.2.41, 0.2.41-beta.1, 0.2.41-dev.1)"
         required: true
         default: "0.1.0"
       version_code:
         description: "Android versionCode (integer)"
         required: true
         default: "1"
+      channel:
+        description: "Release channel"
+        required: true
+        default: "stable"
+        type: choice
+        options:
+          - stable
+          - beta
+          - developer
 
 permissions:
   contents: write
@@ -41,17 +50,44 @@ jobs:
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             TAG="${GITHUB_REF_NAME}"
             NAME="${TAG#v}"
-            # versionCode from semver: major*1e6 + minor*1e3 + patch
-            IFS='.' read -r MAJOR MINOR PATCH <<< "${NAME}"
-            CODE=$(( ${MAJOR:-0} * 1000000 + ${MINOR:-0} * 1000 + ${PATCH:-0} ))
           else
             TAG="v${{ inputs.version_name }}"
             NAME="${{ inputs.version_name }}"
+          fi
+
+          # Semver core without -beta / -dev suffix for versionCode encoding
+          CORE="${NAME%%-*}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${CORE}"
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            CODE=$(( ${MAJOR:-0} * 1000000 + ${MINOR:-0} * 1000 + ${PATCH:-0} ))
+          else
             CODE="${{ inputs.version_code }}"
           fi
+
+          # Channel from tag suffix or workflow input
+          LOWER="$(echo "$NAME" | tr '[:upper:]' '[:lower:]')"
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            if [[ "$LOWER" == *"-dev"* || "$LOWER" == *"-alpha"* ]]; then
+              CHANNEL="developer"
+            elif [[ "$LOWER" == *"-beta"* || "$LOWER" == *"-rc"* ]]; then
+              CHANNEL="beta"
+            else
+              CHANNEL="stable"
+            fi
+          else
+            CHANNEL="${{ inputs.channel }}"
+          fi
+
+          PRERELEASE=false
+          if [[ "$CHANNEL" == "beta" || "$CHANNEL" == "developer" ]]; then
+            PRERELEASE=true
+          fi
+
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
 
       - name: Build signed APK
         run: |
@@ -76,12 +112,20 @@ jobs:
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
           name: Polar ${{ steps.ver.outputs.name }}
+          prerelease: ${{ steps.ver.outputs.prerelease }}
           body: |
             ## Polar ${{ steps.ver.outputs.name }}
 
             versionCode: ${{ steps.ver.outputs.code }}
+            channel: ${{ steps.ver.outputs.channel }}
 
             Install **Polar.apk**, or use **Settings → Updates** in the app.
+
+            | Channel | Who gets this |
+            |---|---|
+            | stable | Everyone (Beta Updates = Off) |
+            | beta | Public Beta + Developer |
+            | developer | Developer only |
 
             SHA-256 of Polar.apk is attached as `Polar.apk.sha256`.
 

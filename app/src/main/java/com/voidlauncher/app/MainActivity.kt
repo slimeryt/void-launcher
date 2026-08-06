@@ -113,6 +113,7 @@ class MainActivity : ComponentActivity() {
                 ),
                 LocalWallpaperApi provides WallpaperApi(
                     onSetFromUri = { setWallpaperFromUri(it) },
+                    onSetBitmap = { applyWallpaperBitmap(it) },
                     onSetSolidColor = { setWallpaperColor(it) },
                     onSetGradient = { setWallpaperGradient(it) },
                     onOpenSystemPicker = {

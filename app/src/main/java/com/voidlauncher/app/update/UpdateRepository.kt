@@ -3,6 +3,7 @@ package com.voidlauncher.app.update
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.File
@@ -16,7 +17,9 @@ data class ReleaseInfo(
     val versionCode: Int,
     val apkUrl: String,
     val notes: String,
-    val publishedAt: String
+    val publishedAt: String,
+    val prerelease: Boolean = false,
+    val channelKind: String = "stable" // stable | beta | developer
 )
 
 sealed class UpdateCheckResult {
@@ -41,10 +44,18 @@ class UpdateRepository(private val context: Context) {
         }.getOrDefault(0L)
     }
 
-    suspend fun checkForUpdate(): UpdateCheckResult = withContext(Dispatchers.IO) {
+    suspend fun checkForUpdate(
+        channel: UpdateChannel = UpdateChannel.Off
+    ): UpdateCheckResult = withContext(Dispatchers.IO) {
         try {
-            val release = fetchLatestRelease()
-                ?: return@withContext UpdateCheckResult.Error("No release found on GitHub")
+            val release = fetchLatestForChannel(channel)
+                ?: return@withContext UpdateCheckResult.Error(
+                    when (channel) {
+                        UpdateChannel.Off -> "No release found on GitHub"
+                        UpdateChannel.PublicBeta -> "No Public Beta release found"
+                        UpdateChannel.Developer -> "No Developer release found"
+                    }
+                )
 
             val currentCode = currentVersionCode()
             val currentName = currentVersionName()
@@ -92,7 +103,6 @@ class UpdateRepository(private val context: Context) {
                     output.flush()
                 }
             }
-            // Reject HTML/error bodies that some hosts return as 200
             if (outFile.length() < 64_000L || !isZipApk(outFile)) {
                 outFile.delete()
                 throw IllegalStateException("Downloaded file is not a valid APK")
@@ -104,7 +114,6 @@ class UpdateRepository(private val context: Context) {
         }
     }
 
-    /** Follow redirects manually — Android HttpURLConnection can mishandle GitHub CDN hops. */
     private fun openDownload(startUrl: String): HttpURLConnection {
         var current = startUrl
         repeat(8) {
@@ -137,7 +146,6 @@ class UpdateRepository(private val context: Context) {
             file.inputStream().use { input ->
                 val magic = ByteArray(4)
                 if (input.read(magic) != 4) return false
-                // ZIP / APK local file header: PK\x03\x04
                 magic[0] == 0x50.toByte() &&
                     magic[1] == 0x4B.toByte() &&
                     magic[2] == 0x03.toByte() &&
@@ -146,16 +154,51 @@ class UpdateRepository(private val context: Context) {
         }.getOrDefault(false)
     }
 
-    private fun fetchLatestRelease(): ReleaseInfo? {
-        // HTML redirect first — avoids api.github.com rate-limit 403s
-        fetchViaLatestRedirect()?.let { return it }
-        return fetchViaApi()
+    private fun fetchLatestForChannel(channel: UpdateChannel): ReleaseInfo? {
+        return when (channel) {
+            UpdateChannel.Off -> {
+                // Stable: HTML redirect first (no API quota), then API latest.
+                fetchViaLatestRedirect()?.let { return it }
+                fetchViaApiLatest()?.takeUnless { it.prerelease }
+            }
+            UpdateChannel.PublicBeta, UpdateChannel.Developer -> {
+                val releases = fetchReleaseList()
+                releases
+                    .filter { matchesChannel(it, channel) }
+                    .maxWithOrNull(releaseComparator)
+            }
+        }
     }
 
-    /**
-     * `GET /releases/latest` → 302 to `/releases/tag/vX.Y.Z`.
-     * No API quota; works for public repos.
-     */
+    private fun matchesChannel(release: ReleaseInfo, channel: UpdateChannel): Boolean {
+        val kind = classifyTag(release.tagName, release.prerelease)
+        return when (channel) {
+            UpdateChannel.Off -> kind == "stable"
+            // Public Beta includes stables + public betas / RCs — not pure developer builds.
+            UpdateChannel.PublicBeta -> kind == "stable" || kind == "beta"
+            UpdateChannel.Developer -> true
+        }
+    }
+
+    private fun classifyTag(tag: String, prerelease: Boolean): String {
+        val t = tag.lowercase()
+        return when {
+            Regex("""(^|[-.])(dev|alpha)([.-]|\d|$)""").containsMatchIn(t) -> "developer"
+            Regex("""(^|[-.])(beta|rc)([.-]|\d|$)""").containsMatchIn(t) -> "beta"
+            prerelease -> "beta" // unmarked prerelease treated as public beta
+            else -> "stable"
+        }
+    }
+
+    private val releaseComparator = Comparator<ReleaseInfo> { a, b ->
+        when {
+            a.versionCode > 0 && b.versionCode > 0 -> a.versionCode.compareTo(b.versionCode)
+            a.versionCode > 0 -> 1
+            b.versionCode > 0 -> -1
+            else -> compareSemVer(a.versionName, b.versionName)
+        }
+    }
+
     private fun fetchViaLatestRedirect(): ReleaseInfo? {
         val connection = (URL(UpdateConfig.LATEST_HTML).openConnection() as HttpURLConnection).apply {
             instanceFollowRedirects = false
@@ -182,11 +225,12 @@ class UpdateRepository(private val context: Context) {
             return ReleaseInfo(
                 tagName = tag,
                 versionName = versionName,
-                // No release notes here — force semver compare (Gradle versionCode ≠ semver encode)
                 versionCode = 0,
                 apkUrl = UpdateConfig.downloadUrl(tag),
                 notes = "",
-                publishedAt = ""
+                publishedAt = "",
+                prerelease = false,
+                channelKind = "stable"
             )
         } catch (_: Exception) {
             return null
@@ -195,73 +239,111 @@ class UpdateRepository(private val context: Context) {
         }
     }
 
-    private fun fetchViaApi(): ReleaseInfo? {
-        val connection = (URL(UpdateConfig.LATEST_API).openConnection() as HttpURLConnection).apply {
+    private fun fetchViaApiLatest(): ReleaseInfo? {
+        val connection = openApi(UpdateConfig.LATEST_API)
+        try {
+            val json = readJsonObject(connection) ?: return null
+            return parseReleaseJson(json)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun fetchReleaseList(): List<ReleaseInfo> {
+        val connection = openApi(UpdateConfig.RELEASES_API)
+        try {
+            val body = readBody(connection) ?: return emptyList()
+            val arr = JSONArray(body)
+            return buildList {
+                for (i in 0 until arr.length()) {
+                    val obj = arr.optJSONObject(i) ?: continue
+                    if (obj.optBoolean("draft", false)) continue
+                    parseReleaseJson(obj)?.let { add(it) }
+                }
+            }
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun openApi(url: String): HttpURLConnection {
+        return (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000
-            readTimeout = 15_000
+            readTimeout = 20_000
             setRequestProperty("User-Agent", UpdateConfig.USER_AGENT)
             setRequestProperty("Accept", "application/vnd.github+json")
             setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
         }
-        try {
-            val code = connection.responseCode
-            if (code == 403 || code == 429) {
-                throw IllegalStateException(
-                    "GitHub rate limit (API $code). Try again in a few minutes."
-                )
-            }
-            if (code != 200) {
-                val err = runCatching {
-                    (connection.errorStream ?: connection.inputStream)
-                        ?.bufferedReader()
-                        ?.use { it.readText() }
-                        ?.take(200)
-                }.getOrNull()
-                throw IllegalStateException(
-                    buildString {
-                        append("GitHub API $code")
-                        if (!err.isNullOrBlank()) append(": ").append(err)
-                    }
-                )
-            }
-            val body = connection.inputStream.bufferedReader().use { it.readText() }
-            val json = JSONObject(body)
-            val tag = json.optString("tag_name", "")
-            val notes = json.optString("body", "")
-            val published = json.optString("published_at", "")
-            val assets = json.optJSONArray("assets") ?: return null
+    }
 
-            var apkUrl: String? = null
-            var legacyUrl: String? = null
-            var anyApkUrl: String? = null
-            for (i in 0 until assets.length()) {
-                val asset = assets.getJSONObject(i)
-                val name = asset.optString("name", "")
-                val url = asset.optString("browser_download_url", null) ?: continue
-                when {
-                    name.equals(UpdateConfig.APK_ASSET_NAME, ignoreCase = true) -> apkUrl = url
-                    name.equals(UpdateConfig.LEGACY_APK_ASSET_NAME, ignoreCase = true) -> legacyUrl = url
-                    name.endsWith(".apk", ignoreCase = true) && anyApkUrl == null -> anyApkUrl = url
-                }
-            }
-            if (apkUrl.isNullOrBlank()) {
-                apkUrl = legacyUrl ?: anyApkUrl ?: UpdateConfig.downloadUrl(tag)
-            }
+    private fun readJsonObject(connection: HttpURLConnection): JSONObject? {
+        val body = readBody(connection) ?: return null
+        return JSONObject(body)
+    }
 
-            val versionName = tag.removePrefix("v").trim()
-            val versionCode = parseVersionCode(notes, versionName)
-
-            return ReleaseInfo(
-                tagName = tag,
-                versionName = versionName,
-                versionCode = versionCode,
-                apkUrl = apkUrl,
-                notes = notes,
-                publishedAt = published
+    private fun readBody(connection: HttpURLConnection): String? {
+        val code = connection.responseCode
+        if (code == 403 || code == 429) {
+            throw IllegalStateException(
+                "GitHub rate limit (API $code). Try again in a few minutes."
             )
-        } finally {
-            connection.disconnect()
         }
+        if (code != 200) {
+            val err = runCatching {
+                (connection.errorStream ?: connection.inputStream)
+                    ?.bufferedReader()
+                    ?.use { it.readText() }
+                    ?.take(200)
+            }.getOrNull()
+            throw IllegalStateException(
+                buildString {
+                    append("GitHub API $code")
+                    if (!err.isNullOrBlank()) append(": ").append(err)
+                }
+            )
+        }
+        return connection.inputStream.bufferedReader().use { it.readText() }
+    }
+
+    private fun parseReleaseJson(json: JSONObject): ReleaseInfo? {
+        val tag = json.optString("tag_name", "")
+        if (tag.isBlank()) return null
+        val notes = json.optString("body", "")
+        val published = json.optString("published_at", "")
+        val prerelease = json.optBoolean("prerelease", false)
+        val assets = json.optJSONArray("assets") ?: return null
+
+        var apkUrl: String? = null
+        var legacyUrl: String? = null
+        var anyApkUrl: String? = null
+        for (i in 0 until assets.length()) {
+            val asset = assets.getJSONObject(i)
+            val name = asset.optString("name", "")
+            val url = asset.optString("browser_download_url", null) ?: continue
+            when {
+                name.equals(UpdateConfig.APK_ASSET_NAME, ignoreCase = true) -> apkUrl = url
+                name.equals(UpdateConfig.LEGACY_APK_ASSET_NAME, ignoreCase = true) -> legacyUrl = url
+                name.endsWith(".apk", ignoreCase = true) && anyApkUrl == null -> anyApkUrl = url
+            }
+        }
+        if (apkUrl.isNullOrBlank()) {
+            apkUrl = legacyUrl ?: anyApkUrl ?: UpdateConfig.downloadUrl(tag)
+        }
+
+        val versionName = tag.removePrefix("v").trim()
+        val versionCode = parseVersionCode(notes, versionName)
+        val kind = classifyTag(tag, prerelease)
+
+        return ReleaseInfo(
+            tagName = tag,
+            versionName = versionName,
+            versionCode = versionCode,
+            apkUrl = apkUrl,
+            notes = notes,
+            publishedAt = published,
+            prerelease = prerelease,
+            channelKind = kind
+        )
     }
 
     private fun friendlyError(e: Exception): String {
@@ -277,26 +359,34 @@ class UpdateRepository(private val context: Context) {
     /**
      * Prefer an explicit line in the release body:
      *   versionCode: 12
-     * Otherwise derive a numeric code from semver (major*1_000_000 + minor*1_000 + patch).
+     * Otherwise derive a numeric code from the semver core (ignores -beta / -dev suffix).
      */
     private fun parseVersionCode(notes: String, versionName: String): Int {
         val match = Regex("""versionCode\s*[:=]\s*(\d+)""", RegexOption.IGNORE_CASE)
             .find(notes)
         if (match != null) return match.groupValues[1].toInt()
 
-        val parts = versionName.split(".", "-", "_")
+        val core = versionName.substringBefore("-").substringBefore("_")
+        val parts = core.split(".")
             .mapNotNull { it.filter(Char::isDigit).toIntOrNull() }
         if (parts.isEmpty()) return 0
         val major = parts.getOrElse(0) { 0 }
         val minor = parts.getOrElse(1) { 0 }
         val patch = parts.getOrElse(2) { 0 }
-        // Match our Gradle scheme: 0.2.6 → 1000+style was 1012; keep semver fallback
-        // Prefer encoded patch ladder used in releases when notes missing:
         return major * 1_000_000 + minor * 1_000 + patch
     }
 
     private fun compareSemVer(a: String, b: String): Int {
-        fun parts(v: String) = v.split(".", "-", "_").map { it.filter(Char::isDigit).toIntOrNull() ?: 0 }
+        fun parts(v: String): List<Int> {
+            val core = v.substringBefore("-").substringBefore("_")
+            val coreParts = core.split(".").map { it.filter(Char::isDigit).toIntOrNull() ?: 0 }
+            val pre = v.substringAfter("-", missingDelimiterValue = "")
+                .ifEmpty { v.substringAfter("_", missingDelimiterValue = "") }
+            val preNum = Regex("""\d+""").findAll(pre).map { it.value.toInt() }.toList()
+            // Stable (no pre) sorts above same core with pre when cores equal — handled by caller
+            // preferring versionCode. Here: compare core then pre numbers.
+            return coreParts + if (pre.isEmpty()) listOf(Int.MAX_VALUE) else (listOf(0) + preNum)
+        }
         val pa = parts(a)
         val pb = parts(b)
         val len = maxOf(pa.size, pb.size)

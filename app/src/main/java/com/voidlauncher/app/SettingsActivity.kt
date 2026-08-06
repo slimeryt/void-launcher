@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import com.voidlauncher.app.account.AccountViewModel
 import com.voidlauncher.app.glass.GlassSettings
 import com.voidlauncher.app.glass.LocalBlurredWallpaper
 import com.voidlauncher.app.glass.LocalGlassSettings
@@ -35,6 +36,7 @@ class SettingsActivity : ComponentActivity() {
 
     private val viewModel: LauncherViewModel by viewModels()
     private val updateViewModel: UpdateViewModel by viewModels()
+    private val accountViewModel: AccountViewModel by viewModels()
     private lateinit var blurController: WallpaperBlurController
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -49,6 +51,7 @@ class SettingsActivity : ComponentActivity() {
         setContent {
             val state by viewModel.state.collectAsStateWithLifecycle()
             val updateState by updateViewModel.state.collectAsStateWithLifecycle()
+            val accountState by accountViewModel.state.collectAsStateWithLifecycle()
             val blurredWallpaper by blurController.wallpaper.collectAsStateWithLifecycle()
             val hasWallpaperAccess by blurController.hasAccess.collectAsStateWithLifecycle()
 
@@ -70,6 +73,7 @@ class SettingsActivity : ComponentActivity() {
                     SettingsContent(
                         state = state,
                         updateState = updateState,
+                        accountState = accountState,
                         hasWallpaperAccess = hasWallpaperAccess,
                         onGrantWallpaperAccess = { startActivity(StoragePermission.requestIntent(this)) },
                         onShowLabelsChange = viewModel::setShowLabels,
@@ -85,6 +89,13 @@ class SettingsActivity : ComponentActivity() {
                         onCheckUpdate = { updateViewModel.checkForUpdates(silent = false) },
                         onCancelUpdate = updateViewModel::cancelUpdateAction,
                         onDownloadUpdate = updateViewModel::downloadUpdate,
+                        onUpdateChannelChange = updateViewModel::setUpdateChannel,
+                        onAccountLogin = accountViewModel::login,
+                        onAccountRegister = accountViewModel::register,
+                        onAccountLogout = accountViewModel::logout,
+                        onRequestDeveloperAccount = accountViewModel::requestDeveloperAccount,
+                        onRequestEnroll = accountViewModel::requestDeveloperEnrollment,
+                        onAccountRefresh = accountViewModel::refresh,
                         onInstallUpdate = {
                             val apk = updateViewModel.state.value.downloadedApk
                             if (apk == null) return@SettingsContent
@@ -119,5 +130,6 @@ class SettingsActivity : ComponentActivity() {
         if (::blurController.isInitialized) {
             blurController.refresh()
         }
+        accountViewModel.refresh()
     }
 }

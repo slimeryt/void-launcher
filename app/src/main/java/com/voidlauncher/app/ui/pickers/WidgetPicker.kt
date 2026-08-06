@@ -2,6 +2,9 @@ package com.voidlauncher.app.ui.pickers
 
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
+import android.graphics.Bitmap
+import android.graphics.Canvas as AndroidCanvas
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
 import androidx.compose.foundation.Image
@@ -10,14 +13,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -40,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -48,6 +53,9 @@ import com.voidlauncher.app.ui.components.toCachedBitmap
 import com.voidlauncher.app.ui.theme.VoidInk
 import com.voidlauncher.app.ui.theme.VoidMist
 import com.voidlauncher.app.ui.theme.VoidMuted
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
 
 private data class WidgetAppGroup(
     val packageName: String,
@@ -75,6 +83,32 @@ private fun AppWidgetProviderInfo.spanCells(density: Float): Pair<Int, Int> {
         cellsForSizeDp(minHeight / density)
     }
     return cols.coerceAtLeast(1) to rows.coerceAtLeast(1)
+}
+
+/**
+ * Rasterize a widget preview without square-cropping / zooming (unlike [toCachedBitmap]).
+ * Preserves the drawable's intrinsic aspect so frames aren't cut off.
+ */
+private fun Drawable.toPreviewBitmap(maxEdgePx: Int = 900): Bitmap {
+    val iw = intrinsicWidth.takeIf { it > 0 } ?: maxEdgePx
+    val ih = intrinsicHeight.takeIf { it > 0 } ?: maxEdgePx
+    val scale = min(1f, maxEdgePx.toFloat() / max(iw, ih).toFloat())
+    val w = max(1, (iw * scale).roundToInt())
+    val h = max(1, (ih * scale).roundToInt())
+
+    if (this is BitmapDrawable) {
+        val src = bitmap
+        if (src != null && !src.isRecycled) {
+            return if (src.width == w && src.height == h) src
+            else Bitmap.createScaledBitmap(src, w, h, true)
+        }
+    }
+
+    val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val canvas = AndroidCanvas(out)
+    setBounds(0, 0, w, h)
+    draw(canvas)
+    return out
 }
 
 @Composable
@@ -194,7 +228,7 @@ private fun WidgetAppSection(
         appIcon?.toCachedBitmap(maxSize = 96, cornerRadiusRatio = 0.22f)?.asImageBitmap()
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (appBmp != null) {
                 Image(
@@ -235,16 +269,16 @@ private fun WidgetPreviewCard(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val density = context.resources.displayMetrics.density
-    val (cols, rows) = remember(info.provider) { info.spanCells(density) }
+    val density = LocalDensity.current
+    val displayDensity = context.resources.displayMetrics.density
+    val (cols, rows) = remember(info.provider) { info.spanCells(displayDensity) }
     val span = "${cols}×${rows}"
 
     val previewBmp = remember(info.provider, densityDpi) {
         runCatching {
             val drawable = info.loadPreviewImage(context, densityDpi)
                 ?: info.loadIcon(context, densityDpi)
-            // Keep corners from the preview asset itself — don't wrap / re-round heavily.
-            drawable?.toCachedBitmap(maxSize = 1024, cornerRadiusRatio = 0f)?.asImageBitmap()
+            drawable?.toPreviewBitmap(maxEdgePx = 900)?.asImageBitmap()
         }.getOrNull()
     }
 
@@ -258,24 +292,38 @@ private fun WidgetPreviewCard(
             ),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        val aspect = (cols.toFloat() / rows.toFloat()).coerceIn(0.45f, 3.2f)
-        if (previewBmp != null) {
-            Image(
-                bitmap = previewBmp,
-                contentDescription = label,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(aspect)
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(aspect),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("No preview", color = VoidMuted)
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            // Cap preview height so tall widgets don't dominate; width follows intrinsic ratio.
+            val maxH = 168.dp
+            val maxW = maxWidth * 0.92f
+            if (previewBmp != null) {
+                val bmpAspect = previewBmp.width.toFloat() / previewBmp.height.toFloat()
+                val heightPx = with(density) { maxH.toPx() }
+                val widthFromH = heightPx * bmpAspect
+                val maxWPx = with(density) { maxW.toPx() }
+                val finalW = min(widthFromH, maxWPx)
+                val finalH = finalW / bmpAspect
+                Image(
+                    bitmap = previewBmp,
+                    contentDescription = label,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .width(with(density) { finalW.toDp() })
+                        .height(with(density) { finalH.toDp() })
+                        .heightIn(max = maxH)
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .width(maxW * (cols.toFloat() / (cols + rows).coerceAtLeast(1)))
+                        .height(maxH * 0.55f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("No preview", color = VoidMuted)
+                }
             }
         }
 

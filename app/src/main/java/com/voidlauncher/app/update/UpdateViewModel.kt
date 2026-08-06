@@ -3,11 +3,15 @@ package com.voidlauncher.app.update
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.voidlauncher.app.data.PreferencesRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
@@ -20,12 +24,15 @@ data class UpdateUiState(
     val statusMessage: String = "",
     val available: ReleaseInfo? = null,
     val downloadedApk: File? = null,
-    val error: String? = null
+    val error: String? = null,
+    val channel: UpdateChannel = UpdateChannel.Off,
+    val developerEnrolled: Boolean = false
 )
 
 class UpdateViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repo = UpdateRepository(application)
+    private val prefs = PreferencesRepository(application)
 
     private val _state = MutableStateFlow(
         UpdateUiState(currentVersion = repo.currentVersionName())
@@ -36,12 +43,75 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
     private var downloadJob: Job? = null
 
     init {
-        checkForUpdates(silent = true)
+        viewModelScope.launch {
+            val p = prefs.preferences.first()
+            val channel = UpdateChannel.fromStorage(p.updateChannel)
+            val enrolled = p.enrollmentStatus == "approved"
+            val safeChannel =
+                if (channel == UpdateChannel.Developer && !enrolled) UpdateChannel.Off else channel
+            if (safeChannel != channel) {
+                prefs.setUpdateChannel(safeChannel.storageKey)
+            }
+            _state.update {
+                it.copy(channel = safeChannel, developerEnrolled = enrolled)
+            }
+            checkForUpdates(silent = true)
+        }
+
+        viewModelScope.launch {
+            prefs.preferences
+                .map { p ->
+                    (p.enrollmentStatus == "approved") to UpdateChannel.fromStorage(p.updateChannel)
+                }
+                .distinctUntilChanged()
+                .collect { (enrolled, channel) ->
+                    _state.update { it.copy(developerEnrolled = enrolled) }
+                    if (channel == UpdateChannel.Developer && !enrolled) {
+                        prefs.setUpdateChannel(UpdateChannel.Off.storageKey)
+                        _state.update {
+                            it.copy(
+                                channel = UpdateChannel.Off,
+                                available = null,
+                                downloadedApk = null,
+                                statusMessage = "Developer enrollment required — switched to Off"
+                            )
+                        }
+                        checkForUpdates(silent = true)
+                    }
+                }
+        }
+    }
+
+    fun setUpdateChannel(channel: UpdateChannel) {
+        if (_state.value.channel == channel) return
+        viewModelScope.launch {
+            if (channel == UpdateChannel.Developer) {
+                val enrolled = prefs.preferences.first().enrollmentStatus == "approved"
+                if (!enrolled) {
+                    _state.update {
+                        it.copy(error = "Developer Beta requires an approved enrollment")
+                    }
+                    return@launch
+                }
+            }
+            prefs.setUpdateChannel(channel.storageKey)
+            _state.update {
+                it.copy(
+                    channel = channel,
+                    available = null,
+                    downloadedApk = null,
+                    error = null,
+                    statusMessage = "Switching to ${channel.label}…"
+                )
+            }
+            checkForUpdates(silent = false)
+        }
     }
 
     fun checkForUpdates(silent: Boolean = false) {
         checkJob?.cancel()
         checkJob = viewModelScope.launch {
+            val channel = _state.value.channel
             _state.update {
                 it.copy(
                     checking = true,
@@ -49,7 +119,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                     statusMessage = if (silent) it.statusMessage else "Checking GitHub…"
                 )
             }
-            when (val result = repo.checkForUpdate()) {
+            when (val result = repo.checkForUpdate(channel)) {
                 is UpdateCheckResult.Available -> {
                     _state.update {
                         it.copy(
@@ -65,7 +135,11 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                         it.copy(
                             checking = false,
                             available = null,
-                            statusMessage = "You're on the latest version",
+                            statusMessage = when (channel) {
+                                UpdateChannel.Off -> "You're on the latest version"
+                                UpdateChannel.PublicBeta -> "You're on the latest Public Beta"
+                                UpdateChannel.Developer -> "You're on the latest Developer build"
+                            },
                             downloadedApk = null
                         )
                     }

@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "polar-accounts",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "polar-accounts",
+      "database_id": "9fb812cc-880b-4ddf-9899-bec1595211e7",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

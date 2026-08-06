@@ -10,6 +10,8 @@ object UpdateConfig {
     /** Prefer HTML latest redirect — not rate-limited like api.github.com. */
     const val LATEST_HTML = "https://github.com/$REPO/releases/latest"
     const val LATEST_API = "https://api.github.com/repos/$REPO/releases/latest"
+    /** List endpoint for beta / developer channel selection. */
+    const val RELEASES_API = "https://api.github.com/repos/$REPO/releases?per_page=40"
 
     fun downloadUrl(tag: String): String =
         "https://github.com/$REPO/releases/download/$tag/$APK_ASSET_NAME"

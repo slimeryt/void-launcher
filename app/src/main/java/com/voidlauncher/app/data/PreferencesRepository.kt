@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
@@ -45,6 +46,18 @@ data class LauncherPreferences(
     val dockLabels: Boolean = false,
     val hapticFeedback: Boolean = true,
     val autoCheckUpdates: Boolean = true,
+    /**
+     * Software update channel key — see [com.voidlauncher.app.update.UpdateChannel]:
+     * `off` | `public_beta` | `developer`.
+     */
+    val updateChannel: String = "off",
+    val accountToken: String = "",
+    val accountEmail: String = "",
+    val accountDisplayName: String = "",
+    /** `none` | `pending` | `approved` | `denied` — Developer Account application */
+    val developerAccountStatus: String = "none",
+    /** `none` | `pending` | `approved` | `denied` — Developer Beta enrollment */
+    val enrollmentStatus: String = "none",
     /** Ids of home-screen widgets (AppWidgetManager appWidgetId), stacked above the app grid. */
     val widgetIds: List<Int> = emptyList()
 )
@@ -66,6 +79,12 @@ class PreferencesRepository(private val context: Context) {
         val DockLabels = booleanPreferencesKey("dock_labels")
         val Haptic = booleanPreferencesKey("haptic_feedback")
         val AutoCheckUpdates = booleanPreferencesKey("auto_check_updates")
+        val UpdateChannel = stringPreferencesKey("update_channel")
+        val AccountToken = stringPreferencesKey("account_token")
+        val AccountEmail = stringPreferencesKey("account_email")
+        val AccountDisplayName = stringPreferencesKey("account_display_name")
+        val DeveloperAccountStatus = stringPreferencesKey("developer_account_status")
+        val EnrollmentStatus = stringPreferencesKey("enrollment_status")
         val WidgetIdsJson = stringPreferencesKey("widget_ids_json")
     }
 
@@ -85,6 +104,12 @@ class PreferencesRepository(private val context: Context) {
             dockLabels = prefs[Keys.DockLabels] ?: false,
             hapticFeedback = prefs[Keys.Haptic] ?: true,
             autoCheckUpdates = prefs[Keys.AutoCheckUpdates] ?: true,
+            updateChannel = prefs[Keys.UpdateChannel] ?: "off",
+            accountToken = prefs[Keys.AccountToken] ?: "",
+            accountEmail = prefs[Keys.AccountEmail] ?: "",
+            accountDisplayName = prefs[Keys.AccountDisplayName] ?: "",
+            developerAccountStatus = prefs[Keys.DeveloperAccountStatus] ?: "none",
+            enrollmentStatus = prefs[Keys.EnrollmentStatus] ?: "none",
             widgetIds = decodeWidgetIds(prefs[Keys.WidgetIdsJson])
         )
     }
@@ -137,6 +162,54 @@ class PreferencesRepository(private val context: Context) {
 
     suspend fun setAutoCheckUpdates(value: Boolean) {
         context.dataStore.edit { it[Keys.AutoCheckUpdates] = value }
+    }
+
+    suspend fun setUpdateChannel(value: String) {
+        context.dataStore.edit { it[Keys.UpdateChannel] = value }
+    }
+
+    suspend fun setAccountSession(
+        token: String,
+        email: String,
+        displayName: String,
+        developerAccountStatus: String,
+        enrollmentStatus: String
+    ) {
+        context.dataStore.edit {
+            it[Keys.AccountToken] = token
+            it[Keys.AccountEmail] = email
+            it[Keys.AccountDisplayName] = displayName
+            it[Keys.DeveloperAccountStatus] = developerAccountStatus
+            it[Keys.EnrollmentStatus] = enrollmentStatus
+        }
+    }
+
+    suspend fun setAccountProfile(
+        email: String,
+        displayName: String,
+        developerAccountStatus: String,
+        enrollmentStatus: String
+    ) {
+        context.dataStore.edit {
+            it[Keys.AccountEmail] = email
+            it[Keys.AccountDisplayName] = displayName
+            it[Keys.DeveloperAccountStatus] = developerAccountStatus
+            it[Keys.EnrollmentStatus] = enrollmentStatus
+        }
+    }
+
+    suspend fun clearAccount() {
+        context.dataStore.edit {
+            it[Keys.AccountToken] = ""
+            it[Keys.AccountEmail] = ""
+            it[Keys.AccountDisplayName] = ""
+            it[Keys.DeveloperAccountStatus] = "none"
+            it[Keys.EnrollmentStatus] = "none"
+        }
+    }
+
+    suspend fun currentAccountToken(): String {
+        return preferences.map { it.accountToken }.first()
     }
 
     suspend fun setWidgetIds(ids: List<Int>) {

@@ -14,6 +14,11 @@ android {
         targetSdk = 35
         versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1002
         versionName = (project.findProperty("versionName") as String?) ?: "0.1.2"
+
+        // Override with -PaccountApiBase=https://...
+        val accountApiBase = (project.findProperty("accountApiBase") as String?)
+            ?: "https://polar-accounts.slimer0935.workers.dev"
+        buildConfigField("String", "ACCOUNT_API_BASE", "\"$accountApiBase\"")
     }
 
     signingConfigs {

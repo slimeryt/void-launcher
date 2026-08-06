@@ -24,10 +24,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -43,31 +41,28 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.voidlauncher.app.account.AccountUiState
+import com.voidlauncher.app.account.DeveloperAccountStatus
 import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.components.SmoothCornerShape
 import com.voidlauncher.app.ui.theme.IosBlue
 import com.voidlauncher.app.ui.theme.VoidInk
 import com.voidlauncher.app.ui.theme.VoidMist
 import com.voidlauncher.app.ui.theme.VoidMuted
+import com.voidlauncher.app.update.UpdateChannel
 import com.voidlauncher.app.update.UpdateUiState
 import com.voidlauncher.app.viewmodel.LauncherUiState
 
-private val SettingsCardBg = Color(0xFF1C1F26)
-private val SettingsChipBg = Color(0xFF2A2E38)
-private val SettingsDivider = Color(0x14FFFFFF)
-/** Continuous corners at 20dp — soft without a bubbly radius. */
-private val CardShape = SmoothCornerShape(20.dp)
-
-private enum class SettingsPage { Root, LiquidGlass, HomeLayout, Updates, General }
+private enum class SettingsPage { Root, Account, LiquidGlass, HomeLayout, Updates, General, About }
 
 @Composable
 fun SettingsContent(
     state: LauncherUiState,
     updateState: UpdateUiState,
+    accountState: AccountUiState,
     hasWallpaperAccess: Boolean,
     onGrantWallpaperAccess: () -> Unit,
     onShowLabelsChange: (Boolean) -> Unit,
@@ -84,10 +79,18 @@ fun SettingsContent(
     onCancelUpdate: () -> Unit,
     onDownloadUpdate: () -> Unit,
     onInstallUpdate: () -> Unit,
+    onUpdateChannelChange: (UpdateChannel) -> Unit,
+    onAccountLogin: (String, String) -> Unit,
+    onAccountRegister: (String, String, String) -> Unit,
+    onAccountLogout: () -> Unit,
+    onRequestDeveloperAccount: () -> Unit,
+    onRequestEnroll: () -> Unit,
+    onAccountRefresh: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var page by remember { mutableStateOf(SettingsPage.Root) }
+    var searchQuery by remember { mutableStateOf("") }
 
     BackHandler {
         if (page != SettingsPage.Root) page = SettingsPage.Root
@@ -97,11 +100,37 @@ fun SettingsContent(
     if (page == SettingsPage.Updates) {
         UpdatesScreen(
             updateState = updateState,
+            accountState = accountState,
             onBack = { page = SettingsPage.Root },
             onCheckUpdate = onCheckUpdate,
             onCancelCheck = onCancelUpdate,
             onDownloadUpdate = onDownloadUpdate,
             onInstallUpdate = onInstallUpdate,
+            onChannelChange = onUpdateChannelChange,
+            onOpenAccount = { page = SettingsPage.Account },
+            modifier = modifier.fillMaxSize()
+        )
+        return
+    }
+
+    if (page == SettingsPage.Account) {
+        AccountScreen(
+            accountState = accountState,
+            onBack = { page = SettingsPage.Root },
+            onLogin = onAccountLogin,
+            onRegister = onAccountRegister,
+            onLogout = onAccountLogout,
+            onRequestDeveloperAccount = onRequestDeveloperAccount,
+            onRequestEnroll = onRequestEnroll,
+            onRefresh = onAccountRefresh,
+            modifier = modifier.fillMaxSize()
+        )
+        return
+    }
+
+    if (page == SettingsPage.About) {
+        AboutScreen(
+            onBack = { page = SettingsPage.Root },
             modifier = modifier.fillMaxSize()
         )
         return
@@ -114,21 +143,14 @@ fun SettingsContent(
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
-        SettingsHeader(
-            title = when (page) {
-                SettingsPage.Root -> "Polar"
-                SettingsPage.LiquidGlass -> "Liquid Glass"
-                SettingsPage.HomeLayout -> "Home Screen"
-                SettingsPage.Updates -> "Updates"
-                SettingsPage.General -> "General"
-            },
-            subtitle = when (page) {
-                SettingsPage.Root -> "Launcher settings"
-                else -> null
-            },
+        SettingsBackBar(
             onBack = {
-                if (page != SettingsPage.Root) page = SettingsPage.Root
-                else onBack()
+                if (page != SettingsPage.Root) {
+                    page = SettingsPage.Root
+                    searchQuery = ""
+                } else {
+                    onBack()
+                }
             }
         )
 
@@ -144,21 +166,25 @@ fun SettingsContent(
                 }
             },
             label = "settings-page",
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.weight(1f)
         ) { current ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp)
-                    .padding(bottom = 28.dp),
+                    .padding(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
                 when (current) {
                     SettingsPage.Root -> RootPage(
-                        state = state,
                         updateState = updateState,
-                        onOpen = { page = it }
+                        accountState = accountState,
+                        searchQuery = searchQuery,
+                        onOpen = {
+                            searchQuery = ""
+                            page = it
+                        }
                     )
                     SettingsPage.LiquidGlass -> LiquidGlassPage(
                         state = state,
@@ -177,6 +203,8 @@ fun SettingsContent(
                         onIconScaleChange = onIconScaleChange
                     )
                     SettingsPage.Updates -> Unit
+                    SettingsPage.Account -> Unit
+                    SettingsPage.About -> Unit
                     SettingsPage.General -> GeneralPage(
                         state = state,
                         onHapticChange = onHapticChange
@@ -184,106 +212,111 @@ fun SettingsContent(
                 }
             }
         }
-    }
-}
 
-@Composable
-private fun SettingsHeader(
-    title: String,
-    subtitle: String?,
-    onBack: () -> Unit
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(SettingsCardBg)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onBack
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                contentDescription = "Back",
-                tint = VoidMist,
-                modifier = Modifier.size(22.dp)
+        if (page == SettingsPage.Root) {
+            SettingsSearchBar(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it }
             )
-        }
-        Column {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineMedium,
-                color = VoidMist
-            )
-            if (subtitle != null) {
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = VoidMuted
-                )
-            }
         }
     }
 }
 
 @Composable
 private fun RootPage(
-    state: LauncherUiState,
     updateState: UpdateUiState,
+    accountState: AccountUiState,
+    searchQuery: String,
     onOpen: (SettingsPage) -> Unit
 ) {
-    SettingsGroup(label = "Appearance") {
-        NavRow(
-            title = "Liquid Glass",
-            subtitle = "Blur, frost, refraction",
-            onClick = { onOpen(SettingsPage.LiquidGlass) },
-            showDivider = true
-        )
-        NavRow(
-            title = "Home Screen",
-            subtitle = "Icons, labels, grid",
-            onClick = { onOpen(SettingsPage.HomeLayout) },
-            showDivider = false
-        )
-    }
-
-    SettingsGroup(label = "System") {
-        NavRow(
-            title = "Updates",
-            subtitle = "v${updateState.currentVersion}" +
-                (updateState.available?.let { " · ${it.versionName} available" } ?: ""),
-            onClick = { onOpen(SettingsPage.Updates) },
-            showDivider = true
-        )
-        NavRow(
-            title = "General",
-            subtitle = "Haptics & behavior",
-            onClick = { onOpen(SettingsPage.General) },
-            showDivider = true
-        )
-        NavRow(
-            title = "About",
-            subtitle = "${state.apps.size} apps · ${state.hiddenCount} hidden",
-            onClick = { },
-            showDivider = false,
-            enabled = false
-        )
-    }
+    val q = searchQuery.trim().lowercase()
+    fun matches(vararg parts: String): Boolean =
+        q.isEmpty() || parts.any { it.lowercase().contains(q) }
 
     Text(
-        text = "Swipe up on home for apps · long-press home to edit",
-        style = MaterialTheme.typography.bodyMedium,
-        color = VoidMuted,
-        modifier = Modifier.padding(horizontal = 8.dp)
+        text = "Settings",
+        style = MaterialTheme.typography.headlineLarge,
+        color = VoidMist,
+        modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
     )
+
+    val accountSubtitle = when {
+        !accountState.signedIn -> "Sign in"
+        accountState.developerEnrolled -> "${accountState.email} · Developer"
+        accountState.isDeveloperAccount -> "${accountState.email} · Dev account"
+        accountState.developerAccountStatus == DeveloperAccountStatus.Pending ->
+            "${accountState.email} · Pending"
+        else -> accountState.email.ifBlank { "Signed in" }
+    }
+    val showAccount = matches("Account", accountSubtitle, "sign in", "developer")
+    val showLiquid = matches("Liquid Glass", "Blur", "frost", "refraction", "Appearance")
+    val showHome = matches("Home Screen", "Icons", "labels", "grid", "Appearance")
+    val updatesSubtitle = "v${updateState.currentVersion}" +
+        (updateState.available?.let { " · ${it.versionName} available" } ?: "")
+    val showUpdates = matches("Updates", updatesSubtitle, "System")
+    val showGeneral = matches("General", "Haptics", "behavior", "System")
+    val showAbout = matches("About", "Version", "privacy", "licenses", "System")
+
+    if (showAccount) {
+        SettingsGroup(label = "Account") {
+            NavRow(
+                title = "Account",
+                subtitle = accountSubtitle,
+                onClick = { onOpen(SettingsPage.Account) },
+                showDivider = false
+            )
+        }
+    }
+
+    if (showLiquid || showHome) {
+        SettingsGroup(label = "Appearance") {
+            if (showLiquid) {
+                NavRow(
+                    title = "Liquid Glass",
+                    subtitle = "Blur, frost, refraction",
+                    onClick = { onOpen(SettingsPage.LiquidGlass) },
+                    showDivider = showHome
+                )
+            }
+            if (showHome) {
+                NavRow(
+                    title = "Home Screen",
+                    subtitle = "Icons, labels, grid",
+                    onClick = { onOpen(SettingsPage.HomeLayout) },
+                    showDivider = false
+                )
+            }
+        }
+    }
+
+    if (showUpdates || showGeneral || showAbout) {
+        SettingsGroup(label = "System") {
+            if (showUpdates) {
+                NavRow(
+                    title = "Updates",
+                    subtitle = updatesSubtitle,
+                    onClick = { onOpen(SettingsPage.Updates) },
+                    showDivider = showGeneral || showAbout
+                )
+            }
+            if (showGeneral) {
+                NavRow(
+                    title = "General",
+                    subtitle = "Haptics & behavior",
+                    onClick = { onOpen(SettingsPage.General) },
+                    showDivider = showAbout
+                )
+            }
+            if (showAbout) {
+                NavRow(
+                    title = "About",
+                    subtitle = "Version, privacy, licenses",
+                    onClick = { onOpen(SettingsPage.About) },
+                    showDivider = false
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -296,6 +329,13 @@ private fun LiquidGlassPage(
     onGlassRefractionChange: (Boolean) -> Unit,
     onGlassSheenChange: (Boolean) -> Unit
 ) {
+    Text(
+        text = "Liquid Glass",
+        style = MaterialTheme.typography.headlineLarge,
+        color = VoidMist,
+        modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+    )
+
     if (!hasWallpaperAccess) {
         WallpaperAccessBanner(onGrantWallpaperAccess)
     }
@@ -368,7 +408,7 @@ private fun WallpaperAccessBanner(onGrantAccess: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(CardShape)
+            .clip(SettingsCardShape)
             .background(SettingsCardBg)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -408,6 +448,13 @@ private fun HomeLayoutPage(
     onGridColumnsChange: (Int) -> Unit,
     onIconScaleChange: (Float) -> Unit
 ) {
+    Text(
+        text = "Home Screen",
+        style = MaterialTheme.typography.headlineLarge,
+        color = VoidMist,
+        modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+    )
+
     SettingsGroup(label = "Labels") {
         ToggleRow(
             title = "App labels",
@@ -451,6 +498,13 @@ private fun GeneralPage(
     state: LauncherUiState,
     onHapticChange: (Boolean) -> Unit
 ) {
+    Text(
+        text = "General",
+        style = MaterialTheme.typography.headlineLarge,
+        color = VoidMist,
+        modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+    )
+
     SettingsGroup(label = "Feedback") {
         ToggleRow(
             title = "Haptic feedback",
@@ -483,7 +537,7 @@ private fun SettingsGroup(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(CardShape)
+                .clip(SettingsCardShape)
                 .background(SettingsCardBg)
         ) {
             content()

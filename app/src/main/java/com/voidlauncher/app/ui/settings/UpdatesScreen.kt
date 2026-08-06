@@ -1,5 +1,6 @@
 package com.voidlauncher.app.ui.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -12,7 +13,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,9 +25,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -53,31 +55,102 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voidlauncher.app.BuildConfig
 import com.voidlauncher.app.R
+import com.voidlauncher.app.account.AccountUiState
+import com.voidlauncher.app.ui.components.CapsuleShape
 import com.voidlauncher.app.ui.components.SmoothCornerShape
 import com.voidlauncher.app.ui.theme.IosBlue
 import com.voidlauncher.app.ui.theme.VoidInk
 import com.voidlauncher.app.ui.theme.VoidMist
 import com.voidlauncher.app.ui.theme.VoidMuted
+import com.voidlauncher.app.update.UpdateChannel
 import com.voidlauncher.app.update.UpdateUiState
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 
-private val UpdatesCardBg = Color(0xFF1C1F26)
+private val UpdatesCardBg = SettingsCardBg
 private val CancelGrey = Color(0xFF3A3A3C)
 private val ButtonShape = SmoothCornerShape(28.dp)
+private val CardShape = SettingsCardShape
 
 @Composable
 fun UpdatesScreen(
     updateState: UpdateUiState,
+    accountState: AccountUiState,
     onBack: () -> Unit,
     onCheckUpdate: () -> Unit,
     onCancelCheck: () -> Unit,
     onDownloadUpdate: () -> Unit,
     onInstallUpdate: () -> Unit,
+    onChannelChange: (UpdateChannel) -> Unit,
+    onOpenAccount: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var showBetaPicker by remember { mutableStateOf(false) }
+    var pendingChannel by remember { mutableStateOf<UpdateChannel?>(null) }
+    var pendingDownloadAgree by remember { mutableStateOf(false) }
+
+    BackHandler {
+        when {
+            pendingChannel != null -> pendingChannel = null
+            pendingDownloadAgree -> pendingDownloadAgree = false
+            showBetaPicker -> showBetaPicker = false
+            else -> onBack()
+        }
+    }
+
+    pendingChannel?.let { channel ->
+        BetaSoftwareAgreementDialog(
+            channel = channel,
+            onAgree = {
+                onChannelChange(channel)
+                pendingChannel = null
+                showBetaPicker = false
+            },
+            onCancel = { pendingChannel = null }
+        )
+    }
+
+    if (pendingDownloadAgree) {
+        val kind = updateState.available?.channelKind ?: "beta"
+        val channel = when (kind) {
+            "developer" -> UpdateChannel.Developer
+            else -> UpdateChannel.PublicBeta
+        }
+        BetaSoftwareAgreementDialog(
+            channel = channel,
+            titleOverride = "Install ${channel.label} Update?",
+            onAgree = {
+                pendingDownloadAgree = false
+                onDownloadUpdate()
+            },
+            onCancel = { pendingDownloadAgree = false }
+        )
+    }
+
+    if (showBetaPicker) {
+        BetaUpdatesPickerScreen(
+            selected = updateState.channel,
+            accountState = accountState,
+            onSelect = { channel ->
+                if (channel == updateState.channel) {
+                    showBetaPicker = false
+                    return@BetaUpdatesPickerScreen
+                }
+                if (channel == UpdateChannel.Off) {
+                    onChannelChange(channel)
+                    showBetaPicker = false
+                } else {
+                    pendingChannel = channel
+                }
+            },
+            onBack = { showBetaPicker = false },
+            modifier = modifier
+        )
+        return
+    }
+
     val busy = updateState.checking || updateState.downloading
-    // Keep split visible briefly while busy; collapse when idle unless user just finished mid-split
     var forceSplit by remember { mutableStateOf(false) }
-    val splitTarget = if (busy || forceSplit) 1f else 0f
     val split = remember { Animatable(0f) }
 
     LaunchedEffect(busy) {
@@ -88,7 +161,6 @@ fun UpdatesScreen(
                 animationSpec = spring(dampingRatio = 0.72f, stiffness = 280f)
             )
         } else if (forceSplit) {
-            // Linger a beat then merge droplets back
             kotlinx.coroutines.delay(180)
             forceSplit = false
             split.animateTo(
@@ -105,48 +177,25 @@ fun UpdatesScreen(
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
-        // 1. Header — Back + chevron
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onBack
-                )
-                .padding(horizontal = 8.dp, vertical = 10.dp)
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
-                contentDescription = null,
-                tint = IosBlue,
-                modifier = Modifier.size(32.dp)
-            )
-            Text(
-                text = "Back",
-                style = MaterialTheme.typography.titleLarge,
-                color = IosBlue
-            )
-        }
+        SettingsBackBar(onBack = onBack)
 
         Column(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // 2. Big ColorOS-style update hero
             UpdateHeroArt(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(220.dp)
+                    .height(280.dp)
             )
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             Text(
                 text = "Software Update",
@@ -157,13 +206,24 @@ fun UpdatesScreen(
 
             Spacer(modifier = Modifier.height(6.dp))
 
+            val channelHint = when (updateState.channel) {
+                UpdateChannel.Off -> null
+                UpdateChannel.PublicBeta -> "Public Beta"
+                UpdateChannel.Developer -> "Developer"
+            }
             val status = when {
                 updateState.error != null -> updateState.error
                 updateState.checking -> "Looking for updates…"
                 updateState.downloading -> "Downloading update…"
                 updateState.downloadedApk != null -> "Ready to install"
-                updateState.available != null ->
-                    "Update ${updateState.available.versionName} is available"
+                updateState.available != null -> {
+                    val kind = when (updateState.available.channelKind) {
+                        "beta" -> "Public Beta "
+                        "developer" -> "Developer "
+                        else -> ""
+                    }
+                    "${kind}Update ${updateState.available.versionName} is available"
+                }
                 updateState.statusMessage.isNotBlank() -> updateState.statusMessage
                 else -> "Your software is up to date"
             }
@@ -177,13 +237,12 @@ fun UpdatesScreen(
                 modifier = Modifier.padding(horizontal = 12.dp)
             )
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // 3. Version card
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(SmoothCornerShape(20.dp))
+                    .clip(CardShape)
                     .background(UpdatesCardBg)
                     .padding(horizontal = 18.dp, vertical = 16.dp)
             ) {
@@ -192,16 +251,60 @@ fun UpdatesScreen(
                 VersionRow("Version", updateState.currentVersion)
                 Spacer(modifier = Modifier.height(14.dp))
                 VersionRow("Build", BuildConfig.VERSION_CODE.toString())
+                if (channelHint != null) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    VersionRow("Channel", channelHint, accent = true)
+                }
                 updateState.available?.let { rel ->
                     Spacer(modifier = Modifier.height(14.dp))
                     VersionRow("Latest", rel.versionName, accent = true)
                 }
             }
 
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // Apple-style Beta Updates enrollment
+            Text(
+                text = "Beta Updates",
+                style = MaterialTheme.typography.titleSmall,
+                color = VoidMuted,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 4.dp, bottom = 8.dp)
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(CardShape)
+                    .background(UpdatesCardBg)
+                    .clickable { showBetaPicker = true }
+                    .padding(horizontal = 18.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Beta Updates",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = VoidMist,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = updateState.channel.label,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = VoidMuted
+                )
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = VoidMuted.copy(alpha = 0.7f),
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
         }
 
-        // 4. Footer droplet button(s)
         UpdateDropletActions(
             split = split.value,
             updateState = updateState,
@@ -214,13 +317,216 @@ fun UpdatesScreen(
                 onCancelCheck()
                 forceSplit = false
             },
-            onDownload = onDownloadUpdate,
+            onDownload = {
+                val kind = updateState.available?.channelKind
+                if (kind == "beta" || kind == "developer") {
+                    pendingDownloadAgree = true
+                } else {
+                    onDownloadUpdate()
+                }
+            },
             onInstall = onInstallUpdate,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 20.dp, top = 8.dp)
         )
+    }
+}
+
+@Composable
+private fun BetaUpdatesPickerScreen(
+    selected: UpdateChannel,
+    accountState: AccountUiState,
+    onSelect: (UpdateChannel) -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val showDeveloper = accountState.developerEnrolled
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(VoidInk)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+    ) {
+        SettingsBackBar(onBack = onBack)
+
+        Text(
+            text = "Beta Updates",
+            style = MaterialTheme.typography.headlineMedium,
+            color = VoidMist,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .clip(CardShape)
+                .background(UpdatesCardBg)
+        ) {
+            ChannelOption(
+                title = "Off",
+                subtitle = "Only public releases",
+                selected = selected == UpdateChannel.Off,
+                onClick = { onSelect(UpdateChannel.Off) },
+                showDivider = true
+            )
+            ChannelOption(
+                title = "Public Beta",
+                subtitle = "Near-final builds before public release",
+                selected = selected == UpdateChannel.PublicBeta,
+                onClick = { onSelect(UpdateChannel.PublicBeta) },
+                showDivider = showDeveloper
+            )
+            if (showDeveloper) {
+                ChannelOption(
+                    title = "Developer",
+                    subtitle = "Earliest builds — may be unstable",
+                    selected = selected == UpdateChannel.Developer,
+                    onClick = { onSelect(UpdateChannel.Developer) },
+                    showDivider = false
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BetaSoftwareAgreementDialog(
+    channel: UpdateChannel,
+    onAgree: () -> Unit,
+    onCancel: () -> Unit,
+    titleOverride: String? = null
+) {
+    val title = titleOverride ?: "Agree to ${channel.label} Terms?"
+    val body = when (channel) {
+        UpdateChannel.Developer ->
+            "Developer builds are early, unfinished software. They may be unstable, incomplete, " +
+                "or remove features without notice.\n\n" +
+                "By agreeing, you understand Polar Developer software is for testing only, " +
+                "is not a finished product, and Polar is not responsible for data loss or device issues.\n\n" +
+                "You can leave Developer anytime by setting Beta Updates to Off or Public Beta."
+        UpdateChannel.PublicBeta ->
+            "Public Beta includes features that may change, break, or be removed before a public release.\n\n" +
+                "By agreeing, you understand Polar Public Beta is pre-release software provided for " +
+                "testing, and Polar is not responsible for data loss or unexpected behavior.\n\n" +
+                "You can leave Public Beta anytime by setting Beta Updates to Off."
+        UpdateChannel.Off -> ""
+    }
+
+    Dialog(
+        onDismissRequest = onCancel,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .clip(SmoothCornerShape(24.dp))
+                .background(UpdatesCardBg)
+                .padding(22.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                color = VoidMist,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = VoidMuted
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .clip(CapsuleShape)
+                        .background(Color.White.copy(alpha = 0.12f))
+                        .clickable(onClick = onCancel),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Cancel", color = VoidMist, style = MaterialTheme.typography.titleMedium)
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .clip(CapsuleShape)
+                        .background(IosBlue)
+                        .clickable(onClick = onAgree),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "Agree",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChannelOption(
+    title: String,
+    subtitle: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    showDivider: Boolean
+) {
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = VoidMist,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = VoidMuted
+                )
+            }
+            if (selected) {
+                Icon(
+                    imageVector = Icons.Rounded.Check,
+                    contentDescription = null,
+                    tint = IosBlue,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+        if (showDivider) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp)
+                    .height(0.5.dp)
+                    .background(Color.White.copy(alpha = 0.08f))
+            )
+        }
     }
 }
 
@@ -279,13 +585,11 @@ private fun UpdateDropletActions(
         horizontalArrangement = Arrangement.spacedBy(gap),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Left droplet — Cancel
         Box(
             modifier = Modifier
                 .weight(cancelWeight)
                 .fillMaxSize()
                 .graphicsLayer {
-                    // Squash/stretch like a separating drop
                     val squash = 1f + (1f - split) * 0.08f
                     scaleX = (0.55f + 0.45f * split) * squash
                     scaleY = 0.92f + 0.08f * split
@@ -306,7 +610,6 @@ private fun UpdateDropletActions(
             }
         }
 
-        // Right / single droplet — primary action
         Box(
             modifier = Modifier
                 .weight(primaryWeight)
@@ -338,10 +641,9 @@ private fun UpdateDropletActions(
                         style = MaterialTheme.typography.titleMedium,
                         maxLines = 1
                     )
-                    // Progress / search bar inside the blue droplet
                     val progress = when {
                         updateState.downloading -> updateState.progress.coerceIn(0.02f, 1f)
-                        else -> -1f // indeterminate search
+                        else -> -1f
                     }
                     DropletProgressBar(progress = progress)
                 }
@@ -358,9 +660,6 @@ private fun UpdateDropletActions(
     }
 }
 
-/**
- * Android 16 / Material 3 style: active track + gap + inactive track (two pieces).
- */
 @Composable
 private fun DropletProgressBar(progress: Float) {
     val indeterminate = rememberInfiniteTransition(label = "search-bar")
@@ -385,13 +684,11 @@ private fun DropletProgressBar(progress: Float) {
         val active = Color.White
 
         if (progress < 0f) {
-            // Indeterminate: sliding active capsule with trailing track gap
             val headW = (size.width * 0.32f).coerceAtLeast(size.height * 3f)
             val travel = size.width + headW + gap
             val headEnd = (sweep * travel) - gap
             val headStart = headEnd - headW
 
-            // Left inactive (before gap before head)
             val leftEnd = (headStart - gap).coerceAtMost(size.width)
             if (leftEnd > 0f) {
                 drawRoundRect(
@@ -401,7 +698,6 @@ private fun DropletProgressBar(progress: Float) {
                     cornerRadius = CornerRadius(r, r)
                 )
             }
-            // Active head
             val drawStart = headStart.coerceIn(0f, size.width)
             val drawEnd = headEnd.coerceIn(0f, size.width)
             if (drawEnd > drawStart) {
@@ -412,7 +708,6 @@ private fun DropletProgressBar(progress: Float) {
                     cornerRadius = CornerRadius(r, r)
                 )
             }
-            // Right inactive (after gap after head)
             val rightStart = (headEnd + gap).coerceAtLeast(0f)
             if (rightStart < size.width) {
                 drawRoundRect(

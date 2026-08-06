@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Color
  */
 data class WallpaperApi(
     val onSetFromUri: (Uri) -> Unit = {},
+    val onSetBitmap: (android.graphics.Bitmap) -> Unit = {},
     val onSetSolidColor: (Color) -> Unit = {},
     val onSetGradient: (List<Color>) -> Unit = {},
     val onOpenSystemPicker: () -> Unit = {}
