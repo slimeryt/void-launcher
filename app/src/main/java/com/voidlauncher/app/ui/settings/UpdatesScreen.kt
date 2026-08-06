@@ -58,6 +58,7 @@ import com.voidlauncher.app.R
 import com.voidlauncher.app.account.AccountUiState
 import com.voidlauncher.app.ui.components.CapsuleShape
 import com.voidlauncher.app.ui.components.GlassPanel
+import com.voidlauncher.app.ui.components.Android16ProgressBar
 import com.voidlauncher.app.ui.components.SmoothCornerShape
 import com.voidlauncher.app.ui.theme.IosBlue
 import com.voidlauncher.app.ui.theme.VoidInk
@@ -81,6 +82,7 @@ fun UpdatesScreen(
     onDownloadUpdate: () -> Unit,
     onInstallUpdate: () -> Unit,
     onChannelChange: (UpdateChannel) -> Unit,
+    onMarkChannelAgreed: (UpdateChannel) -> Unit = {},
     onOpenAccount: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -120,6 +122,7 @@ fun UpdatesScreen(
             titleOverride = "Install ${channel.label} Update?",
             onAgree = {
                 pendingDownloadAgree = false
+                onMarkChannelAgreed(channel)
                 onDownloadUpdate()
             },
             onCancel = { pendingDownloadAgree = false }
@@ -136,6 +139,16 @@ fun UpdatesScreen(
                     return@BetaUpdatesPickerScreen
                 }
                 if (channel == UpdateChannel.Off) {
+                    onChannelChange(channel)
+                    showBetaPicker = false
+                    return@BetaUpdatesPickerScreen
+                }
+                val alreadyAgreed = when (channel) {
+                    UpdateChannel.PublicBeta -> updateState.agreedPublicBeta
+                    UpdateChannel.Developer -> updateState.agreedDeveloperBeta
+                    UpdateChannel.Off -> true
+                }
+                if (alreadyAgreed) {
                     onChannelChange(channel)
                     showBetaPicker = false
                 } else {
@@ -318,7 +331,12 @@ fun UpdatesScreen(
             },
             onDownload = {
                 val kind = updateState.available?.channelKind
-                if (kind == "beta" || kind == "developer") {
+                val needsAgree = when (kind) {
+                    "developer" -> !updateState.agreedDeveloperBeta
+                    "beta" -> !updateState.agreedPublicBeta
+                    else -> false
+                }
+                if (needsAgree) {
                     pendingDownloadAgree = true
                 } else {
                     onDownloadUpdate()
@@ -674,90 +692,10 @@ private fun UpdateDropletActions(
 
 @Composable
 private fun DropletProgressBar(progress: Float) {
-    val indeterminate = rememberInfiniteTransition(label = "search-bar")
-    val sweep by indeterminate.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1100, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "sweep"
+    Android16ProgressBar(
+        progress = progress,
+        modifier = Modifier.fillMaxWidth(),
+        activeColor = Color.White,
+        trackColor = Color.White.copy(alpha = 0.28f)
     )
-
-    Canvas(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(4.dp)
-    ) {
-        val gap = 4.dp.toPx()
-        val r = size.height / 2f
-        val track = Color.White.copy(alpha = 0.28f)
-        val active = Color.White
-
-        if (progress < 0f) {
-            val headW = (size.width * 0.32f).coerceAtLeast(size.height * 3f)
-            val travel = size.width + headW + gap
-            val headEnd = (sweep * travel) - gap
-            val headStart = headEnd - headW
-
-            val leftEnd = (headStart - gap).coerceAtMost(size.width)
-            if (leftEnd > 0f) {
-                drawRoundRect(
-                    color = track,
-                    topLeft = Offset.Zero,
-                    size = Size(leftEnd.coerceAtLeast(0f), size.height),
-                    cornerRadius = CornerRadius(r, r)
-                )
-            }
-            val drawStart = headStart.coerceIn(0f, size.width)
-            val drawEnd = headEnd.coerceIn(0f, size.width)
-            if (drawEnd > drawStart) {
-                drawRoundRect(
-                    color = active,
-                    topLeft = Offset(drawStart, 0f),
-                    size = Size(drawEnd - drawStart, size.height),
-                    cornerRadius = CornerRadius(r, r)
-                )
-            }
-            val rightStart = (headEnd + gap).coerceAtLeast(0f)
-            if (rightStart < size.width) {
-                drawRoundRect(
-                    color = track,
-                    topLeft = Offset(rightStart, 0f),
-                    size = Size(size.width - rightStart, size.height),
-                    cornerRadius = CornerRadius(r, r)
-                )
-            }
-        } else {
-            val p = progress.coerceIn(0f, 1f)
-            if (p >= 0.999f) {
-                drawRoundRect(
-                    color = active,
-                    topLeft = Offset.Zero,
-                    size = Size(size.width, size.height),
-                    cornerRadius = CornerRadius(r, r)
-                )
-            } else {
-                val activeW = ((size.width - gap) * p).coerceAtLeast(0f)
-                if (activeW > 0.5f) {
-                    drawRoundRect(
-                        color = active,
-                        topLeft = Offset.Zero,
-                        size = Size(activeW, size.height),
-                        cornerRadius = CornerRadius(r, r)
-                    )
-                }
-                val restStart = activeW + gap
-                if (restStart < size.width) {
-                    drawRoundRect(
-                        color = track,
-                        topLeft = Offset(restStart, 0f),
-                        size = Size(size.width - restStart, size.height),
-                        cornerRadius = CornerRadius(r, r)
-                    )
-                }
-            }
-        }
-    }
 }

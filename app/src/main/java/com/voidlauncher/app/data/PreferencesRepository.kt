@@ -55,6 +55,10 @@ data class LauncherPreferences(
      * `off` | `public_beta` | `developer`.
      */
     val updateChannel: String = "off",
+    /** User accepted Public Beta software agreement at least once. */
+    val agreedPublicBeta: Boolean = false,
+    /** User accepted Developer software agreement at least once. */
+    val agreedDeveloperBeta: Boolean = false,
     val accountToken: String = "",
     val accountEmail: String = "",
     val accountDisplayName: String = "",
@@ -88,6 +92,8 @@ class PreferencesRepository(private val context: Context) {
         val Haptic = booleanPreferencesKey("haptic_feedback")
         val AutoCheckUpdates = booleanPreferencesKey("auto_check_updates")
         val UpdateChannel = stringPreferencesKey("update_channel")
+        val AgreedPublicBeta = booleanPreferencesKey("agreed_public_beta")
+        val AgreedDeveloperBeta = booleanPreferencesKey("agreed_developer_beta")
         val AccountToken = stringPreferencesKey("account_token")
         val AccountEmail = stringPreferencesKey("account_email")
         val AccountDisplayName = stringPreferencesKey("account_display_name")
@@ -117,6 +123,8 @@ class PreferencesRepository(private val context: Context) {
             hapticFeedback = prefs[Keys.Haptic] ?: true,
             autoCheckUpdates = prefs[Keys.AutoCheckUpdates] ?: true,
             updateChannel = prefs[Keys.UpdateChannel] ?: "off",
+            agreedPublicBeta = prefs[Keys.AgreedPublicBeta] ?: false,
+            agreedDeveloperBeta = prefs[Keys.AgreedDeveloperBeta] ?: false,
             accountToken = prefs[Keys.AccountToken] ?: "",
             accountEmail = prefs[Keys.AccountEmail] ?: "",
             accountDisplayName = prefs[Keys.AccountDisplayName] ?: "",
@@ -194,6 +202,15 @@ class PreferencesRepository(private val context: Context) {
 
     suspend fun setUpdateChannel(value: String) {
         context.dataStore.edit { it[Keys.UpdateChannel] = value }
+    }
+
+    suspend fun setBetaChannelAgreed(channelKey: String) {
+        context.dataStore.edit {
+            when (channelKey) {
+                "public_beta" -> it[Keys.AgreedPublicBeta] = true
+                "developer" -> it[Keys.AgreedDeveloperBeta] = true
+            }
+        }
     }
 
     suspend fun setAccountSession(

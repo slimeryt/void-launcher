@@ -91,6 +91,7 @@ class SettingsActivity : ComponentActivity() {
                         onCancelUpdate = updateViewModel::cancelUpdateAction,
                         onDownloadUpdate = updateViewModel::downloadUpdate,
                         onUpdateChannelChange = updateViewModel::setUpdateChannel,
+                        onMarkBetaChannelAgreed = updateViewModel::markBetaChannelAgreed,
                         onAccountLogin = accountViewModel::login,
                         onAccountRegister = accountViewModel::register,
                         onAccountLogout = accountViewModel::logout,

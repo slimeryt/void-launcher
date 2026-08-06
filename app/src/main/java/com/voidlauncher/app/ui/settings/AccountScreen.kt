@@ -45,6 +45,7 @@ import androidx.compose.foundation.text.BasicTextField
 import com.voidlauncher.app.account.AccountUiState
 import com.voidlauncher.app.account.DeveloperAccountStatus
 import com.voidlauncher.app.account.EnrollmentStatus
+import com.voidlauncher.app.ui.components.Android16ProgressBar
 import com.voidlauncher.app.ui.components.CapsuleShape
 import com.voidlauncher.app.ui.theme.IosBlue
 import com.voidlauncher.app.ui.theme.VoidInk
@@ -150,6 +151,7 @@ fun AccountScreen(
                 SignedInCard(
                     state = accountState,
                     busy = accountState.busy,
+                    refreshing = accountState.refreshing,
                     onLogout = onLogout,
                     onRequestDeveloperAccount = onRequestDeveloperAccount,
                     onRequestEnroll = onRequestEnroll,
@@ -189,6 +191,7 @@ fun AccountScreen(
 private fun SignedInCard(
     state: AccountUiState,
     busy: Boolean,
+    refreshing: Boolean,
     onLogout: () -> Unit,
     onRequestDeveloperAccount: () -> Unit,
     onRequestEnroll: () -> Unit,
@@ -295,9 +298,10 @@ private fun SignedInCard(
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(modifier = Modifier.weight(1f)) {
                 SecondaryButton(
-                    label = "Refresh",
+                    label = if (refreshing) "Refreshing" else "Refresh",
                     enabled = !busy,
                     onClick = onRefresh,
+                    showProgress = refreshing,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -307,19 +311,6 @@ private fun SignedInCard(
                     enabled = !busy,
                     onClick = onLogout,
                     modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
-
-        if (busy) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
-            ) {
-                CircularProgressIndicator(
-                    color = IosBlue,
-                    strokeWidth = 2.dp,
-                    modifier = Modifier.size(22.dp)
                 )
             }
         }
@@ -449,16 +440,35 @@ private fun SecondaryButton(
     label: String,
     enabled: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showProgress: Boolean = false
 ) {
     Box(
         modifier = modifier
             .height(44.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(Color.White.copy(alpha = 0.08f))
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(label, color = VoidMist, style = MaterialTheme.typography.bodyLarge)
+        if (showProgress) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(label, color = VoidMist, style = MaterialTheme.typography.bodyMedium)
+                Android16ProgressBar(
+                    progress = -1f,
+                    modifier = Modifier.fillMaxWidth(),
+                    height = 3.dp,
+                    activeColor = IosBlue,
+                    trackColor = Color.White.copy(alpha = 0.18f)
+                )
+            }
+        } else {
+            Text(label, color = VoidMist, style = MaterialTheme.typography.bodyLarge)
+        }
     }
 }

@@ -26,7 +26,9 @@ data class UpdateUiState(
     val downloadedApk: File? = null,
     val error: String? = null,
     val channel: UpdateChannel = UpdateChannel.Off,
-    val developerEnrolled: Boolean = false
+    val developerEnrolled: Boolean = false,
+    val agreedPublicBeta: Boolean = false,
+    val agreedDeveloperBeta: Boolean = false
 )
 
 class UpdateViewModel(application: Application) : AndroidViewModel(application) {
@@ -53,7 +55,12 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                 prefs.setUpdateChannel(safeChannel.storageKey)
             }
             _state.update {
-                it.copy(channel = safeChannel, developerEnrolled = enrolled)
+                it.copy(
+                    channel = safeChannel,
+                    developerEnrolled = enrolled,
+                    agreedPublicBeta = p.agreedPublicBeta,
+                    agreedDeveloperBeta = p.agreedDeveloperBeta
+                )
             }
             checkForUpdates(silent = true)
         }
@@ -61,11 +68,21 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             prefs.preferences
                 .map { p ->
-                    (p.enrollmentStatus == "approved") to UpdateChannel.fromStorage(p.updateChannel)
+                    Triple(
+                        p.enrollmentStatus == "approved",
+                        UpdateChannel.fromStorage(p.updateChannel),
+                        p.agreedPublicBeta to p.agreedDeveloperBeta
+                    )
                 }
                 .distinctUntilChanged()
-                .collect { (enrolled, channel) ->
-                    _state.update { it.copy(developerEnrolled = enrolled) }
+                .collect { (enrolled, channel, agreed) ->
+                    _state.update {
+                        it.copy(
+                            developerEnrolled = enrolled,
+                            agreedPublicBeta = agreed.first,
+                            agreedDeveloperBeta = agreed.second
+                        )
+                    }
                     if (channel == UpdateChannel.Developer && !enrolled) {
                         prefs.setUpdateChannel(UpdateChannel.Off.storageKey)
                         _state.update {
@@ -82,7 +99,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun setUpdateChannel(channel: UpdateChannel) {
+fun setUpdateChannel(channel: UpdateChannel) {
         if (_state.value.channel == channel) return
         viewModelScope.launch {
             if (channel == UpdateChannel.Developer) {
@@ -94,6 +111,10 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                     return@launch
                 }
             }
+            // First successful enable of a beta channel counts as agreement.
+            if (channel == UpdateChannel.PublicBeta || channel == UpdateChannel.Developer) {
+                prefs.setBetaChannelAgreed(channel.storageKey)
+            }
             prefs.setUpdateChannel(channel.storageKey)
             _state.update {
                 it.copy(
@@ -101,10 +122,27 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                     available = null,
                     downloadedApk = null,
                     error = null,
-                    statusMessage = "Switching to ${channel.label}…"
+                    statusMessage = "Switching to ${channel.label}…",
+                    agreedPublicBeta = it.agreedPublicBeta || channel == UpdateChannel.PublicBeta,
+                    agreedDeveloperBeta = it.agreedDeveloperBeta || channel == UpdateChannel.Developer
                 )
             }
             checkForUpdates(silent = false)
+        }
+    }
+
+    /** Persist agreement without switching channel (e.g. download confirm). */
+    fun markBetaChannelAgreed(channel: UpdateChannel) {
+        if (channel == UpdateChannel.Off) return
+        viewModelScope.launch {
+            prefs.setBetaChannelAgreed(channel.storageKey)
+            _state.update {
+                when (channel) {
+                    UpdateChannel.PublicBeta -> it.copy(agreedPublicBeta = true)
+                    UpdateChannel.Developer -> it.copy(agreedDeveloperBeta = true)
+                    UpdateChannel.Off -> it
+                }
+            }
         }
     }
 

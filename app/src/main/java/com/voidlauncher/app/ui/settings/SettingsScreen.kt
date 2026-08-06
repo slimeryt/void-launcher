@@ -81,6 +81,7 @@ fun SettingsContent(
     onDownloadUpdate: () -> Unit,
     onInstallUpdate: () -> Unit,
     onUpdateChannelChange: (UpdateChannel) -> Unit,
+    onMarkBetaChannelAgreed: (UpdateChannel) -> Unit,
     onAccountLogin: (String, String) -> Unit,
     onAccountRegister: (String, String, String) -> Unit,
     onAccountLogout: () -> Unit,
@@ -109,6 +110,7 @@ fun SettingsContent(
             onDownloadUpdate = onDownloadUpdate,
             onInstallUpdate = onInstallUpdate,
             onChannelChange = onUpdateChannelChange,
+            onMarkChannelAgreed = onMarkBetaChannelAgreed,
             onOpenAccount = { page = SettingsPage.Account },
             modifier = modifier.fillMaxSize()
         )

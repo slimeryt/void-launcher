@@ -19,6 +19,7 @@ data class AccountUiState(
     val enrollmentStatus: EnrollmentStatus = EnrollmentStatus.None,
     val developerEnrolled: Boolean = false,
     val busy: Boolean = false,
+    val refreshing: Boolean = false,
     val error: String? = null,
     val info: String? = null
 )
@@ -28,15 +29,16 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
     private val repo = AccountRepository(application)
 
     private val busy = MutableStateFlow(false)
+    private val refreshing = MutableStateFlow(false)
     private val error = MutableStateFlow<String?>(null)
     private val info = MutableStateFlow<String?>(null)
 
     val state: StateFlow<AccountUiState> = combine(
         repo.session,
-        busy,
-        error,
-        info
-    ) { session, isBusy, err, msg ->
+        combine(busy, refreshing, error, info) { b, r, e, i ->
+            AccountBusyInfo(b, r, e, i)
+        }
+    ) { session, busyInfo ->
         AccountUiState(
             signedIn = session.signedIn,
             email = session.email,
@@ -45,14 +47,22 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
             isDeveloperAccount = session.isDeveloperAccount,
             enrollmentStatus = session.enrollmentStatus,
             developerEnrolled = session.developerEnrolled,
-            busy = isBusy,
-            error = err,
-            info = msg
+            busy = busyInfo.busy,
+            refreshing = busyInfo.refreshing,
+            error = busyInfo.error,
+            info = busyInfo.info
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = AccountUiState()
+    )
+
+    private data class AccountBusyInfo(
+        val busy: Boolean,
+        val refreshing: Boolean,
+        val error: String?,
+        val info: String?
     )
 
     init {
@@ -66,6 +76,7 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
 
     fun refresh() {
         viewModelScope.launch {
+            refreshing.value = true
             busy.value = true
             error.value = null
             runCatching { repo.refreshMe() }
@@ -75,6 +86,7 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
             busy.value = false
+            refreshing.value = false
         }
     }
 
