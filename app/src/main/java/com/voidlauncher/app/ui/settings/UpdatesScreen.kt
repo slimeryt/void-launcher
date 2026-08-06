@@ -623,7 +623,8 @@ private fun UpdateDropletActions(
             cornerRadius = 28.dp,
             strong = true,
             enableSheen = true,
-            enableRefraction = true
+            enableRefraction = true,
+            sampleWallpaper = false
         ) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -659,6 +660,7 @@ private fun UpdateDropletActions(
             strong = true,
             enableSheen = true,
             enableRefraction = true,
+            sampleWallpaper = false,
             tint = IosBlue.copy(alpha = 0.55f)
         ) {
             Box(

@@ -85,7 +85,8 @@ fun SettingsBackButton(
         cornerRadius = 22.dp,
         strong = true,
         enableSheen = true,
-        enableRefraction = true
+        enableRefraction = true,
+        sampleWallpaper = false
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -146,7 +147,8 @@ fun SettingsSearchBar(
             cornerRadius = 24.dp,
             strong = true,
             enableSheen = true,
-            enableRefraction = true
+            enableRefraction = true,
+            sampleWallpaper = false
         ) {
             Row(
                 modifier = Modifier

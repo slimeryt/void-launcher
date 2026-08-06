@@ -51,8 +51,12 @@ import com.voidlauncher.app.ui.theme.VoidGlassBorder
 import kotlin.math.roundToInt
 
 /**
- * Optical liquid glass: wallpaper backdrop → Gaussian blur (σ≈25–40) → AGSL
+ * Optical liquid glass: backdrop → Gaussian blur (σ≈25–40) → AGSL
  * refraction / Fresnel / Blinn-Phong specular.
+ *
+ * @param sampleWallpaper When true (default), crops the wallpaper buffer as the
+ *   backdrop (home / dock / drawer / Liquid Glass preview). When false, uses a
+ *   dark plate so settings chrome stays frost glass without wallpaper portals.
  */
 @Composable
 fun GlassPanel(
@@ -61,19 +65,10 @@ fun GlassPanel(
     strong: Boolean = false,
     enableSheen: Boolean = true,
     enableRefraction: Boolean = true,
-    /**
-     * Kept for call-site clarity (Liquid Glass preview). Backdrop is always the
-     * wallpaper buffer when available — optics need a real image to refract.
-     */
-    sampleWallpaper: Boolean = false,
+    sampleWallpaper: Boolean = true,
     tint: Color = Color.Transparent,
     content: @Composable BoxScope.() -> Unit
 ) {
-    // sampleWallpaper retained for Liquid Glass preview call sites; backdrop is always
-    // the wallpaper buffer when present (required for optical refraction).
-    @Suppress("UNUSED_PARAMETER")
-    val _sampleWallpaper = sampleWallpaper
-
     val wallpaper = LocalBlurredWallpaper.current
     val glass = LocalGlassSettings.current
     val wallpaperXOffset = LocalWallpaperXOffset.current
@@ -97,8 +92,8 @@ fun GlassPanel(
             null
         }
     }
-    val useOpticalShader = refractionOn && runtimeShader != null && wallpaper != null
-    val hasBackdrop = wallpaper != null
+    val useWallpaperBackdrop = sampleWallpaper && wallpaper != null
+    val useOpticalShader = refractionOn && runtimeShader != null
 
     // σ ≈ 25–40 at typical strength; 0% blur stays clear.
     val blurSigma = when {
@@ -106,6 +101,8 @@ fun GlassPanel(
         else -> (30f * blurStrength).coerceIn(25f * blurStrength.coerceAtLeast(0.4f), 40f) *
             (if (strong) 1.05f else 0.92f)
     }
+    // Dark plate path: skip heavy blur — optics are Fresnel + specular only.
+    val effectiveBlurSigma = if (useWallpaperBackdrop) blurSigma else (blurSigma * 0.25f).coerceAtMost(8f)
 
     Box(
         modifier = modifier
@@ -131,13 +128,12 @@ fun GlassPanel(
                 shape = shape
             )
     ) {
-        if (hasBackdrop) {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .graphicsLayer {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .graphicsLayer {
                         compositingStrategy = CompositingStrategy.Offscreen
-                        val blurPx = blurSigma
+                        val blurPx = effectiveBlurSigma
                         val blurEffect =
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && blurPx >= 1f) {
                                 AndroidRenderEffect.createBlurEffect(
@@ -152,13 +148,19 @@ fun GlassPanel(
                         val shader = runtimeShader
                         val shaderEffect =
                             if (useOpticalShader && shader != null && size.width > 1f && size.height > 1f) {
-                                val eta = (if (strong) 0.055f else 0.04f) *
-                                    blurStrength.coerceIn(0.5f, 1.4f).coerceAtLeast(0.5f)
+                                val eta = if (useWallpaperBackdrop) {
+                                    ((if (strong) 0.055f else 0.04f) *
+                                        blurStrength.coerceIn(0.5f, 1.4f).coerceAtLeast(0.5f))
+                                        .coerceIn(0.03f, 0.07f)
+                                } else {
+                                    // Plate path: tiny refraction so rim still reads without warping void.
+                                    0.02f
+                                }
                                 LiquidRefractionShader.update(
                                     shader = shader,
                                     size = Size(size.width, size.height),
                                     cornerRadiusPx = cornerRadiusPx,
-                                    eta = eta.coerceIn(0.03f, 0.07f),
+                                    eta = eta,
                                     frost = frostAmount * (if (strong) 1.05f else 0.9f),
                                     fresnelMin = 0.05f,
                                     fresnelMax = if (strong) 0.45f else 0.38f,
@@ -168,7 +170,11 @@ fun GlassPanel(
                                     } else {
                                         0f
                                     },
-                                    chromatic = if (strong) 1.8f else 1.2f
+                                    chromatic = if (useWallpaperBackdrop) {
+                                        if (strong) 1.8f else 1.2f
+                                    } else {
+                                        0.4f
+                                    }
                                 )
                                 AndroidRenderEffect.createRuntimeShaderEffect(shader, "content")
                             } else {
@@ -187,51 +193,58 @@ fun GlassPanel(
                     }
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
-                    val panel = coords
-                    val wp = wallpaper ?: return@Canvas
-                    if (panel == null || !panel.isAttached || size.minDimension <= 2f) {
-                        return@Canvas
+                    if (size.minDimension <= 2f) return@Canvas
+                    if (useWallpaperBackdrop) {
+                        val panel = coords
+                        val wp = wallpaper ?: return@Canvas
+                        if (panel == null || !panel.isAttached) return@Canvas
+                        val pos = panel.positionInWindow()
+                        val scaleX = wp.bitmapWidth.toFloat() / wp.fullWidthPx.toFloat()
+                        val scaleY = wp.bitmapHeight.toFloat() / wp.fullHeightPx.toFloat()
+                        val extraWidthPx = (wp.fullWidthPx - wp.screenWidth).coerceAtLeast(0)
+                        val pageOffsetPx = wallpaperXOffset.coerceIn(0f, 1f) * extraWidthPx
+                        val realX = pageOffsetPx + pos.x
+                        // Extra pad so refraction can sample outside panel bounds without clamping artifacts.
+                        val pad = 0.08f
+                        val srcX = ((realX - size.width * pad) * scaleX).roundToInt()
+                            .coerceIn(0, (wp.bitmapWidth - 1).coerceAtLeast(0))
+                        val srcY = ((pos.y - size.height * pad) * scaleY).roundToInt()
+                            .coerceIn(0, (wp.bitmapHeight - 1).coerceAtLeast(0))
+                        val srcW = ((size.width * (1f + pad * 2f)) * scaleX).roundToInt().coerceAtLeast(1)
+                            .coerceAtMost((wp.bitmapWidth - srcX).coerceAtLeast(1))
+                        val srcH = ((size.height * (1f + pad * 2f)) * scaleY).roundToInt().coerceAtLeast(1)
+                            .coerceAtMost((wp.bitmapHeight - srcY).coerceAtLeast(1))
+                        drawImage(
+                            image = wp.image,
+                            srcOffset = IntOffset(srcX, srcY),
+                            srcSize = IntSize(srcW, srcH),
+                            dstOffset = IntOffset.Zero,
+                            dstSize = IntSize(
+                                size.width.roundToInt().coerceAtLeast(1),
+                                size.height.roundToInt().coerceAtLeast(1)
+                            ),
+                            alpha = 1f
+                        )
+                    } else {
+                        // Dark plate for settings frost chrome (Fresnel + specular still read).
+                        drawRect(Color(0xFF2C2C2E))
+                        drawRect(Color.White.copy(alpha = 0.10f * frostAmount.coerceIn(0.3f, 1.5f)))
                     }
-                    val pos = panel.positionInWindow()
-                    val scaleX = wp.bitmapWidth.toFloat() / wp.fullWidthPx.toFloat()
-                    val scaleY = wp.bitmapHeight.toFloat() / wp.fullHeightPx.toFloat()
-                    val extraWidthPx = (wp.fullWidthPx - wp.screenWidth).coerceAtLeast(0)
-                    val pageOffsetPx = wallpaperXOffset.coerceIn(0f, 1f) * extraWidthPx
-                    val realX = pageOffsetPx + pos.x
-                    // Extra pad so refraction can sample outside panel bounds without clamping artifacts.
-                    val pad = 0.08f
-                    val srcX = ((realX - size.width * pad) * scaleX).roundToInt()
-                        .coerceIn(0, (wp.bitmapWidth - 1).coerceAtLeast(0))
-                    val srcY = ((pos.y - size.height * pad) * scaleY).roundToInt()
-                        .coerceIn(0, (wp.bitmapHeight - 1).coerceAtLeast(0))
-                    val srcW = ((size.width * (1f + pad * 2f)) * scaleX).roundToInt().coerceAtLeast(1)
-                        .coerceAtMost((wp.bitmapWidth - srcX).coerceAtLeast(1))
-                    val srcH = ((size.height * (1f + pad * 2f)) * scaleY).roundToInt().coerceAtLeast(1)
-                        .coerceAtMost((wp.bitmapHeight - srcY).coerceAtLeast(1))
-                    drawImage(
-                        image = wp.image,
-                        srcOffset = IntOffset(srcX, srcY),
-                        srcSize = IntSize(srcW, srcH),
-                        dstOffset = IntOffset.Zero,
-                        dstSize = IntSize(
-                            size.width.roundToInt().coerceAtLeast(1),
-                            size.height.roundToInt().coerceAtLeast(1)
-                        ),
-                        alpha = 1f
-                    )
                 }
             }
-        }
 
         // Minimal veil / tint only — optics live in the AGSL (or blur-only fallback).
         Box(
             modifier = Modifier
                 .matchParentSize()
                 .drawBehind {
-                    if (!hasBackdrop) {
-                        val veil = if (strong) 0.22f else 0.16f
-                        drawRect(Color.White.copy(alpha = veil * frostAmount.coerceIn(0.3f, 1.5f)))
-                        // Soft Fresnel-ish rim without AGSL
+                    if (!useOpticalShader) {
+                        if (!useWallpaperBackdrop) {
+                            val veil = if (strong) 0.22f else 0.16f
+                            drawRect(Color.White.copy(alpha = veil * frostAmount.coerceIn(0.3f, 1.5f)))
+                        } else {
+                            drawRect(Color.White.copy(alpha = 0.06f * frostAmount))
+                        }
                         val rim = if (strong) 0.28f else 0.18f
                         drawRoundRect(
                             brush = Brush.linearGradient(
@@ -243,14 +256,6 @@ fun GlassPanel(
                                 start = Offset.Zero,
                                 end = Offset(size.width, size.height)
                             ),
-                            cornerRadius = CornerRadius(cornerRadius.toPx(), cornerRadius.toPx()),
-                            style = Stroke(width = 1.5.dp.toPx())
-                        )
-                    } else if (!useOpticalShader) {
-                        // Blur-only path (API < 33): light frost + rim
-                        drawRect(Color.White.copy(alpha = 0.06f * frostAmount))
-                        drawRoundRect(
-                            color = Color.White.copy(alpha = 0.22f),
                             cornerRadius = CornerRadius(cornerRadius.toPx(), cornerRadius.toPx()),
                             style = Stroke(width = 1.5.dp.toPx())
                         )
