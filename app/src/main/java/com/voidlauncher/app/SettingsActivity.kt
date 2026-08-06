@@ -23,6 +23,7 @@ import com.voidlauncher.app.glass.LocalGlassSettings
 import com.voidlauncher.app.glass.StoragePermission
 import com.voidlauncher.app.glass.WallpaperBlurController
 import com.voidlauncher.app.ui.settings.SettingsContent
+import com.voidlauncher.app.ui.settings.SettingsHazeHost
 import com.voidlauncher.app.ui.theme.VoidInk
 import com.voidlauncher.app.ui.theme.VoidTheme
 import com.voidlauncher.app.update.ApkInstaller
@@ -71,69 +72,73 @@ class SettingsActivity : ComponentActivity() {
                 )
             ) {
                 VoidTheme {
-                    SettingsContent(
-                        state = state,
-                        updateState = updateState,
-                        accountState = accountState,
-                        hasWallpaperAccess = hasWallpaperAccess,
-                        onGrantWallpaperAccess = { startActivity(StoragePermission.requestIntent(this)) },
-                        onShowLabelsChange = viewModel::setShowLabels,
-                        onGridColumnsChange = viewModel::setGridColumns,
-                        onIconScaleChange = viewModel::setIconScale,
-                        onDockLabelsChange = viewModel::setDockLabels,
-                        onHapticChange = viewModel::setHapticFeedback,
-                        onAutoCheckUpdatesChange = viewModel::setAutoCheckUpdates,
-                        onGlassBlurChange = viewModel::setGlassBlurStrength,
-                        onGlassFrostChange = viewModel::setGlassFrostAmount,
-                        onGlassRefractionChange = viewModel::setGlassRefraction,
-                        onGlassSheenChange = viewModel::setGlassSheen,
-                        onCheckUpdate = { updateViewModel.checkForUpdates(silent = false) },
-                        onCancelUpdate = updateViewModel::cancelUpdateAction,
-                        onDownloadUpdate = updateViewModel::downloadUpdate,
-                        onUpdateChannelChange = updateViewModel::setUpdateChannel,
-                        onMarkBetaChannelAgreed = updateViewModel::markBetaChannelAgreed,
-                        onAccountLogin = accountViewModel::login,
-                        onAccountRegister = accountViewModel::register,
-                        onAccountLogout = accountViewModel::logout,
-                        onRequestDeveloperAccount = accountViewModel::requestDeveloperAccount,
-                        onRequestEnroll = accountViewModel::requestDeveloperEnrollment,
-                        onAccountRefresh = accountViewModel::refresh,
-                        onInstallUpdate = {
-                            val apk = updateViewModel.state.value.downloadedApk
-                            if (apk == null) return@SettingsContent
-                            val block = ApkInstaller.updateBlockReason(this, apk)
-                            if (block != null) {
-                                Toast.makeText(this, block, Toast.LENGTH_LONG).show()
-                                return@SettingsContent
-                            }
-                            if (!ApkInstaller.canInstallPackages(this)) {
-                                Toast.makeText(
-                                    this,
-                                    "Allow Polar to install updates",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                                startActivity(ApkInstaller.installPermissionSettingsIntent(this))
-                                return@SettingsContent
-                            }
-                            ApkInstaller.installApk(this, apk)
-                        },
-                        onBack = { finish() },
-                        onOpenAppIcons = {
-                            startActivity(
-                                Intent(this, MainActivity::class.java).apply {
-                                    addFlags(
-                                        Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
-                                            Intent.FLAG_ACTIVITY_SINGLE_TOP
-                                    )
-                                    putExtra(MainActivity.EXTRA_OPEN_ICON_EDITOR, true)
-                                }
-                            )
-                            finish()
-                        },
+                    SettingsHazeHost(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(VoidInk)
-                    )
+                    ) {
+                        SettingsContent(
+                            state = state,
+                            updateState = updateState,
+                            accountState = accountState,
+                            hasWallpaperAccess = hasWallpaperAccess,
+                            onGrantWallpaperAccess = { startActivity(StoragePermission.requestIntent(this)) },
+                            onShowLabelsChange = viewModel::setShowLabels,
+                            onGridColumnsChange = viewModel::setGridColumns,
+                            onIconScaleChange = viewModel::setIconScale,
+                            onDockLabelsChange = viewModel::setDockLabels,
+                            onHapticChange = viewModel::setHapticFeedback,
+                            onAutoCheckUpdatesChange = viewModel::setAutoCheckUpdates,
+                            onGlassBlurChange = viewModel::setGlassBlurStrength,
+                            onGlassFrostChange = viewModel::setGlassFrostAmount,
+                            onGlassRefractionChange = viewModel::setGlassRefraction,
+                            onGlassSheenChange = viewModel::setGlassSheen,
+                            onCheckUpdate = { updateViewModel.checkForUpdates(silent = false) },
+                            onCancelUpdate = updateViewModel::cancelUpdateAction,
+                            onDownloadUpdate = updateViewModel::downloadUpdate,
+                            onUpdateChannelChange = updateViewModel::setUpdateChannel,
+                            onMarkBetaChannelAgreed = updateViewModel::markBetaChannelAgreed,
+                            onAccountLogin = accountViewModel::login,
+                            onAccountRegister = accountViewModel::register,
+                            onAccountLogout = accountViewModel::logout,
+                            onRequestDeveloperAccount = accountViewModel::requestDeveloperAccount,
+                            onRequestEnroll = accountViewModel::requestDeveloperEnrollment,
+                            onAccountRefresh = accountViewModel::refresh,
+                            onInstallUpdate = {
+                                val apk = updateViewModel.state.value.downloadedApk
+                                if (apk == null) return@SettingsContent
+                                val block = ApkInstaller.updateBlockReason(this, apk)
+                                if (block != null) {
+                                    Toast.makeText(this, block, Toast.LENGTH_LONG).show()
+                                    return@SettingsContent
+                                }
+                                if (!ApkInstaller.canInstallPackages(this)) {
+                                    Toast.makeText(
+                                        this,
+                                        "Allow Polar to install updates",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                    startActivity(ApkInstaller.installPermissionSettingsIntent(this))
+                                    return@SettingsContent
+                                }
+                                ApkInstaller.installApk(this, apk)
+                            },
+                            onBack = { finish() },
+                            onOpenAppIcons = {
+                                startActivity(
+                                    Intent(this, MainActivity::class.java).apply {
+                                        addFlags(
+                                            Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+                                                Intent.FLAG_ACTIVITY_SINGLE_TOP
+                                        )
+                                        putExtra(MainActivity.EXTRA_OPEN_ICON_EDITOR, true)
+                                    }
+                                )
+                                finish()
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
             }
         }

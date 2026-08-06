@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import com.google.accompanist.systemuicontroller.rememberSystemUiController
 import com.voidlauncher.app.data.AppInfo
+import com.voidlauncher.app.glass.LocalHazeState
 import com.voidlauncher.app.ui.components.AppActionsSheet
 import com.voidlauncher.app.ui.drawer.AppDrawer
 import com.voidlauncher.app.ui.home.HomeScreen
@@ -27,6 +28,7 @@ import com.voidlauncher.app.ui.icons.IconEditorPanel
 import com.voidlauncher.app.ui.icons.IconTheme
 import com.voidlauncher.app.ui.icons.LocalIconAppearance
 import com.voidlauncher.app.viewmodel.LauncherUiState
+import dev.chrisbanes.haze.rememberHazeState
 
 @Composable
 fun LauncherRoot(
@@ -90,7 +92,12 @@ fun LauncherRoot(
         onIconEditorOpenChange(false)
     }
 
-    CompositionLocalProvider(LocalIconAppearance provides appearance) {
+    val hazeState = rememberHazeState()
+
+    CompositionLocalProvider(
+        LocalIconAppearance provides appearance,
+        LocalHazeState provides hazeState
+    ) {
         Box(modifier = modifier.fillMaxSize()) {
             HomeScreen(
                 state = state,

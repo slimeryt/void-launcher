@@ -45,10 +45,10 @@ import androidx.compose.foundation.text.BasicTextField
 import com.voidlauncher.app.account.AccountUiState
 import com.voidlauncher.app.account.DeveloperAccountStatus
 import com.voidlauncher.app.account.EnrollmentStatus
+import com.voidlauncher.app.glass.LocalHazeState
 import com.voidlauncher.app.ui.components.Android16ProgressBar
 import com.voidlauncher.app.ui.components.CapsuleShape
 import com.voidlauncher.app.ui.theme.IosBlue
-import com.voidlauncher.app.ui.theme.VoidInk
 import com.voidlauncher.app.ui.theme.VoidMist
 import com.voidlauncher.app.ui.theme.VoidMuted
 
@@ -114,11 +114,11 @@ fun AccountScreen(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var displayName by remember { mutableStateOf("") }
+    val hazeState = LocalHazeState.current
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(VoidInk)
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
@@ -128,6 +128,7 @@ fun AccountScreen(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
+                .settingsHazeSource(hazeState)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 28.dp)

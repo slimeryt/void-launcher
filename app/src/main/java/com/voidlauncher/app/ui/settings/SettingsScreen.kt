@@ -47,10 +47,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voidlauncher.app.account.AccountUiState
 import com.voidlauncher.app.account.DeveloperAccountStatus
+import com.voidlauncher.app.glass.LocalHazeState
 import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.components.SmoothCornerShape
 import com.voidlauncher.app.ui.theme.IosBlue
-import com.voidlauncher.app.ui.theme.VoidInk
 import com.voidlauncher.app.ui.theme.VoidMist
 import com.voidlauncher.app.ui.theme.VoidMuted
 import com.voidlauncher.app.update.UpdateChannel
@@ -94,6 +94,7 @@ fun SettingsContent(
 ) {
     var page by remember { mutableStateOf(SettingsPage.Root) }
     var searchQuery by remember { mutableStateOf("") }
+    val hazeState = LocalHazeState.current
 
     BackHandler {
         if (page != SettingsPage.Root) page = SettingsPage.Root
@@ -143,7 +144,6 @@ fun SettingsContent(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(VoidInk)
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
@@ -170,7 +170,9 @@ fun SettingsContent(
                 }
             },
             label = "settings-page",
-            modifier = Modifier.weight(1f)
+            modifier = Modifier
+                .weight(1f)
+                .settingsHazeSource(hazeState)
         ) { current ->
             Column(
                 modifier = Modifier
@@ -355,7 +357,7 @@ private fun LiquidGlassPage(
         WallpaperAccessBanner(onGrantWallpaperAccess)
     }
 
-    // Live preview — settings apply immediately to this panel
+    // Live preview — samples wallpaper (portal) so refraction/blur knobs are visible
     GlassPanel(
         modifier = Modifier
             .fillMaxWidth()
@@ -363,7 +365,8 @@ private fun LiquidGlassPage(
         cornerRadius = 28.dp,
         strong = true,
         enableSheen = state.glassSheen,
-        enableRefraction = state.glassRefraction
+        enableRefraction = state.glassRefraction,
+        sampleWallpaper = true
     ) {
         Text(
             text = "Liquid Glass preview",

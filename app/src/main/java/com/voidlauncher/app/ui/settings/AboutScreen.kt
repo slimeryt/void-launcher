@@ -26,7 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.voidlauncher.app.BuildConfig
-import com.voidlauncher.app.ui.theme.VoidInk
+import com.voidlauncher.app.glass.LocalHazeState
 import com.voidlauncher.app.ui.theme.VoidMist
 import com.voidlauncher.app.ui.theme.VoidMuted
 
@@ -61,10 +61,11 @@ fun AboutScreen(
         return
     }
 
+    val hazeState = LocalHazeState.current
+
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(VoidInk)
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
@@ -74,6 +75,7 @@ fun AboutScreen(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
+                .settingsHazeSource(hazeState)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 28.dp),
@@ -129,10 +131,10 @@ private fun AboutDocumentScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val hazeState = LocalHazeState.current
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(VoidInk)
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
@@ -140,6 +142,7 @@ private fun AboutDocumentScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .settingsHazeSource(hazeState)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 32.dp)

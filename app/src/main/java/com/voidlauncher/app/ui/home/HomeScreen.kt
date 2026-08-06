@@ -59,6 +59,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -93,9 +94,12 @@ import com.voidlauncher.app.ui.components.AppIcon
 import com.voidlauncher.app.ui.components.AppIconShape
 import com.voidlauncher.app.ui.components.CapsuleShape
 import com.voidlauncher.app.ui.components.DockBar
+import com.voidlauncher.app.glass.LocalHazeState
+import com.voidlauncher.app.glass.LocalWallpaperXOffset
 import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.components.HomeClock
 import com.voidlauncher.app.ui.components.SmoothCornerShape
+import com.voidlauncher.app.ui.components.WallpaperHazeSource
 import com.voidlauncher.app.ui.components.toCachedBitmap
 import com.voidlauncher.app.ui.icons.LocalIconAppearance
 import com.voidlauncher.app.ui.pickers.WallpaperPickerOverlay
@@ -107,6 +111,7 @@ import com.voidlauncher.app.ui.theme.VoidMuted
 import com.voidlauncher.app.viewmodel.LauncherUiState
 import com.voidlauncher.app.widget.LocalWidgetHostApi
 import com.voidlauncher.app.widget.WidgetView
+import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 import kotlin.math.hypot
 import kotlin.math.roundToInt
@@ -203,9 +208,10 @@ fun HomeScreen(
     )
     val isDragging = dragIndex >= 0
 
-    androidx.compose.runtime.CompositionLocalProvider(
-        com.voidlauncher.app.glass.LocalWallpaperXOffset provides wallpaperXOffset
+    CompositionLocalProvider(
+        LocalWallpaperXOffset provides wallpaperXOffset
     ) {
+    val hazeState = LocalHazeState.current
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -228,6 +234,14 @@ fun HomeScreen(
                 )
             }
     ) {
+        if (hazeState != null) {
+            WallpaperHazeSource(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .hazeSource(state = hazeState, zIndex = 0f)
+            )
+        }
+
         // Edit-mode dim overlay
         if (dimAlpha > 0.01f) {
             Box(
@@ -390,6 +404,13 @@ fun HomeScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
+                    .then(
+                        if (hazeState != null) {
+                            Modifier.hazeSource(state = hazeState, zIndex = 1f)
+                        } else {
+                            Modifier
+                        }
+                    )
                     .graphicsLayer {
                         scaleX = editScale
                         scaleY = editScale

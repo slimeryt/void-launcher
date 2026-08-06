@@ -60,8 +60,8 @@ import com.voidlauncher.app.ui.components.CapsuleShape
 import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.components.Android16ProgressBar
 import com.voidlauncher.app.ui.components.SmoothCornerShape
+import com.voidlauncher.app.glass.LocalHazeState
 import com.voidlauncher.app.ui.theme.IosBlue
-import com.voidlauncher.app.ui.theme.VoidInk
 import com.voidlauncher.app.ui.theme.VoidMist
 import com.voidlauncher.app.ui.theme.VoidMuted
 import com.voidlauncher.app.update.UpdateChannel
@@ -164,6 +164,7 @@ fun UpdatesScreen(
     val busy = updateState.checking || updateState.downloading
     var forceSplit by remember { mutableStateOf(false) }
     val split = remember { Animatable(0f) }
+    val hazeState = LocalHazeState.current
 
     LaunchedEffect(busy) {
         if (busy) {
@@ -185,7 +186,6 @@ fun UpdatesScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(VoidInk)
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
@@ -195,6 +195,7 @@ fun UpdatesScreen(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
+                .settingsHazeSource(hazeState)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -360,31 +361,36 @@ private fun BetaUpdatesPickerScreen(
     modifier: Modifier = Modifier
 ) {
     val showDeveloper = accountState.developerEnrolled
+    val hazeState = LocalHazeState.current
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(VoidInk)
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
         SettingsBackBar(onBack = onBack)
 
-        Text(
-            text = "Beta Updates",
-            style = MaterialTheme.typography.headlineMedium,
-            color = VoidMist,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-        )
-
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .clip(CardShape)
-                .background(UpdatesCardBg)
+                .fillMaxSize()
+                .settingsHazeSource(hazeState)
         ) {
+            Text(
+                text = "Beta Updates",
+                style = MaterialTheme.typography.headlineMedium,
+                color = VoidMist,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .clip(CardShape)
+                    .background(UpdatesCardBg)
+            ) {
             ChannelOption(
                 title = "Off",
                 subtitle = "Only public releases",
@@ -407,6 +413,7 @@ private fun BetaUpdatesPickerScreen(
                     onClick = { onSelect(UpdateChannel.Developer) },
                     showDivider = false
                 )
+            }
             }
         }
     }

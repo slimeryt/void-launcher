@@ -27,7 +27,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import com.voidlauncher.app.ui.components.CapsuleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
@@ -54,6 +53,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import com.voidlauncher.app.data.AppInfo
 import com.voidlauncher.app.ui.components.AppIcon
+import com.voidlauncher.app.ui.components.CapsuleShape
 import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.theme.VoidCyan
 import com.voidlauncher.app.ui.theme.VoidMist
@@ -92,7 +92,6 @@ fun AppDrawer(
         modifier = modifier
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // Scrim — tap to dismiss
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -120,7 +119,6 @@ fun AppDrawer(
                         .fillMaxSize()
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    // Drag handle — swipe down to close (only this area steals vertical drag)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
