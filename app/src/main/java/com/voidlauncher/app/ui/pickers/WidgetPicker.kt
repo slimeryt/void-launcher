@@ -3,6 +3,7 @@ package com.voidlauncher.app.ui.pickers
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.graphics.drawable.Drawable
+import android.os.Build
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -41,9 +43,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.components.SmoothCornerShape
 import com.voidlauncher.app.ui.components.toCachedBitmap
+import com.voidlauncher.app.ui.theme.VoidInk
 import com.voidlauncher.app.ui.theme.VoidMist
 import com.voidlauncher.app.ui.theme.VoidMuted
 
@@ -53,6 +55,27 @@ private data class WidgetAppGroup(
     val appIcon: Drawable?,
     val widgets: List<AppWidgetProviderInfo>
 )
+
+/** Classic launcher cell conversion: `(dp + 30) / 70`. */
+private fun cellsForSizeDp(sizeDp: Float): Int {
+    var n = 2
+    while (70 * n - 30 < sizeDp) n++
+    return (n - 1).coerceAtLeast(1)
+}
+
+private fun AppWidgetProviderInfo.spanCells(density: Float): Pair<Int, Int> {
+    val cols = if (Build.VERSION.SDK_INT >= 31 && targetCellWidth > 0) {
+        targetCellWidth
+    } else {
+        cellsForSizeDp(minWidth / density)
+    }
+    val rows = if (Build.VERSION.SDK_INT >= 31 && targetCellHeight > 0) {
+        targetCellHeight
+    } else {
+        cellsForSizeDp(minHeight / density)
+    }
+    return cols.coerceAtLeast(1) to rows.coerceAtLeast(1)
+}
 
 @Composable
 fun WidgetPickerOverlay(
@@ -84,40 +107,21 @@ fun WidgetPickerOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.45f))
+            .background(VoidInk)
+            .statusBarsPadding()
+            .navigationBarsPadding()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = onDismiss
+                onClick = {}
             )
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 10.dp)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {}
-                )
-        ) {
-            GlassPanel(
-                modifier = Modifier.fillMaxSize(),
-                cornerRadius = 28.dp,
-                strong = true,
-                enableSheen = false,
-                enableRefraction = true
-            ) {
-                WidgetPickerBody(
-                    groups = groups,
-                    densityDpi = densityDpi,
-                    onDismiss = onDismiss,
-                    onPick = onPick
-                )
-            }
-        }
+        WidgetPickerBody(
+            groups = groups,
+            densityDpi = densityDpi,
+            onDismiss = onDismiss,
+            onPick = onPick
+        )
     }
 }
 
@@ -158,8 +162,8 @@ private fun WidgetPickerBody(
             }
         } else {
             LazyColumn(
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(18.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(22.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(groups, key = { it.packageName }) { group ->
@@ -190,7 +194,7 @@ private fun WidgetAppSection(
         appIcon?.toCachedBitmap(maxSize = 96, cornerRadiusRatio = 0.22f)?.asImageBitmap()
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (appBmp != null) {
                 Image(
@@ -213,7 +217,7 @@ private fun WidgetAppSection(
         }
 
         group.widgets.forEach { info ->
-            WidgetRow(
+            WidgetPreviewCard(
                 info = info,
                 label = info.loadLabel(pm).toString(),
                 densityDpi = densityDpi,
@@ -224,69 +228,76 @@ private fun WidgetAppSection(
 }
 
 @Composable
-private fun WidgetRow(
+private fun WidgetPreviewCard(
     info: AppWidgetProviderInfo,
     label: String,
     densityDpi: Int,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val previewBmp = remember(info.provider) {
+    val density = context.resources.displayMetrics.density
+    val (cols, rows) = remember(info.provider) { info.spanCells(density) }
+    val span = "${cols}×${rows}"
+
+    val previewBmp = remember(info.provider, densityDpi) {
         runCatching {
             val drawable = info.loadPreviewImage(context, densityDpi)
                 ?: info.loadIcon(context, densityDpi)
-            drawable?.toCachedBitmap(maxSize = 320, cornerRadiusRatio = 0.12f)?.asImageBitmap()
+            // Keep corners from the preview asset itself — don't wrap / re-round heavily.
+            drawable?.toCachedBitmap(maxSize = 1024, cornerRadiusRatio = 0f)?.asImageBitmap()
         }.getOrNull()
     }
 
-    val density = context.resources.displayMetrics.density
-    val minW = (info.minWidth / density).toInt().coerceAtLeast(1)
-    val minH = (info.minHeight / density).toInt().coerceAtLeast(1)
-
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(SmoothCornerShape(18.dp))
-            .background(Color.White.copy(alpha = 0.08f))
-            .clickable(onClick = onClick)
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            ),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(72.dp)
-                .clip(SmoothCornerShape(14.dp))
-                .background(Color.White.copy(alpha = 0.06f)),
-            contentAlignment = Alignment.Center
-        ) {
-            if (previewBmp != null) {
-                Image(
-                    bitmap = previewBmp,
-                    contentDescription = label,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(6.dp)
-                )
-            } else {
-                Text("◇", color = VoidMuted, style = MaterialTheme.typography.titleLarge)
+        val aspect = (cols.toFloat() / rows.toFloat()).coerceIn(0.45f, 3.2f)
+        if (previewBmp != null) {
+            Image(
+                bitmap = previewBmp,
+                contentDescription = label,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(aspect)
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(aspect),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("No preview", color = VoidMuted)
             }
         }
-        Spacer(modifier = Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
                 text = label,
                 color = VoidMist,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
             )
-            Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "${minW}×${minH} dp",
+                text = span,
                 color = VoidMuted,
-                style = MaterialTheme.typography.labelMedium
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(start = 12.dp)
             )
         }
     }

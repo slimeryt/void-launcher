@@ -43,9 +43,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.components.SmoothCornerShape
 import com.voidlauncher.app.ui.theme.IosBlue
+import com.voidlauncher.app.ui.theme.VoidInk
 import com.voidlauncher.app.ui.theme.VoidMist
 import com.voidlauncher.app.ui.theme.VoidMuted
 import com.voidlauncher.app.wallpaper.LocalWallpaperApi
@@ -91,50 +91,31 @@ fun WallpaperPickerOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.45f))
+            .background(VoidInk)
+            .statusBarsPadding()
+            .navigationBarsPadding()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = onDismiss
+                onClick = {}
             )
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 10.dp)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {}
+        WallpaperPickerBody(
+            onDismiss = onDismiss,
+            onPickPhoto = {
+                pickMedia.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                 )
-        ) {
-            GlassPanel(
-                modifier = Modifier.fillMaxSize(),
-                cornerRadius = 28.dp,
-                strong = true,
-                enableSheen = false,
-                enableRefraction = true
-            ) {
-                WallpaperPickerBody(
-                    onDismiss = onDismiss,
-                    onPickPhoto = {
-                        pickMedia.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                        )
-                    },
-                    onSystem = {
-                        wallpaperApi.onOpenSystemPicker()
-                        onDismiss()
-                    },
-                    onSwatch = { colors ->
-                        wallpaperApi.onSetGradient(colors)
-                        onDismiss()
-                    }
-                )
+            },
+            onSystem = {
+                wallpaperApi.onOpenSystemPicker()
+                onDismiss()
+            },
+            onSwatch = { colors ->
+                wallpaperApi.onSetGradient(colors)
+                onDismiss()
             }
-        }
+        )
     }
 }
 
