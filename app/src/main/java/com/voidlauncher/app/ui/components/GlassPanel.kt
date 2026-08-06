@@ -12,21 +12,15 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
 import android.util.Log
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,6 +38,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -51,21 +46,13 @@ import androidx.compose.ui.unit.dp
 import com.voidlauncher.app.glass.LiquidRefractionShader
 import com.voidlauncher.app.glass.LocalBlurredWallpaper
 import com.voidlauncher.app.glass.LocalGlassSettings
-import com.voidlauncher.app.glass.LocalHazeState
 import com.voidlauncher.app.glass.LocalWallpaperXOffset
 import com.voidlauncher.app.ui.theme.VoidGlassBorder
-import com.voidlauncher.app.ui.theme.VoidInk
-import dev.chrisbanes.haze.HazeDefaults
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
 import kotlin.math.roundToInt
 
 /**
- * Liquid glass that blurs/refracts whatever is actually behind the panel.
- *
- * Prefers [LocalHazeState] backdrop blur (real Compose content). Falls back to
- * wallpaper sampling only when no Haze host is provided (legacy / preview).
+ * Optical liquid glass: wallpaper backdrop → Gaussian blur (σ≈25–40) → AGSL
+ * refraction / Fresnel / Blinn-Phong specular.
  */
 @Composable
 fun GlassPanel(
@@ -75,140 +62,123 @@ fun GlassPanel(
     enableSheen: Boolean = true,
     enableRefraction: Boolean = true,
     /**
-     * When true, sample the wallpaper buffer instead of Haze (Liquid Glass live preview).
-     * Everywhere else, omit this so glass blurs whatever is actually behind the panel.
+     * Kept for call-site clarity (Liquid Glass preview). Backdrop is always the
+     * wallpaper buffer when available — optics need a real image to refract.
      */
     sampleWallpaper: Boolean = false,
     tint: Color = Color.Transparent,
     content: @Composable BoxScope.() -> Unit
 ) {
-    val hazeState = LocalHazeState.current
-    val useHaze = hazeState != null && !sampleWallpaper
-    val blurred = when {
-        sampleWallpaper -> LocalBlurredWallpaper.current
-        useHaze -> null
-        else -> LocalBlurredWallpaper.current
-    }
+    // sampleWallpaper retained for Liquid Glass preview call sites; backdrop is always
+    // the wallpaper buffer when present (required for optical refraction).
+    @Suppress("UNUSED_PARAMETER")
+    val _sampleWallpaper = sampleWallpaper
+
+    val wallpaper = LocalBlurredWallpaper.current
     val glass = LocalGlassSettings.current
     val wallpaperXOffset = LocalWallpaperXOffset.current
-    val effectiveRefraction = enableRefraction && glass.refractionEnabled && blurred != null
-    val effectiveSheen = enableSheen && glass.sheenEnabled
-    val blurStrength = glass.blurStrength
+    val density = LocalDensity.current
+    val cornerRadiusPx = with(density) { cornerRadius.toPx() }
+
+    val blurStrength = glass.blurStrength.coerceIn(0f, 1.6f)
     val frostAmount = glass.frostAmount
+    val refractionOn = enableRefraction && glass.refractionEnabled
+    val specularOn = enableSheen && glass.sheenEnabled
+
     var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val shape = remember(cornerRadius) { SmoothCornerShape(radius = cornerRadius) }
 
-    val transition = rememberInfiniteTransition(label = "liquid")
-    val sheenShift by transition.animateFloat(
-        initialValue = -0.15f,
-        targetValue = 1.15f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(6400, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "sheen"
-    )
     val runtimeShader = remember {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             runCatching { LiquidRefractionShader.create() }
-                .onFailure { Log.e("GlassPanel", "AGSL refraction shader failed to compile", it) }
+                .onFailure { Log.e("GlassPanel", "AGSL liquid glass failed to compile", it) }
                 .getOrNull()
         } else {
             null
         }
     }
-    val useShader = effectiveRefraction && runtimeShader != null
+    val useOpticalShader = refractionOn && runtimeShader != null && wallpaper != null
+    val hasBackdrop = wallpaper != null
 
-    val hazeStyle = remember(blurStrength, frostAmount, strong, tint) {
-        val blurRadius = ((if (strong) 28f else 18f) * blurStrength.coerceIn(0.35f, 1.6f)).dp
-        val frost = frostAmount.coerceIn(0f, 1.5f)
-        val baseTint = Color.White.copy(alpha = (if (strong) 0.14f else 0.10f) * frost)
-        val tintLayer = if (tint.alpha > 0.01f) tint else Color.Transparent
-        HazeStyle(
-            backgroundColor = VoidInk.copy(alpha = 0.35f),
-            tints = buildList {
-                add(HazeTint(baseTint))
-                if (tintLayer.alpha > 0.01f) add(HazeTint(tintLayer))
-            },
-            blurRadius = blurRadius,
-            noiseFactor = HazeDefaults.noiseFactor * 0.35f
-        )
+    // σ ≈ 25–40 at typical strength; 0% blur stays clear.
+    val blurSigma = when {
+        blurStrength <= 0.01f -> 0f
+        else -> (30f * blurStrength).coerceIn(25f * blurStrength.coerceAtLeast(0.4f), 40f) *
+            (if (strong) 1.05f else 0.92f)
     }
-
-    val hazeModifier = hazeState?.takeIf { useHaze }?.let { state ->
-        Modifier.hazeEffect(state = state, style = hazeStyle)
-    } ?: Modifier
 
     Box(
         modifier = modifier
             .shadow(
-                elevation = if (strong) 18.dp else 10.dp,
+                elevation = if (strong) 16.dp else 8.dp,
                 shape = shape,
-                ambientColor = Color.Black.copy(alpha = 0.35f),
-                spotColor = Color.Black.copy(alpha = 0.45f),
+                ambientColor = Color.Black.copy(alpha = 0.28f),
+                spotColor = Color.Black.copy(alpha = 0.38f),
                 clip = false
             )
             .clip(shape)
-            .then(hazeModifier)
             .onGloballyPositioned { coords = it }
             .border(
                 width = 1.dp,
                 brush = Brush.linearGradient(
                     colors = listOf(
-                        Color.White.copy(alpha = 0.85f),
-                        VoidGlassBorder,
-                        Color.White.copy(alpha = 0.05f),
-                        Color.Black.copy(alpha = 0.18f)
+                        Color.White.copy(alpha = 0.55f),
+                        VoidGlassBorder.copy(alpha = 0.5f),
+                        Color.White.copy(alpha = 0.08f),
+                        Color.Black.copy(alpha = 0.14f)
                     )
                 ),
                 shape = shape
             )
     ) {
-        // Legacy wallpaper portal — only when Haze isn't hosting this tree
-        if (!useHaze && blurred != null) {
+        if (hasBackdrop) {
             Box(
                 modifier = Modifier
                     .matchParentSize()
                     .graphicsLayer {
                         compositingStrategy = CompositingStrategy.Offscreen
-                        val b = blurStrength
-                        val f = frostAmount
-                        val shaderOn = useShader
-                        val blurPx = if (shaderOn) {
-                            (if (strong) 8f else 5f) * b
-                        } else {
-                            (if (strong) 20f else 12f) * b
-                        }
-                        val blurEffect = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && blurPx >= 1f) {
-                            AndroidRenderEffect.createBlurEffect(
-                                blurPx,
-                                blurPx,
-                                Shader.TileMode.CLAMP
-                            )
-                        } else {
-                            null
-                        }
-                        val shaderEffect =
-                            if (shaderOn && runtimeShader != null &&
-                                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                                size.width > 1f && size.height > 1f
-                            ) {
-                                LiquidRefractionShader.update(
-                                    shader = runtimeShader,
-                                    size = Size(size.width, size.height),
-                                    intensity = (if (strong) 0.16f else 0.11f) * b.coerceIn(0.5f, 1.6f),
-                                    chromatic = if (strong) 1.6f else 1.0f,
-                                    frost = (if (strong) 0.22f else 0.12f) * f,
-                                    time = 0f,
-                                    bezel = if (strong) 0.09f else 0.06f
+                        val blurPx = blurSigma
+                        val blurEffect =
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && blurPx >= 1f) {
+                                AndroidRenderEffect.createBlurEffect(
+                                    blurPx,
+                                    blurPx,
+                                    Shader.TileMode.CLAMP
                                 )
-                                AndroidRenderEffect.createRuntimeShaderEffect(runtimeShader, "content")
                             } else {
                                 null
                             }
+
+                        val shader = runtimeShader
+                        val shaderEffect =
+                            if (useOpticalShader && shader != null && size.width > 1f && size.height > 1f) {
+                                val eta = (if (strong) 0.055f else 0.04f) *
+                                    blurStrength.coerceIn(0.5f, 1.4f).coerceAtLeast(0.5f)
+                                LiquidRefractionShader.update(
+                                    shader = shader,
+                                    size = Size(size.width, size.height),
+                                    cornerRadiusPx = cornerRadiusPx,
+                                    eta = eta.coerceIn(0.03f, 0.07f),
+                                    frost = frostAmount * (if (strong) 1.05f else 0.9f),
+                                    fresnelMin = 0.05f,
+                                    fresnelMax = if (strong) 0.45f else 0.38f,
+                                    specularPower = 50f,
+                                    specularStrength = if (specularOn) {
+                                        if (strong) 0.62f else 0.48f
+                                    } else {
+                                        0f
+                                    },
+                                    chromatic = if (strong) 1.8f else 1.2f
+                                )
+                                AndroidRenderEffect.createRuntimeShaderEffect(shader, "content")
+                            } else {
+                                null
+                            }
+
+                        // Inner runs first: blur backdrop, then optical AGSL.
                         renderEffect = when {
                             shaderEffect != null && blurEffect != null ->
-                                AndroidRenderEffect.createChainEffect(blurEffect, shaderEffect)
+                                AndroidRenderEffect.createChainEffect(shaderEffect, blurEffect)
                                     .asComposeRenderEffect()
                             shaderEffect != null -> shaderEffect.asComposeRenderEffect()
                             blurEffect != null -> blurEffect.asComposeRenderEffect()
@@ -218,8 +188,8 @@ fun GlassPanel(
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val panel = coords
-                    val wp = blurred
-                    if (wp == null || panel == null || !panel.isAttached || size.minDimension <= 2f) {
+                    val wp = wallpaper ?: return@Canvas
+                    if (panel == null || !panel.isAttached || size.minDimension <= 2f) {
                         return@Canvas
                     }
                     val pos = panel.positionInWindow()
@@ -228,7 +198,8 @@ fun GlassPanel(
                     val extraWidthPx = (wp.fullWidthPx - wp.screenWidth).coerceAtLeast(0)
                     val pageOffsetPx = wallpaperXOffset.coerceIn(0f, 1f) * extraWidthPx
                     val realX = pageOffsetPx + pos.x
-                    val pad = 0.02f
+                    // Extra pad so refraction can sample outside panel bounds without clamping artifacts.
+                    val pad = 0.08f
                     val srcX = ((realX - size.width * pad) * scaleX).roundToInt()
                         .coerceIn(0, (wp.bitmapWidth - 1).coerceAtLeast(0))
                     val srcY = ((pos.y - size.height * pad) * scaleY).roundToInt()
@@ -237,97 +208,59 @@ fun GlassPanel(
                         .coerceAtMost((wp.bitmapWidth - srcX).coerceAtLeast(1))
                     val srcH = ((size.height * (1f + pad * 2f)) * scaleY).roundToInt().coerceAtLeast(1)
                         .coerceAtMost((wp.bitmapHeight - srcY).coerceAtLeast(1))
-                    val dst = IntSize(
-                        size.width.roundToInt().coerceAtLeast(1),
-                        size.height.roundToInt().coerceAtLeast(1)
-                    )
                     drawImage(
                         image = wp.image,
                         srcOffset = IntOffset(srcX, srcY),
                         srcSize = IntSize(srcW, srcH),
                         dstOffset = IntOffset.Zero,
-                        dstSize = dst,
+                        dstSize = IntSize(
+                            size.width.roundToInt().coerceAtLeast(1),
+                            size.height.roundToInt().coerceAtLeast(1)
+                        ),
                         alpha = 1f
                     )
                 }
             }
         }
 
+        // Minimal veil / tint only — optics live in the AGSL (or blur-only fallback).
         Box(
             modifier = Modifier
                 .matchParentSize()
                 .drawBehind {
-                    val frost = frostAmount
-                    // Light veil only — Haze (or wallpaper sample) supplies the backdrop
-                    val veil = if (useHaze) {
-                        if (strong) 0.06f else 0.04f
-                    } else if (blurred != null) {
-                        if (strong) 0.10f else 0.06f
-                    } else {
-                        if (strong) 0.18f else 0.12f
-                    }
-                    drawRect(Color.White.copy(alpha = veil * frost))
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = veil * 1.2f * frost),
-                                Color.White.copy(alpha = veil * 0.5f * frost),
-                                Color.Black.copy(alpha = 0.04f * frost)
-                            )
-                        )
-                    )
-                    if (tint.alpha > 0.01f && !useHaze) drawRect(tint)
-                    drawTopSpecular(strong)
-                    if (effectiveSheen) {
-                        val bandX = size.width * sheenShift
-                        drawRect(
+                    if (!hasBackdrop) {
+                        val veil = if (strong) 0.22f else 0.16f
+                        drawRect(Color.White.copy(alpha = veil * frostAmount.coerceIn(0.3f, 1.5f)))
+                        // Soft Fresnel-ish rim without AGSL
+                        val rim = if (strong) 0.28f else 0.18f
+                        drawRoundRect(
                             brush = Brush.linearGradient(
                                 colors = listOf(
+                                    Color.White.copy(alpha = rim),
                                     Color.Transparent,
-                                    Color.White.copy(alpha = 0.10f),
-                                    Color.Transparent
+                                    Color.White.copy(alpha = rim * 0.55f)
                                 ),
-                                start = Offset(bandX - size.width * 0.2f, 0f),
-                                end = Offset(bandX + size.width * 0.2f, size.height)
-                            )
+                                start = Offset.Zero,
+                                end = Offset(size.width, size.height)
+                            ),
+                            cornerRadius = CornerRadius(cornerRadius.toPx(), cornerRadius.toPx()),
+                            style = Stroke(width = 1.5.dp.toPx())
+                        )
+                    } else if (!useOpticalShader) {
+                        // Blur-only path (API < 33): light frost + rim
+                        drawRect(Color.White.copy(alpha = 0.06f * frostAmount))
+                        drawRoundRect(
+                            color = Color.White.copy(alpha = 0.22f),
+                            cornerRadius = CornerRadius(cornerRadius.toPx(), cornerRadius.toPx()),
+                            style = Stroke(width = 1.5.dp.toPx())
                         )
                     }
-                    drawRoundRect(
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.65f),
-                                Color.White.copy(alpha = 0.16f),
-                                Color.White.copy(alpha = 0.06f),
-                                Color.Black.copy(alpha = 0.20f)
-                            ),
-                            start = Offset.Zero,
-                            end = Offset(size.width, size.height)
-                        ),
-                        cornerRadius = CornerRadius(cornerRadius.toPx(), cornerRadius.toPx()),
-                        style = Stroke(width = 1.2.dp.toPx())
-                    )
+                    if (tint.alpha > 0.01f) drawRect(tint)
                 }
         )
 
         content()
     }
-}
-
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawTopSpecular(strong: Boolean) {
-    val peak = if (strong) 0.30f else 0.20f
-    drawOval(
-        brush = Brush.radialGradient(
-            colors = listOf(
-                Color.White.copy(alpha = peak),
-                Color.White.copy(alpha = peak * 0.35f),
-                Color.Transparent
-            ),
-            center = Offset(size.width * 0.5f, -size.height * 0.05f),
-            radius = size.width * 0.65f
-        ),
-        topLeft = Offset(-size.width * 0.15f, -size.height * 0.55f),
-        size = Size(size.width * 1.3f, size.height * 0.9f)
-    )
 }
 
 /** Force every icon into a rounded rectangle bitmap (no leftover circular masks). */

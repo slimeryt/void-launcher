@@ -386,7 +386,7 @@ private fun LiquidGlassPage(
         )
         ToggleRow(
             title = "Sheen",
-            subtitle = "Moving highlight band",
+            subtitle = "Wet specular highlight",
             checked = state.glassSheen,
             onCheckedChange = onGlassSheenChange,
             showDivider = false
