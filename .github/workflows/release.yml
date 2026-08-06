@@ -65,6 +65,11 @@ jobs:
           mkdir -p dist
           cp app/build/outputs/apk/release/app-release.apk dist/Polar.apk
           cp dist/Polar.apk dist/VoidLauncher.apk
+          sha256sum dist/Polar.apk | tee dist/Polar.apk.sha256
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)
+          echo "Using build-tools: $BT"
+          "$BT/apksigner" verify --verbose dist/Polar.apk
+          "$BT/zipalign" -c -v 4 dist/Polar.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -78,8 +83,12 @@ jobs:
 
             Install **Polar.apk**, or use **Settings → Updates** in the app.
 
-            If Android says the package is invalid / conflicts, uninstall the old Polar/Void once, then install this APK.
+            SHA-256 of Polar.apk is attached as `Polar.apk.sha256`.
+
+            If Android says the package conflicts with an existing app, uninstall the old Polar/Void once (same package id: `com.voidlauncher.app`), then install this APK.
           files: |
             dist/Polar.apk
             dist/VoidLauncher.apk
+            dist/Polar.apk.sha256
           generate_release_notes: true
+          fail_on_unmatched_files: true

@@ -58,6 +58,13 @@ android {
     }
 
     packaging {
+        // Legacy packaging (compressed .so + extractNativeLibs=true) is far more
+        // reliable for sideload/GitHub installs across OEM package installers.
+        // useLegacyPackaging=false caused "package appears to be invalid" for users
+        // installing Polar.apk outside adb / Play.
+        jniLibs {
+            useLegacyPackaging = true
+        }
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
