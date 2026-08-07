@@ -49,9 +49,10 @@ import kotlin.math.roundToInt
 /**
  * Liquid glass panel powered by Abdullajon1881/LiquidGlass (AGSL SDF lens).
  *
- * When [sampleWallpaper] is true, crops the wallpaper buffer into a local
- * provider and refracts it. When false (settings chrome), uses a dark plate so
- * Back / Search / Check stay frost glass without wallpaper portals.
+ * Backdrop selection:
+ * - [sampleWallpaper] true → wallpaper crop (home / Liquid Glass preview)
+ * - false + [LocalLiquidGlassProvider] → live UI behind chrome (settings)
+ * - false, no shared provider → structured frost plate (still shows rim/lens)
  */
 @Composable
 fun GlassPanel(
@@ -69,61 +70,65 @@ fun GlassPanel(
     val wallpaperXOffset = LocalWallpaperXOffset.current
 
     val blurStrength = glass.blurStrength.coerceIn(0f, 1.6f)
-    val frostAmount = glass.frostAmount
+    val frostAmount = glass.frostAmount.coerceIn(0f, 1.5f)
     val refractionOn = enableRefraction && glass.refractionEnabled
     val specularOn = enableSheen && glass.sheenEnabled
     val useWallpaper = sampleWallpaper && wallpaper != null
+    // Settings chrome stays on a local structured plate (no wallpaper portals).
+    // Live UI sampling needs chrome outside the provider subtree — follow-up.
 
     val shape = remember(cornerRadius) { SmoothCornerShape(radius = cornerRadius) }
     val provider = rememberLiquidGlassProviderState()
 
-    // Map Polar knobs → LiquidGlass style (blur ~σ25–40 at strength 1).
-    val blurRadius = when {
-        blurStrength <= 0.01f -> 0.dp
-        else -> (28.dp * blurStrength * (if (strong) 1.05f else 0.92f) * frostAmount.coerceIn(0.5f, 1.4f))
-            .coerceIn(8.dp, 42.dp)
-    }
+    // Independent knobs — wide ranges so Settings sliders are obvious.
+    val blurRadius = (32.dp * blurStrength * (if (strong) 1.1f else 1f)).coerceIn(0.dp, 48.dp)
+    // Frost → tint wash + slight extra blur (not a hard floor).
+    val frostBlurBoost = (12.dp * frostAmount).coerceIn(0.dp, 18.dp)
+    val effectiveBlur = blurRadius + frostBlurBoost
+
     val refraction = if (refractionOn) {
+        // Edge band + pixel offset — library defaults are 12/16; push harder so
+        // wallpaper detail and chromatic fringe actually read.
+        val amount = (if (strong) 28.dp else 22.dp) * (0.65f + 0.35f * blurStrength.coerceIn(0.4f, 1.4f))
         GlassRefraction(
-            height = if (strong) 14.dp else 11.dp,
-            amount = if (strong) 18.dp else 14.dp
+            height = if (strong) 18.dp else 14.dp,
+            amount = amount.coerceIn(14.dp, 36.dp)
         )
     } else {
         GlassRefraction.None
     }
     val highlight = if (specularOn) {
         GlassHighlight(
-            width = if (strong) 2.5.dp else 2.dp,
-            alpha = if (strong) 0.62f else 0.48f,
+            width = if (strong) 3.dp else 2.2.dp,
+            alpha = (if (strong) 0.72f else 0.55f) * frostAmount.coerceIn(0.5f, 1.2f).coerceAtMost(1f),
             lightAngleDegrees = 245f
         )
     } else {
         GlassHighlight.None
     }
-    val style = remember(
-        cornerRadius, blurRadius, refraction, highlight, tint, strong, frostAmount, refractionOn
-    ) {
-        GlassStyle(
-            shape = GlassShape.RoundedRectangle(cornerRadius),
-            blurRadius = blurRadius,
-            refraction = refraction,
-            saturation = if (useWallpaper) 1.45f else 1.1f,
-            tint = when {
-                tint.alpha > 0.01f -> tint
-                !useWallpaper -> Color.White.copy(alpha = 0.08f * frostAmount.coerceIn(0.4f, 1.2f))
-                else -> Color.Unspecified
-            },
-            highlight = highlight,
-            noiseAlpha = 0.012f,
-            chromaticAberration = if (refractionOn && useWallpaper) {
-                if (strong) 0.35f else 0.22f
-            } else {
-                0f
-            },
-            isInteractive = false,
-            fallbackScrim = Color(0xFF2C2C2E).copy(alpha = 0.72f)
-        )
+    val chromatic = when {
+        !refractionOn -> 0f
+        useWallpaper -> if (strong) 0.55f else 0.4f
+        else -> 0.28f // plate path: fringe still readable when toggling refraction
     }
+    val style = GlassStyle(
+        shape = GlassShape.RoundedRectangle(cornerRadius),
+        blurRadius = effectiveBlur,
+        refraction = refraction,
+        saturation = if (useWallpaper) 1.55f else 1.2f,
+        tint = when {
+            tint.alpha > 0.01f -> tint
+            frostAmount > 0.05f -> Color.White.copy(
+                alpha = (0.04f + 0.14f * frostAmount).coerceIn(0.04f, 0.28f)
+            )
+            else -> Color.Unspecified
+        },
+        highlight = highlight,
+        noiseAlpha = 0.018f,
+        chromaticAberration = chromatic,
+        isInteractive = false,
+        fallbackScrim = Color(0xFF2C2C2E).copy(alpha = 0.72f)
+    )
 
     var panelPos by remember { mutableStateOf<Offset?>(null) }
 
@@ -156,7 +161,6 @@ fun GlassPanel(
                 shape = shape
             )
     ) {
-        // Backdrop recorded for LiquidGlass (sibling below the glass layer).
         Canvas(
             modifier = Modifier
                 .matchParentSize()
@@ -171,7 +175,7 @@ fun GlassPanel(
                 val extraWidthPx = (wp.fullWidthPx - wp.screenWidth).coerceAtLeast(0)
                 val pageOffsetPx = wallpaperXOffset.coerceIn(0f, 1f) * extraWidthPx
                 val realX = pageOffsetPx + pos.x
-                val pad = 0.08f
+                val pad = 0.12f
                 val srcX = ((realX - size.width * pad) * scaleX).roundToInt()
                     .coerceIn(0, (wp.bitmapWidth - 1).coerceAtLeast(0))
                 val srcY = ((pos.y - size.height * pad) * scaleY).roundToInt()
@@ -192,20 +196,29 @@ fun GlassPanel(
                     alpha = 1f
                 )
             } else {
-                drawRect(Color(0xFF2C2C2E))
-                drawRect(Color.White.copy(alpha = 0.10f * frostAmount.coerceIn(0.3f, 1.5f)))
+                // Structured plate so edge refraction / chromatic still read
+                // without wallpaper portals.
+                drawRect(Color(0xFF1C1C1E))
+                drawRect(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.16f),
+                            Color.Transparent,
+                            Color.White.copy(alpha = 0.07f)
+                        ),
+                        start = Offset.Zero,
+                        end = Offset(size.width, size.height)
+                    )
+                )
+                drawRect(Color.White.copy(alpha = 0.06f * frostAmount.coerceIn(0.3f, 1.5f)))
             }
         }
 
-        // Glass fill — matchParentSize so it doesn't collapse the panel.
-        // Content must stay a *direct* child of the outer Box (below) or wrap-
-        // content callers (Back, Dock, Cancel/Done) measure to 0×0.
         Box(
             modifier = Modifier
                 .matchParentSize()
                 .liquidGlass(provider, style)
                 .drawBehind {
-                    // Soft rim for pre-API-33 blur/scrim tiers (shader already paints rim on 33+).
                     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
                         val rim = if (strong) 0.28f else 0.18f
                         drawRoundRect(
@@ -225,7 +238,6 @@ fun GlassPanel(
                 }
         )
 
-        // Sizes the panel; drawn above the glass layer.
         content()
     }
 }

@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import com.voidlauncher.app.glass.LocalHazeState
+import com.voidlauncher.app.glass.LocalLiquidGlassProvider
 import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.components.SmoothCornerShape
 import com.voidlauncher.app.ui.theme.IosBlue
@@ -36,6 +37,7 @@ import com.voidlauncher.app.ui.theme.VoidMuted
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import dev.liquidglass.compose.rememberLiquidGlassProviderState
 
 /** Dark charcoal gray used for settings cards (non-glass surfaces). */
 val SettingsCardBg = Color(0xFF2C2C2E)
@@ -44,8 +46,9 @@ val SettingsDivider = Color(0x14FFFFFF)
 val SettingsCardShape = SmoothCornerShape(28.dp)
 
 /**
- * Provides [LocalHazeState] and a full-screen backdrop source so Settings chrome
- * (Back / Search / update actions) blurs the real Settings UI behind it.
+ * Host for Settings locals. The LiquidGlass *provider* is applied by each
+ * screen around page content only — chrome (Back / Search) must stay a sibling
+ * above that provider, never inside it.
  */
 @Composable
 fun SettingsHazeHost(
@@ -53,28 +56,31 @@ fun SettingsHazeHost(
     content: @Composable () -> Unit
 ) {
     val hazeState = rememberHazeState()
-    CompositionLocalProvider(LocalHazeState provides hazeState) {
+    val liquidGlass = rememberLiquidGlassProviderState()
+    CompositionLocalProvider(
+        LocalHazeState provides hazeState,
+        LocalLiquidGlassProvider provides liquidGlass
+    ) {
         Box(
             modifier = modifier
                 .fillMaxSize()
                 .background(VoidInk)
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .hazeSource(state = hazeState, zIndex = 0f)
-                    .background(VoidInk)
-            )
             content()
         }
     }
 }
 
-/** Mark scrollable / card content so glass chrome can refract it. */
+/** Mark scrollable / card content so legacy Haze can still sample it if needed. */
 fun Modifier.settingsHazeSource(hazeState: HazeState?, zIndex: Float = 1f): Modifier =
     if (hazeState != null) hazeSource(state = hazeState, zIndex = zIndex) else this
 
-/** Shared iOS-style Back control used across Settings screens. */
+/**
+ * Shared iOS-style Back control. Glass must be drawn *above* the provider —
+ * callers overlay chrome on top of [SettingsHazeHost] content, or keep Back
+ * outside the recorded subtree. When [LocalLiquidGlassProvider] is set,
+ * [GlassPanel] refracts that live backdrop.
+ */
 @Composable
 fun SettingsBackButton(
     onBack: () -> Unit,

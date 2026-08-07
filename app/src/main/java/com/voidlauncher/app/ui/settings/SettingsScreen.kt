@@ -414,8 +414,8 @@ private fun LiquidGlassPage(
     }
 
     Text(
-        text = "Preview above updates live. Home dock / pills use the same settings " +
-            "(Abdullajon LiquidGlass AGSL lens).",
+        text = "Preview above updates live. Knobs drive blur, frost tint, edge refraction, " +
+            "chromatic fringe, and specular rim (Abdullajon LiquidGlass AGSL).",
         style = MaterialTheme.typography.bodyMedium,
         color = VoidMuted,
         modifier = Modifier.padding(horizontal = 8.dp)
