@@ -28,7 +28,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -144,7 +143,7 @@ fun GlassPanel(
                     (if (strong) 0.14f else 0.12f) *
                         (0.85f + 0.15f * blurStrength.coerceIn(0.4f, 1.4f))
                 } else {
-                    if (strong) 0.155f else 0.135f
+                    if (strong) 0.12f else 0.1f
                 }
                 LiquidRefractionShader.update(
                     shader = shader,
@@ -154,20 +153,21 @@ fun GlassPanel(
                     frost = frostAmount * (if (useWallpaperBackdrop) {
                         if (strong) 0.85f else 0.7f
                     } else {
-                        if (strong) 0.55f else 0.45f
+                        // Settings chrome: keep frost low so the plate stays transparent.
+                        if (strong) 0.22f else 0.16f
                     }),
-                    fresnelMin = if (useWallpaperBackdrop) 0.025f else 0.04f,
+                    fresnelMin = if (useWallpaperBackdrop) 0.025f else 0.02f,
                     fresnelMax = if (useWallpaperBackdrop) {
                         if (strong) 0.28f else 0.22f
                     } else {
-                        if (strong) 0.36f else 0.3f
+                        if (strong) 0.22f else 0.16f
                     },
-                    specularPower = if (useWallpaperBackdrop) 56f else 42f,
+                    specularPower = if (useWallpaperBackdrop) 56f else 48f,
                     specularStrength = if (specularOn) {
                         if (useWallpaperBackdrop) {
                             if (strong) 0.62f else 0.5f
                         } else {
-                            if (strong) 0.78f else 0.65f
+                            if (strong) 0.55f else 0.42f
                         }
                     } else {
                         0f
@@ -175,7 +175,7 @@ fun GlassPanel(
                     chromatic = if (useWallpaperBackdrop) {
                         if (strong) 1.55f else 1.2f
                     } else {
-                        if (strong) 2.1f else 1.7f
+                        if (strong) 1.5f else 1.2f
                     }
                 )
                 AndroidRenderEffect.createRuntimeShaderEffect(shader, "content")
@@ -207,64 +207,25 @@ fun GlassPanel(
     Box(
         modifier = modifier
             .shadow(
-                elevation = if (strong) 16.dp else 8.dp,
+                elevation = when {
+                    !useWallpaperBackdrop -> if (strong) 10.dp else 6.dp
+                    strong -> 16.dp
+                    else -> 8.dp
+                },
                 shape = shape,
-                ambientColor = Color.Black.copy(alpha = 0.28f),
-                spotColor = Color.Black.copy(alpha = 0.38f),
+                ambientColor = Color.Black.copy(
+                    alpha = if (useWallpaperBackdrop) 0.28f else 0.16f
+                ),
+                spotColor = Color.Black.copy(
+                    alpha = if (useWallpaperBackdrop) 0.38f else 0.2f
+                ),
                 clip = false
             )
             .clip(shape)
             .onGloballyPositioned { coords = it }
             .then(
                 if (useOpticalShader) {
-                    // Liquid Glass stroke: luminous outer rim + dark inner hairline.
-                    Modifier.drawWithContent {
-                        drawContent()
-                        val cr = CornerRadius(cornerRadius.toPx(), cornerRadius.toPx())
-                        val inset = 0.75.dp.toPx()
-                        // Soft specular glass edge (top-left catch light).
-                        drawRoundRect(
-                            brush = Brush.linearGradient(
-                                colors = listOf(
-                                    Color.White.copy(alpha = if (strong) 0.72f else 0.58f),
-                                    Color.White.copy(alpha = 0.22f),
-                                    Color.White.copy(alpha = 0.08f),
-                                    Color.Black.copy(alpha = 0.22f)
-                                ),
-                                start = Offset.Zero,
-                                end = Offset(size.width, size.height)
-                            ),
-                            cornerRadius = cr,
-                            style = Stroke(width = 1.35.dp.toPx())
-                        )
-                        // Inner hairline — Apple glass depth cue.
-                        drawRoundRect(
-                            color = Color.Black.copy(alpha = 0.28f),
-                            topLeft = Offset(inset, inset),
-                            size = Size(
-                                (size.width - inset * 2f).coerceAtLeast(0f),
-                                (size.height - inset * 2f).coerceAtLeast(0f)
-                            ),
-                            cornerRadius = CornerRadius(
-                                (cornerRadius.toPx() - inset).coerceAtLeast(1f),
-                                (cornerRadius.toPx() - inset).coerceAtLeast(1f)
-                            ),
-                            style = Stroke(width = 0.7.dp.toPx())
-                        )
-                        // Bright top lip.
-                        drawRoundRect(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.White.copy(alpha = 0.35f),
-                                    Color.Transparent
-                                ),
-                                startY = 0f,
-                                endY = size.height * 0.45f
-                            ),
-                            cornerRadius = cr,
-                            style = Stroke(width = 0.9.dp.toPx())
-                        )
-                    }
+                    Modifier.liquidGlassStroke(cornerRadius = cornerRadius, strong = strong)
                 } else {
                     Modifier.border(
                         width = 1.dp,
@@ -324,50 +285,40 @@ fun GlassPanel(
             } else {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     if (size.minDimension <= 2f) return@Canvas
-                    drawRect(Color(0xFF141416))
+                    // Transparent liquid plate for settings chrome (see VoidInk / haze through).
+                    drawRect(Color.White.copy(alpha = 0.10f))
                     drawRect(
                         brush = Brush.linearGradient(
                             colors = listOf(
-                                Color.White.copy(alpha = 0.34f),
-                                Color(0xFF6EB0E8).copy(alpha = 0.2f),
+                                Color.White.copy(alpha = 0.22f),
+                                Color(0xFF6EB0E8).copy(alpha = 0.10f),
                                 Color.Transparent,
-                                Color(0xFF8B5CF6).copy(alpha = 0.12f),
-                                Color.White.copy(alpha = 0.18f)
+                                Color.White.copy(alpha = 0.08f)
                             ),
                             start = Offset.Zero,
                             end = Offset(size.width * 1.1f, size.height * 1.2f)
                         )
                     )
-                    val bands = 14
+                    val bands = 10
                     for (i in 0 until bands) {
                         val y = size.height * (i + 0.5f) / bands
                         drawRect(
-                            color = Color.White.copy(alpha = if (i % 2 == 0) 0.045f else 0.02f),
+                            color = Color.White.copy(alpha = if (i % 2 == 0) 0.028f else 0.012f),
                             topLeft = Offset(0f, y),
-                            size = Size(size.width, 1.25f)
+                            size = Size(size.width, 1.1f)
                         )
                     }
                     drawRect(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                Color.White.copy(alpha = 0.22f),
+                                Color.White.copy(alpha = 0.14f),
                                 Color.Transparent
                             ),
                             center = Offset(size.width * 0.18f, size.height * 0.2f),
                             radius = size.minDimension * 0.95f
                         )
                     )
-                    drawRect(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFF4A90D9).copy(alpha = 0.14f),
-                                Color.Transparent
-                            ),
-                            center = Offset(size.width * 0.85f, size.height * 0.75f),
-                            radius = size.minDimension * 0.8f
-                        )
-                    )
-                    drawRect(Color.White.copy(alpha = 0.04f * frostAmount.coerceIn(0.3f, 1.5f)))
+                    drawRect(Color.White.copy(alpha = 0.03f * frostAmount.coerceIn(0.3f, 1.5f)))
                 }
             }
         }

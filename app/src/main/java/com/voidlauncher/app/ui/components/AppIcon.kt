@@ -109,6 +109,7 @@ fun AppIcon(
                 modifier = Modifier
                     .size(iconSize)
                     .clip(shape)
+                    .liquidGlassStrokeRatio(cornerRadiusRatio = radiusRatio, strong = true)
             )
             if (editMode) {
                 Box(

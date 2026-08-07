@@ -102,6 +102,7 @@ import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.components.HomeClock
 import com.voidlauncher.app.ui.components.SmoothCornerShape
 import com.voidlauncher.app.ui.components.WallpaperHazeSource
+import com.voidlauncher.app.ui.components.liquidGlassStrokeRatio
 import com.voidlauncher.app.ui.components.toCachedBitmap
 import com.voidlauncher.app.ui.icons.LocalIconAppearance
 import com.voidlauncher.app.ui.pickers.WallpaperPickerOverlay
@@ -903,6 +904,7 @@ private fun FolderIcon(
                     .size(size)
                     .clip(shape)
                     .background(Color(0x66FFFFFF))
+                    .liquidGlassStrokeRatio(cornerRadiusRatio = radiusRatio, strong = true)
                     .padding(pad)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(gap)) {
