@@ -1,10 +1,9 @@
 package com.voidlauncher.app.ui
 
-import androidx.activity.compose.BackHandler
 import android.graphics.RenderEffect as AndroidRenderEffect
 import android.graphics.Shader
 import android.os.Build
-import androidx.compose.foundation.Canvas
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -24,14 +23,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import com.google.accompanist.systemuicontroller.rememberSystemUiController
 import com.voidlauncher.app.data.AppInfo
-import com.voidlauncher.app.glass.LocalBlurredWallpaper
 import com.voidlauncher.app.glass.LocalHazeState
-import com.voidlauncher.app.glass.LocalWallpaperScrollState
-import com.voidlauncher.app.glass.WallpaperCrop
 import com.voidlauncher.app.ui.components.AppActionsSheet
 import com.voidlauncher.app.ui.drawer.AppDrawer
 import com.voidlauncher.app.ui.home.HomeScreen
@@ -41,7 +35,6 @@ import com.voidlauncher.app.ui.icons.IconTheme
 import com.voidlauncher.app.ui.icons.LocalIconAppearance
 import com.voidlauncher.app.viewmodel.LauncherUiState
 import dev.chrisbanes.haze.rememberHazeState
-import kotlin.math.roundToInt
 
 @Composable
 fun LauncherRoot(
@@ -106,38 +99,63 @@ fun LauncherRoot(
     }
 
     val hazeState = rememberHazeState()
+    // Fixed ~50% blur of the live home (icons + wallpaper), not a separate opaque layer.
+    val editorBlurSigma = 15f
 
     CompositionLocalProvider(
         LocalIconAppearance provides appearance,
         LocalHazeState provides hazeState
     ) {
         Box(modifier = modifier.fillMaxSize()) {
-            HomeScreen(
-                state = state,
-                onLaunchApp = onLaunchApp,
-                onAppLongClick = { actionApp = it },
-                onOpenDrawer = { onDrawerOpenChange(true) },
-                onOpenDrawerSearch = onOpenDrawerSearch,
-                onEditModeChange = onEditModeChange,
-                onRemoveHomeItem = onRemoveHomeItem,
-                onSwapHomeItems = onSwapHomeItems,
-                onCreateFolder = onCreateFolder,
-                onAddAppToFolder = onAddAppToFolder,
-                onAddPage = onAddPage,
-                onAddAppToHome = { app, _ -> onAddAppToHome(app) },
-                modifier = Modifier.fillMaxSize()
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (state.iconEditorOpen &&
+                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                        ) {
+                            Modifier.graphicsLayer {
+                                compositingStrategy = CompositingStrategy.Offscreen
+                                renderEffect = AndroidRenderEffect
+                                    .createBlurEffect(
+                                        editorBlurSigma,
+                                        editorBlurSigma,
+                                        Shader.TileMode.CLAMP
+                                    )
+                                    .asComposeRenderEffect()
+                            }
+                        } else {
+                            Modifier
+                        }
+                    )
+            ) {
+                HomeScreen(
+                    state = state,
+                    onLaunchApp = onLaunchApp,
+                    onAppLongClick = { actionApp = it },
+                    onOpenDrawer = { onDrawerOpenChange(true) },
+                    onOpenDrawerSearch = onOpenDrawerSearch,
+                    onEditModeChange = onEditModeChange,
+                    onRemoveHomeItem = onRemoveHomeItem,
+                    onSwapHomeItems = onSwapHomeItems,
+                    onCreateFolder = onCreateFolder,
+                    onAddAppToFolder = onAddAppToFolder,
+                    onAddPage = onAddPage,
+                    onAddAppToHome = { app, _ -> onAddAppToHome(app) },
+                    modifier = Modifier.fillMaxSize()
+                )
 
-            AppDrawer(
-                visible = state.isDrawerOpen,
-                state = state,
-                onLaunchApp = onLaunchApp,
-                onAppLongClick = { actionApp = it },
-                onAddAppToHome = onAddAppToHome,
-                onSearchQueryChange = onSearchQueryChange,
-                onClose = { onDrawerOpenChange(false) },
-                modifier = Modifier.fillMaxSize()
-            )
+                AppDrawer(
+                    visible = state.isDrawerOpen,
+                    state = state,
+                    onLaunchApp = onLaunchApp,
+                    onAppLongClick = { actionApp = it },
+                    onAddAppToHome = onAddAppToHome,
+                    onSearchQueryChange = onSearchQueryChange,
+                    onClose = { onDrawerOpenChange(false) },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
 
             AppActionsSheet(
                 app = actionApp,
@@ -149,55 +167,10 @@ fun LauncherRoot(
             )
 
             if (state.iconEditorOpen) {
-                // Fixed 50% blur backdrop (independent of glass settings slider).
-                val wp = LocalBlurredWallpaper.current
-                val scroll = LocalWallpaperScrollState.current
-                val editorBlurSigma = 15f // ~50% of the typical 0–30σ glass range
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .then(
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && wp != null) {
-                                Modifier.graphicsLayer {
-                                    compositingStrategy = CompositingStrategy.Offscreen
-                                    renderEffect = AndroidRenderEffect
-                                        .createBlurEffect(
-                                            editorBlurSigma,
-                                            editorBlurSigma,
-                                            Shader.TileMode.CLAMP
-                                        )
-                                        .asComposeRenderEffect()
-                                }
-                            } else {
-                                Modifier.background(Color.Black.copy(alpha = 0.45f))
-                            }
-                        )
-                ) {
-                    if (wp != null) {
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            val src = WallpaperCrop.screenSrc(
-                                wp = wp,
-                                wallpaperXOffset = scroll.offset,
-                                screenW = size.width,
-                                screenH = size.height
-                            )
-                            drawImage(
-                                image = wp.image,
-                                srcOffset = IntOffset(src.x, src.y),
-                                srcSize = IntSize(src.w, src.h),
-                                dstOffset = IntOffset.Zero,
-                                dstSize = IntSize(
-                                    size.width.roundToInt().coerceAtLeast(1),
-                                    size.height.roundToInt().coerceAtLeast(1)
-                                )
-                            )
-                        }
-                    }
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.18f))
+                        .background(Color.Black.copy(alpha = 0.22f))
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,

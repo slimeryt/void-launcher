@@ -285,40 +285,30 @@ fun GlassPanel(
             } else {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     if (size.minDimension <= 2f) return@Canvas
-                    // Transparent liquid plate for settings chrome (see VoidInk / haze through).
-                    drawRect(Color.White.copy(alpha = 0.10f))
+                    // Clear liquid plate — mostly see-through so settings chrome reads as glass.
+                    drawRect(Color.White.copy(alpha = 0.07f))
                     drawRect(
                         brush = Brush.linearGradient(
                             colors = listOf(
-                                Color.White.copy(alpha = 0.22f),
-                                Color(0xFF6EB0E8).copy(alpha = 0.10f),
+                                Color.White.copy(alpha = 0.28f),
+                                Color.White.copy(alpha = 0.04f),
                                 Color.Transparent,
-                                Color.White.copy(alpha = 0.08f)
+                                Color.White.copy(alpha = 0.10f)
                             ),
                             start = Offset.Zero,
-                            end = Offset(size.width * 1.1f, size.height * 1.2f)
+                            end = Offset(size.width * 1.05f, size.height * 1.15f)
                         )
                     )
-                    val bands = 10
-                    for (i in 0 until bands) {
-                        val y = size.height * (i + 0.5f) / bands
-                        drawRect(
-                            color = Color.White.copy(alpha = if (i % 2 == 0) 0.028f else 0.012f),
-                            topLeft = Offset(0f, y),
-                            size = Size(size.width, 1.1f)
-                        )
-                    }
                     drawRect(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                Color.White.copy(alpha = 0.14f),
+                                Color.White.copy(alpha = 0.18f),
                                 Color.Transparent
                             ),
-                            center = Offset(size.width * 0.18f, size.height * 0.2f),
-                            radius = size.minDimension * 0.95f
+                            center = Offset(size.width * 0.15f, size.height * 0.2f),
+                            radius = size.minDimension * 0.9f
                         )
                     )
-                    drawRect(Color.White.copy(alpha = 0.03f * frostAmount.coerceIn(0.3f, 1.5f)))
                 }
             }
         }
@@ -328,26 +318,24 @@ fun GlassPanel(
                 .matchParentSize()
                 .drawBehind {
                     if (!useOpticalShader) {
-                        if (!useWallpaperBackdrop) {
-                            val veil = if (strong) 0.22f else 0.16f
-                            drawRect(Color.White.copy(alpha = veil * frostAmount.coerceIn(0.3f, 1.5f)))
-                        } else {
+                        if (useWallpaperBackdrop) {
                             drawRect(Color.White.copy(alpha = 0.06f * frostAmount))
-                        }
-                        val rim = if (strong) 0.28f else 0.18f
-                        drawRoundRect(
-                            brush = Brush.linearGradient(
-                                colors = listOf(
-                                    Color.White.copy(alpha = rim),
-                                    Color.Transparent,
-                                    Color.White.copy(alpha = rim * 0.55f)
+                            val rim = if (strong) 0.28f else 0.18f
+                            drawRoundRect(
+                                brush = Brush.linearGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = rim),
+                                        Color.Transparent,
+                                        Color.White.copy(alpha = rim * 0.55f)
+                                    ),
+                                    start = Offset.Zero,
+                                    end = Offset(size.width, size.height)
                                 ),
-                                start = Offset.Zero,
-                                end = Offset(size.width, size.height)
-                            ),
-                            cornerRadius = CornerRadius(cornerRadius.toPx(), cornerRadius.toPx()),
-                            style = Stroke(width = 1.5.dp.toPx())
-                        )
+                                cornerRadius = CornerRadius(cornerRadius.toPx(), cornerRadius.toPx()),
+                                style = Stroke(width = 1.5.dp.toPx())
+                            )
+                        }
+                        // Chrome frost plate: no extra opaque veil — plate + stroke carry the look.
                     }
                     if (tint.alpha > 0.01f) drawRect(tint)
                 }

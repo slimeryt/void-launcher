@@ -53,7 +53,15 @@ fun SettingsHazeHost(
         Box(
             modifier = modifier
                 .fillMaxSize()
-                .background(VoidInk)
+                .background(
+                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF2A2A30),
+                            VoidInk,
+                            Color(0xFF050508)
+                        )
+                    )
+                )
         ) {
             content()
         }

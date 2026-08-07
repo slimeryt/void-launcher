@@ -73,9 +73,7 @@ class SettingsActivity : ComponentActivity() {
             ) {
                 VoidTheme {
                     SettingsHazeHost(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(VoidInk)
+                        modifier = Modifier.fillMaxSize()
                     ) {
                         SettingsContent(
                             state = state,
