@@ -73,17 +73,20 @@ object LiquidRefractionShader {
             float gLen = length(g);
             float2 gHat = gLen > 0.0001 ? g / gLen : float2(0.0, 0.0);
 
-            // Stronger edge bend — cap ~12% UV so the lens is obvious on wallpaper.
-            float etaClamped = clamp(eta, 0.0, 0.14);
-            float2 offsetUv = g * etaClamped;
-            float offsetLen = length(offsetUv);
-            if (offsetLen > 0.12) {
-                offsetUv *= 0.12 / offsetLen;
+            // Pixel-space lens bend along the rim normal (not tiny UV*grad).
+            // eta 0.04..0.14 maps to ~12..40px at the rim — clearly visible.
+            float bezel = max(r * 1.35, 28.0);
+            float lens = 0.0;
+            if (edgeDist < bezel) {
+                float x = 1.0 - edgeDist / bezel;
+                lens = 1.0 - sqrt(max(1.0 - x * x, 0.0));
             }
-            float2 refractCoord = fragCoord + offsetUv * resolution;
+            float etaClamped = clamp(eta, 0.0, 0.14);
+            float bendPx = etaClamped * 320.0 * lens;
+            float2 refractCoord = fragCoord - gHat * bendPx;
 
             float m = maskM(fragCoord);
-            float ca = chromatic * m;
+            float ca = chromatic * lens;
             half4 cR = content.eval(refractCoord + gHat * ca);
             half4 cG = content.eval(refractCoord);
             half4 cB = content.eval(refractCoord - gHat * ca);
