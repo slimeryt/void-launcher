@@ -15,8 +15,9 @@ import androidx.compose.ui.geometry.Size
 object LiquidRefractionShader {
 
     /**
-     * Checklist targets:
-     * - η (eta): 0.03–0.07, max ~5% UV at edges
+     * Optical targets (tuned for visible edge lensing on wallpaper):
+     * - η (eta): up to ~0.12 at strong settings
+     * - UV offset cap ~12% so magnification reads at the rim
      * - Fresnel alpha: 0.05 center → 0.45 perimeter
      * - Specular power n: ~50
      * - Light: top-left
@@ -47,43 +48,40 @@ object LiquidRefractionShader {
             float r = clamp(cornerRadius, 1.0, min(halfSize.x, halfSize.y));
             float sd = sdRoundRect(p, halfSize, r);
             float edgeDist = max(-sd, 0.0);
-            float bezel = max(r * 0.95, 12.0);
-            // High at perimeter, ~0 deep inside (∇M drives refraction at edges only).
+            // Wider bezel so ∇M (and thus refraction) covers more of the rim.
+            float bezel = max(r * 1.35, 28.0);
             return exp(-edgeDist / bezel);
         }
 
         float2 maskGrad(float2 fragCoord) {
-            float e = 1.5;
+            float e = 2.0;
             float dx = maskM(fragCoord + float2(e, 0.0)) - maskM(fragCoord - float2(e, 0.0));
             float dy = maskM(fragCoord + float2(0.0, e)) - maskM(fragCoord - float2(0.0, e));
             return float2(dx, dy) / (2.0 * e);
         }
 
         half4 main(float2 fragCoord) {
-            float2 uv = fragCoord / resolution;
             float2 halfSize = resolution * 0.5;
             float2 p = fragCoord - halfSize;
             float r = clamp(cornerRadius, 1.0, min(halfSize.x, halfSize.y));
             float sd = sdRoundRect(p, halfSize, r);
             float edgeDist = max(-sd, 0.0);
             float maxDist = min(halfSize.x, halfSize.y);
-            // 0 at center, 1 at perimeter (for Fresnel cosθ approximation).
             float perimeter = 1.0 - clamp(edgeDist / maxDist, 0.0, 1.0);
 
             float2 g = maskGrad(fragCoord);
             float gLen = length(g);
             float2 gHat = gLen > 0.0001 ? g / gLen : float2(0.0, 0.0);
 
-            // UV_refracted = UV + ∇M · η  (cap ~5% UV)
-            float etaClamped = clamp(eta, 0.0, 0.07);
+            // Stronger edge bend — cap ~12% UV so the lens is obvious on wallpaper.
+            float etaClamped = clamp(eta, 0.0, 0.14);
             float2 offsetUv = g * etaClamped;
             float offsetLen = length(offsetUv);
-            if (offsetLen > 0.05) {
-                offsetUv *= 0.05 / offsetLen;
+            if (offsetLen > 0.12) {
+                offsetUv *= 0.12 / offsetLen;
             }
             float2 refractCoord = fragCoord + offsetUv * resolution;
 
-            // Chromatic fringe along gradient (pixel-scale, weighted by edge mask).
             float m = maskM(fragCoord);
             float ca = chromatic * m;
             half4 cR = content.eval(refractCoord + gHat * ca);
@@ -92,15 +90,12 @@ object LiquidRefractionShader {
             half3 rgb = half3(cR.r, cG.g, cB.b);
             half a = cG.a;
 
-            // Soft frost veil toward cool white.
-            rgb = mix(rgb, half3(0.94, 0.97, 1.0), half(clamp(frost, 0.0, 1.5) * 0.14));
+            rgb = mix(rgb, half3(0.94, 0.97, 1.0), half(clamp(frost, 0.0, 1.5) * 0.12));
 
-            // Fresnel: I = Imin + (Imax-Imin) * (1-cosθ)^5 , cosθ ≈ 1-perimeter
             float fresnelTerm = pow(perimeter, 5.0);
             float fresnelA = mix(fresnelMin, fresnelMax, fresnelTerm);
             rgb = rgb + half3(fresnelA, fresnelA, fresnelA);
 
-            // Pillow normal from height field for Blinn-Phong specular.
             float2 hGrad = maskGrad(fragCoord) * 40.0;
             float3 N = normalize(float3(-hGrad.x, -hGrad.y, 1.0));
             float3 L = normalize(float3(lightDir.x, lightDir.y, 0.65));
@@ -110,7 +105,6 @@ object LiquidRefractionShader {
             float spec = pow(ndoth, max(specularPower, 1.0)) * specularStrength * (0.35 + 0.65 * m);
             rgb = rgb + half3(spec, spec, spec);
 
-            // Keep fragments outside the shape transparent-ish (clip handles most).
             float inside = smoothstep(1.5, -1.5, sd);
             return half4(rgb, a * half(inside));
         }

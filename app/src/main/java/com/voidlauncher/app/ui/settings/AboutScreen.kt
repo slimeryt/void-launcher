@@ -284,10 +284,6 @@ License: Apache License 2.0
 Haze (chrisbanes)
 License: Apache License 2.0
 
-LiquidGlass (Abdullajon1881) — AGSL liquid glass / SDF lens
-https://github.com/Abdullajon1881/LiquidGlass
-License: Apache License 2.0
-
 Full Apache License 2.0 text:
 https://www.apache.org/licenses/LICENSE-2.0
 """.trimIndent()
@@ -295,8 +291,8 @@ https://www.apache.org/licenses/LICENSE-2.0
 private val AcknowledgmentsText = """
 Thanks for using Polar.
 
-Built with Jetpack Compose. Liquid Glass optics use Abdullajon1881/LiquidGlass
-(Apache 2.0), inspired by Apple's Liquid Glass design language.
+Built with Jetpack Compose. Liquid Glass uses Polar's AGSL RuntimeShader
+(refraction, chromatic fringe, Fresnel, specular).
 
 Wallpaper blur and software updates are maintained as part of Polar.
 """.trimIndent()
