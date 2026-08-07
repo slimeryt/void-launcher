@@ -177,59 +177,62 @@ fun GlassPanel(
             }
         }
 
-        if (providerDpSize.width > 0.dp && providerDpSize.height > 0.dp) {
-            Box(
-                modifier = Modifier
-                    .requiredSize(providerDpSize)
-                    .align(Alignment.Center)
-                    .liquidGlassProvider(provider)
-            ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    if (size.minDimension <= 2f) return@Canvas
-                    if (useWallpaper) {
-                        val wp = wallpaper ?: return@Canvas
-                        val pos = panelPos ?: return@Canvas
-                        val padPx = with(density) { providerPad.toPx() }
-                        val scaleX = wp.bitmapWidth.toFloat() / wp.fullWidthPx.toFloat()
-                        val scaleY = wp.bitmapHeight.toFloat() / wp.fullHeightPx.toFloat()
-                        val extraWidthPx = (wp.fullWidthPx - wp.screenWidth).coerceAtLeast(0)
-                        val pageOffsetPx = wallpaperXOffset.coerceIn(0f, 1f) * extraWidthPx
-                        // Provider is centered on the panel; its top-left is panel - pad.
-                        val realX = pageOffsetPx + pos.x - padPx
-                        val realY = pos.y - padPx
-                        val srcX = (realX * scaleX).roundToInt()
-                            .coerceIn(0, (wp.bitmapWidth - 1).coerceAtLeast(0))
-                        val srcY = (realY * scaleY).roundToInt()
-                            .coerceIn(0, (wp.bitmapHeight - 1).coerceAtLeast(0))
-                        val srcW = (size.width * scaleX).roundToInt().coerceAtLeast(1)
-                            .coerceAtMost((wp.bitmapWidth - srcX).coerceAtLeast(1))
-                        val srcH = (size.height * scaleY).roundToInt().coerceAtLeast(1)
-                            .coerceAtMost((wp.bitmapHeight - srcY).coerceAtLeast(1))
-                        drawImage(
-                            image = wp.image,
-                            srcOffset = IntOffset(srcX, srcY),
-                            srcSize = IntSize(srcW, srcH),
-                            dstOffset = IntOffset.Zero,
-                            dstSize = IntSize(
-                                size.width.roundToInt().coerceAtLeast(1),
-                                size.height.roundToInt().coerceAtLeast(1)
-                            ),
-                            alpha = 1f
-                        )
-                    } else {
-                        drawRect(Color(0xFF1C1C1E))
-                        drawRect(
-                            brush = Brush.linearGradient(
-                                colors = listOf(
-                                    Color.White.copy(alpha = 0.22f),
-                                    Color.Transparent,
-                                    Color(0xFF4A90D9).copy(alpha = 0.18f),
-                                    Color.White.copy(alpha = 0.1f)
+        // Oversized backdrop must live under matchParentSize so requiredSize
+        // cannot inflate wrap-content chrome (dock / Back / Cancel / Done).
+        Box(modifier = Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
+            if (providerDpSize.width > 0.dp && providerDpSize.height > 0.dp) {
+                Box(
+                    modifier = Modifier
+                        .requiredSize(providerDpSize)
+                        .liquidGlassProvider(provider)
+                ) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        if (size.minDimension <= 2f) return@Canvas
+                        if (useWallpaper) {
+                            val wp = wallpaper ?: return@Canvas
+                            val pos = panelPos ?: return@Canvas
+                            val padPx = with(density) { providerPad.toPx() }
+                            val scaleX = wp.bitmapWidth.toFloat() / wp.fullWidthPx.toFloat()
+                            val scaleY = wp.bitmapHeight.toFloat() / wp.fullHeightPx.toFloat()
+                            val extraWidthPx = (wp.fullWidthPx - wp.screenWidth).coerceAtLeast(0)
+                            val pageOffsetPx = wallpaperXOffset.coerceIn(0f, 1f) * extraWidthPx
+                            // Provider is centered on the panel; its top-left is panel - pad.
+                            val realX = pageOffsetPx + pos.x - padPx
+                            val realY = pos.y - padPx
+                            val srcX = (realX * scaleX).roundToInt()
+                                .coerceIn(0, (wp.bitmapWidth - 1).coerceAtLeast(0))
+                            val srcY = (realY * scaleY).roundToInt()
+                                .coerceIn(0, (wp.bitmapHeight - 1).coerceAtLeast(0))
+                            val srcW = (size.width * scaleX).roundToInt().coerceAtLeast(1)
+                                .coerceAtMost((wp.bitmapWidth - srcX).coerceAtLeast(1))
+                            val srcH = (size.height * scaleY).roundToInt().coerceAtLeast(1)
+                                .coerceAtMost((wp.bitmapHeight - srcY).coerceAtLeast(1))
+                            drawImage(
+                                image = wp.image,
+                                srcOffset = IntOffset(srcX, srcY),
+                                srcSize = IntSize(srcW, srcH),
+                                dstOffset = IntOffset.Zero,
+                                dstSize = IntSize(
+                                    size.width.roundToInt().coerceAtLeast(1),
+                                    size.height.roundToInt().coerceAtLeast(1)
                                 ),
-                                start = Offset.Zero,
-                                end = Offset(size.width, size.height)
+                                alpha = 1f
                             )
-                        )
+                        } else {
+                            drawRect(Color(0xFF1C1C1E))
+                            drawRect(
+                                brush = Brush.linearGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.22f),
+                                        Color.Transparent,
+                                        Color(0xFF4A90D9).copy(alpha = 0.18f),
+                                        Color.White.copy(alpha = 0.1f)
+                                    ),
+                                    start = Offset.Zero,
+                                    end = Offset(size.width, size.height)
+                                )
+                            )
+                        }
                     }
                 }
             }
@@ -259,6 +262,7 @@ fun GlassPanel(
                 }
         )
 
+        // Sizes wrap-content panels; must stay a direct child (not under matchParentSize).
         content()
     }
 }
