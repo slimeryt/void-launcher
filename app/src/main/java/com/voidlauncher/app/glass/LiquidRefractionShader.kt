@@ -6,12 +6,15 @@ import androidx.annotation.RequiresApi
 import androidx.compose.ui.geometry.Size
 
 /**
- * AGSL liquid glass tuned toward Apple Liquid Glass optics:
- * - Spherical-cap **zoom** across the whole surface (thick-glass magnification)
- * - Circular **rim bezel** refraction along the SDF normal
- * - Soft chromatic fringe, Fresnel rim, Blinn-Phong specular
+ * AGSL liquid glass closer to Apple Liquid Glass optics (iOS 26):
  *
- * Backdrop should be only lightly blurred; heavy blur kills the lens read.
+ * Per Ken Sorrell / Apple lens model — **flat center, steep rim**:
+ * - Circular-arc **surface slope** (∞ at rim → 0 deep inside), not whole-surface zoom
+ * - Snell-style bend: `(1 - 1/IOR) * slope * bevel`
+ * - Per-channel IOR dispersion (soft chromatic fringe)
+ * - Soft Fresnel rim + Blinn-Phong specular
+ *
+ * Backdrop should stay lightly blurred; heavy blur kills the lens read.
  */
 object LiquidRefractionShader {
 
@@ -45,11 +48,22 @@ object LiquidRefractionShader {
             return len > 0.0001 ? g / len : float2(0.0);
         }
 
-        // Convex glass edge: 0 flat inside the band → 1 at the rim (infinite slope).
-        float lensProfile(float edgeDist, float height) {
-            if (height <= 0.0001 || edgeDist >= height) return 0.0;
-            float x = 1.0 - edgeDist / height;
-            return 1.0 - sqrt(max(1.0 - x * x, 0.0));
+        // t = 0 at rim, 1 past the bevel (center). Slope ∞ at rim → 0 inside.
+        float surfaceSlope(float t) {
+            float cl = clamp(t, 0.001, 0.999);
+            float x = 1.0 - cl;
+            return x / max(sqrt(max(1.0 - x * x, 0.0)), 0.001);
+        }
+
+        half4 sampleRgb(float2 coord, float2 n, float bend, float ca) {
+            // Per-channel IOR split (dispersion), not a crude RGB pixel offset.
+            float2 cR = coord - n * (bend * (1.0 - ca));
+            float2 cG = coord - n * bend;
+            float2 cB = coord - n * (bend * (1.0 + ca));
+            half4 sR = content.eval(cR);
+            half4 sG = content.eval(cG);
+            half4 sB = content.eval(cB);
+            return half4(sR.r, sG.g, sB.b, sG.a);
         }
 
         half4 main(float2 fragCoord) {
@@ -63,49 +77,49 @@ object LiquidRefractionShader {
 
             float2 n = sdfNormal(p, halfSize, r);
 
-            // --- Apple-style whole-surface zoom (spherical cap) ---
-            // Sample is pulled toward center → backdrop appears magnified.
-            // Elliptical r̂ so pills/rounded rects lens correctly.
-            float2 invHalf = 1.0 / max(halfSize, float2(1.0));
-            float2 rn = p * invHalf;
+            // Bezel band: wide enough to read as thick glass (~corner or 28% of half-min).
+            float bezel = max(max(r * 1.05, 22.0), maxDist * 0.28);
+            float t = clamp(edgeDist / bezel, 0.0, 1.0);
+            float slope = surfaceSlope(t);
+            // Soft falloff past the bevel so the interior stays flat (Apple: center ≈ passthrough).
+            float rimMask = 1.0 - smoothstep(0.55, 1.0, t);
+
+            // Map Polar eta (≈0.05–0.15) → glass IOR ≈ 1.35–1.72.
+            float ior = 1.0 + clamp(eta, 0.0, 0.2) * 4.8;
+            float snell = 1.0 - 1.0 / ior;
+            // Cap so the rim doesn't fishbowl; keep a strong but readable warp.
+            float bend = min(slope * snell * bezel * 0.42, bezel * 0.9) * rimMask;
+
+            // Tiny residual center pull — real thick glass magnifies slightly, Apple is subtle.
+            float2 rn = p / max(halfSize, float2(1.0));
             float rHat = min(length(rn), 1.0);
-            float zoomCap = 1.0 - sqrt(max(1.0 - rHat * rHat, 0.0));
-            float etaClamped = clamp(eta, 0.0, 0.16);
-            // ~0.12 default feel at eta=0.1 (glasskit-like thick glass).
-            float zoom = etaClamped * 1.35;
-            float2 zoomPull = p * (zoom * zoomCap);
+            float centerZoom = clamp(eta, 0.0, 0.16) * 0.22 * (1.0 - sqrt(max(1.0 - rHat * rHat, 0.0)));
+            float2 zoomPull = p * centerZoom;
 
-            // --- Rim bezel refraction (circular profile along SDF normal) ---
-            float bezel = max(r * 0.95, 18.0);
-            float rimLens = lensProfile(edgeDist, bezel);
-            float bendPx = etaClamped * 220.0 * rimLens;
-            float2 rimPull = n * bendPx;
+            float ca = clamp(chromatic, 0.0, 4.0) * 0.018 * rimMask;
+            half4 sampled = sampleRgb(fragCoord - zoomPull, n, bend, ca);
+            half3 rgb = sampled.rgb;
+            half a = sampled.a;
 
-            float2 sampleCoord = fragCoord - zoomPull - rimPull;
+            // Light frost — keep detail so the lens warp stays readable.
+            rgb = mix(rgb, half3(0.96, 0.98, 1.0), half(clamp(frost, 0.0, 1.5) * 0.06));
 
-            // Soft RGB split only in the curved rim (iOS is subtle, not prismatic).
-            float ca = chromatic * rimLens;
-            half4 cR = content.eval(sampleCoord - n * ca);
-            half4 cG = content.eval(sampleCoord);
-            half4 cB = content.eval(sampleCoord + n * ca);
-            half3 rgb = half3(cR.r, cG.g, cB.b);
-            half a = cG.a;
-
-            // Light frost — keep detail so magnification stays readable.
-            rgb = mix(rgb, half3(0.96, 0.98, 1.0), half(clamp(frost, 0.0, 1.5) * 0.08));
-
-            // Soft Fresnel rim (not a white wash).
-            float fresnelTerm = pow(perimeter, 4.0) * rimLens;
+            // Soft Fresnel rim (glow at grazing edge, not a white wash).
+            float fresnelTerm = pow(perimeter, 3.2) * rimMask;
             float fresnelA = mix(fresnelMin, fresnelMax, fresnelTerm);
             rgb = rgb + half3(fresnelA, fresnelA, fresnelA);
 
-            // Wet specular lobe from pillow normal.
-            float3 N = normalize(float3(-n.x * (0.35 + 0.85 * rimLens), -n.y * (0.35 + 0.85 * rimLens), 1.0));
-            float3 L = normalize(float3(lightDir.x, lightDir.y, 0.7));
+            // Wet specular lobe concentrated on the curved rim.
+            float3 N = normalize(float3(
+                -n.x * (0.25 + 1.1 * rimMask * min(slope * 0.08, 1.0)),
+                -n.y * (0.25 + 1.1 * rimMask * min(slope * 0.08, 1.0)),
+                1.0
+            ));
+            float3 L = normalize(float3(lightDir.x, lightDir.y, 0.72));
             float3 V = float3(0.0, 0.0, 1.0);
             float3 H = normalize(L + V);
             float spec = pow(max(dot(N, H), 0.0), max(specularPower, 1.0))
-                * specularStrength * (0.25 + 0.75 * rimLens);
+                * specularStrength * (0.2 + 0.8 * rimMask);
             rgb = rgb + half3(spec, spec, spec);
 
             float inside = smoothstep(1.5, -1.5, sd);
@@ -123,11 +137,11 @@ object LiquidRefractionShader {
         cornerRadiusPx: Float,
         eta: Float,
         frost: Float,
-        fresnelMin: Float = 0.04f,
-        fresnelMax: Float = 0.32f,
-        specularPower: Float = 48f,
-        specularStrength: Float = 0.5f,
-        chromatic: Float = 1.2f,
+        fresnelMin: Float = 0.03f,
+        fresnelMax: Float = 0.26f,
+        specularPower: Float = 56f,
+        specularStrength: Float = 0.55f,
+        chromatic: Float = 1.0f,
         lightDirX: Float = -0.55f,
         lightDirY: Float = -0.75f
     ) {

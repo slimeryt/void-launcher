@@ -147,31 +147,32 @@ fun GlassPanel(
                     val shader = runtimeShader
                     val shaderEffect =
                         if (useOpticalShader && shader != null && size.width > 1f && size.height > 1f) {
+                            // eta → IOR in shader; Apple glass reads ~1.5 (eta≈0.1).
                             val eta = if (useWallpaperBackdrop) {
-                                (if (strong) 0.12f else 0.1f) *
-                                    (0.75f + 0.25f * blurStrength.coerceIn(0.4f, 1.4f))
+                                (if (strong) 0.13f else 0.11f) *
+                                    (0.8f + 0.2f * blurStrength.coerceIn(0.4f, 1.4f))
                             } else {
-                                0.06f
+                                0.07f
                             }
                             LiquidRefractionShader.update(
                                 shader = shader,
                                 size = Size(size.width, size.height),
                                 cornerRadiusPx = cornerRadiusPx,
-                                eta = eta.coerceIn(0.05f, 0.15f),
-                                frost = frostAmount * (if (strong) 0.9f else 0.75f),
-                                fresnelMin = 0.04f,
-                                fresnelMax = if (strong) 0.34f else 0.28f,
-                                specularPower = 48f,
+                                eta = eta.coerceIn(0.06f, 0.16f),
+                                frost = frostAmount * (if (strong) 0.85f else 0.7f),
+                                fresnelMin = 0.025f,
+                                fresnelMax = if (strong) 0.28f else 0.22f,
+                                specularPower = 56f,
                                 specularStrength = if (specularOn) {
-                                    if (strong) 0.58f else 0.45f
+                                    if (strong) 0.62f else 0.5f
                                 } else {
                                     0f
                                 },
-                                // iOS fringe is subtle — was over-prismatic before.
+                                // Dispersion multiplier — iOS fringe is soft, not prismatic.
                                 chromatic = if (useWallpaperBackdrop) {
-                                    if (strong) 1.6f else 1.2f
+                                    if (strong) 1.35f else 1.05f
                                 } else {
-                                    0.7f
+                                    0.6f
                                 }
                             )
                             AndroidRenderEffect.createRuntimeShaderEffect(shader, "content")
@@ -201,7 +202,10 @@ fun GlassPanel(
                     val extraWidthPx = (wp.fullWidthPx - wp.screenWidth).coerceAtLeast(0)
                     val pageOffsetPx = wallpaperXOffset.coerceIn(0f, 1f) * extraWidthPx
                     val realX = pageOffsetPx + pos.x
-                    val pad = 0.22f
+                    // Slightly oversized source crop so rim bend can pull “outside”
+                    // neighbors without a layout-breaking oversized layer. Center stays
+                    // screen-aligned; edges are mildly compressed.
+                    val pad = 0.26f
                     val srcX = ((realX - size.width * pad) * scaleX).roundToInt()
                         .coerceIn(0, (wp.bitmapWidth - 1).coerceAtLeast(0))
                     val srcY = ((pos.y - size.height * pad) * scaleY).roundToInt()
