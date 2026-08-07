@@ -139,25 +139,21 @@ class WallpaperBlurController(
         if (screenW <= 0 || screenH <= 0) return null
 
         val drawable = loadWallpaperDrawable() ?: return null
-        // Keep the FULL wallpaper width — system wallpapers are commonly 2-5x screen
-        // width for home-page parallax scrolling. Center-cropping this away meant we
-        // always sampled the dead-center page slice no matter which page was really
-        // on screen, so glass panels would show unrelated wallpaper content (wrong
-        // colors/edges) whenever the visible page wasn't exactly the middle one.
-        val source = drawableToWideBitmap(drawable, screenW, screenH) ?: return null
+        val wm = WallpaperManager.getInstance(context)
+        // System wallpaper engines pan across desiredMinimumWidth (often ~2× screen).
+        // Fitting height-only left many wallpapers at exactly one screen wide, so glass
+        // crops never moved while the real wallpaper behind the dock did.
+        val desiredW = wm.desiredMinimumWidth.coerceAtLeast(screenW)
+        val desiredH = wm.desiredMinimumHeight.coerceAtLeast(screenH)
+        val source = drawableToParallaxBitmap(drawable, screenW, screenH, desiredW, desiredH)
+            ?: return null
         val fullWidthPx = source.width
         val fullHeightPx = source.height
 
         // Downscale only for perf/memory -- this buffer must stay a clean, accurate
         // copy of the real wallpaper. All visual blur/frost is applied live by
-        // GlassPanel from the user's actual slider values; baking a fixed blur or
-        // tint in here made "0%" never really mean "clear," regardless of settings.
-        // The old 900px cap silently forced a ~3x downscale (instead of the intended
-        // ~1.5x) on any screen taller than 1350px -- that coarse buffer then gets
-        // stretched back up to full screen size, and *again* when a small panel crops
-        // into it, so wallpaper features looked artificially enlarged/blocky ("zoomed
-        // in"), independent of any shader math.
-        val targetH = (screenH / 1.5f).roundToInt().coerceIn(400, 2000)
+        // GlassPanel from the user's actual slider values.
+        val targetH = (fullHeightPx / 1.5f).roundToInt().coerceIn(400, 2400)
         val targetW = (fullWidthPx * (targetH.toFloat() / fullHeightPx)).roundToInt().coerceAtLeast(400)
         val scaled = Bitmap.createScaledBitmap(source, targetW, targetH, true)
         if (scaled !== source) source.recycle()
@@ -183,10 +179,18 @@ class WallpaperBlurController(
         }.getOrNull()
     }
 
-    /** Scales to match screen height exactly (standard for wallpapers) but never crops
-     *  width, so any parallax-scroll width beyond one screen is preserved for correct
-     *  per-page offset sampling later. */
-    private fun drawableToWideBitmap(drawable: Drawable, screenW: Int, screenH: Int): Bitmap? {
+    /**
+     * Scale wallpaper to **cover** [desiredW]×[desiredH] (same model as the system
+     * wallpaper engine). That guarantees horizontal parallax room even when
+     * [WallpaperManager.getDrawable] returns a single-screen bitmap.
+     */
+    private fun drawableToParallaxBitmap(
+        drawable: Drawable,
+        screenW: Int,
+        screenH: Int,
+        desiredW: Int,
+        desiredH: Int
+    ): Bitmap? {
         val src = if (drawable is BitmapDrawable && drawable.bitmap != null && !drawable.bitmap.isRecycled) {
             drawable.bitmap
         } else {
@@ -199,9 +203,11 @@ class WallpaperBlurController(
             bmp
         }
 
-        val scale = screenH.toFloat() / src.height
-        val scaledW = (src.width * scale).roundToInt().coerceAtLeast(1)
-        val scaledH = screenH
+        val coverW = desiredW.coerceAtLeast(screenW).toFloat()
+        val coverH = desiredH.coerceAtLeast(screenH).toFloat()
+        val scale = max(coverW / src.width.toFloat(), coverH / src.height.toFloat())
+        val scaledW = (src.width * scale).roundToInt().coerceAtLeast(screenW)
+        val scaledH = (src.height * scale).roundToInt().coerceAtLeast(screenH)
         if (scaledW == src.width && scaledH == src.height) return src
         val scaled = Bitmap.createScaledBitmap(src, scaledW, scaledH, true)
         if (scaled !== src) src.recycle()

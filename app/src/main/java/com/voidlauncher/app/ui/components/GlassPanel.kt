@@ -47,6 +47,7 @@ import com.voidlauncher.app.glass.LiquidRefractionShader
 import com.voidlauncher.app.glass.LocalBlurredWallpaper
 import com.voidlauncher.app.glass.LocalGlassSettings
 import com.voidlauncher.app.glass.LocalWallpaperXOffset
+import com.voidlauncher.app.glass.WallpaperCrop
 import com.voidlauncher.app.ui.theme.VoidGlassBorder
 import kotlin.math.roundToInt
 
@@ -132,6 +133,9 @@ fun GlassPanel(
                 .matchParentSize()
                 .graphicsLayer {
                     compositingStrategy = CompositingStrategy.Offscreen
+                    // Offscreen + RenderEffect can keep a stale recorded layer unless a
+                    // graphicsLayer property changes — bump a no-op so page parallax redraws.
+                    translationX = wallpaperXOffset * 0.0001f
                     val blurPx = effectiveBlurSigma
                     val blurEffect =
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && blurPx >= 1f) {
@@ -197,27 +201,19 @@ fun GlassPanel(
                     val wp = wallpaper ?: return@Canvas
                     if (panel == null || !panel.isAttached) return@Canvas
                     val pos = panel.positionInWindow()
-                    val scaleX = wp.bitmapWidth.toFloat() / wp.fullWidthPx.toFloat()
-                    val scaleY = wp.bitmapHeight.toFloat() / wp.fullHeightPx.toFloat()
-                    val extraWidthPx = (wp.fullWidthPx - wp.screenWidth).coerceAtLeast(0)
-                    val pageOffsetPx = wallpaperXOffset.coerceIn(0f, 1f) * extraWidthPx
-                    val realX = pageOffsetPx + pos.x
-                    // Slightly oversized source crop so rim bend can pull “outside”
-                    // neighbors without a layout-breaking oversized layer. Center stays
-                    // screen-aligned; edges are mildly compressed.
-                    val pad = 0.26f
-                    val srcX = ((realX - size.width * pad) * scaleX).roundToInt()
-                        .coerceIn(0, (wp.bitmapWidth - 1).coerceAtLeast(0))
-                    val srcY = ((pos.y - size.height * pad) * scaleY).roundToInt()
-                        .coerceIn(0, (wp.bitmapHeight - 1).coerceAtLeast(0))
-                    val srcW = ((size.width * (1f + pad * 2f)) * scaleX).roundToInt().coerceAtLeast(1)
-                        .coerceAtMost((wp.bitmapWidth - srcX).coerceAtLeast(1))
-                    val srcH = ((size.height * (1f + pad * 2f)) * scaleY).roundToInt().coerceAtLeast(1)
-                        .coerceAtMost((wp.bitmapHeight - srcY).coerceAtLeast(1))
+                    val src = WallpaperCrop.panelSrc(
+                        wp = wp,
+                        wallpaperXOffset = wallpaperXOffset,
+                        panelX = pos.x,
+                        panelY = pos.y,
+                        panelW = size.width,
+                        panelH = size.height,
+                        pad = 0.26f
+                    )
                     drawImage(
                         image = wp.image,
-                        srcOffset = IntOffset(srcX, srcY),
-                        srcSize = IntSize(srcW, srcH),
+                        srcOffset = IntOffset(src.x, src.y),
+                        srcSize = IntSize(src.w, src.h),
                         dstOffset = IntOffset.Zero,
                         dstSize = IntSize(
                             size.width.roundToInt().coerceAtLeast(1),
