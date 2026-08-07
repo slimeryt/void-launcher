@@ -94,14 +94,14 @@ fun GlassPanel(
     val useWallpaperBackdrop = sampleWallpaper && wallpaper != null
     val useOpticalShader = refractionOn && runtimeShader != null
 
-    // Keep blur light when refracting — heavy Gaussian hides the UV warp.
+    // iOS-like: light frost blur so magnification/rim lens stay sharp.
     val blurSigma = when {
         blurStrength <= 0.01f -> 0f
-        refractionOn -> (14f * blurStrength).coerceIn(0f, 22f) * (if (strong) 1.05f else 1f)
-        else -> (28f * blurStrength).coerceIn(0f, 36f) * (if (strong) 1.05f else 0.92f)
+        refractionOn -> (10f * blurStrength).coerceIn(0f, 16f) * (if (strong) 1.05f else 1f)
+        else -> (22f * blurStrength).coerceIn(0f, 30f) * (if (strong) 1.05f else 0.92f)
     }
     val effectiveBlurSigma =
-        if (useWallpaperBackdrop) blurSigma else (blurSigma * 0.3f).coerceAtMost(8f)
+        if (useWallpaperBackdrop) blurSigma else (blurSigma * 0.35f).coerceAtMost(7f)
 
     Box(
         modifier = modifier
@@ -148,29 +148,30 @@ fun GlassPanel(
                     val shaderEffect =
                         if (useOpticalShader && shader != null && size.width > 1f && size.height > 1f) {
                             val eta = if (useWallpaperBackdrop) {
-                                (if (strong) 0.11f else 0.09f) *
-                                    (0.7f + 0.3f * blurStrength.coerceIn(0.4f, 1.4f))
+                                (if (strong) 0.12f else 0.1f) *
+                                    (0.75f + 0.25f * blurStrength.coerceIn(0.4f, 1.4f))
                             } else {
-                                0.05f
+                                0.06f
                             }
                             LiquidRefractionShader.update(
                                 shader = shader,
                                 size = Size(size.width, size.height),
                                 cornerRadiusPx = cornerRadiusPx,
-                                eta = eta.coerceIn(0.04f, 0.14f),
-                                frost = frostAmount * (if (strong) 1.0f else 0.85f),
-                                fresnelMin = 0.05f,
-                                fresnelMax = if (strong) 0.48f else 0.4f,
-                                specularPower = 50f,
+                                eta = eta.coerceIn(0.05f, 0.15f),
+                                frost = frostAmount * (if (strong) 0.9f else 0.75f),
+                                fresnelMin = 0.04f,
+                                fresnelMax = if (strong) 0.34f else 0.28f,
+                                specularPower = 48f,
                                 specularStrength = if (specularOn) {
-                                    if (strong) 0.7f else 0.55f
+                                    if (strong) 0.58f else 0.45f
                                 } else {
                                     0f
                                 },
+                                // iOS fringe is subtle — was over-prismatic before.
                                 chromatic = if (useWallpaperBackdrop) {
-                                    if (strong) 3.2f else 2.4f
+                                    if (strong) 1.6f else 1.2f
                                 } else {
-                                    1.0f
+                                    0.7f
                                 }
                             )
                             AndroidRenderEffect.createRuntimeShaderEffect(shader, "content")
@@ -200,7 +201,7 @@ fun GlassPanel(
                     val extraWidthPx = (wp.fullWidthPx - wp.screenWidth).coerceAtLeast(0)
                     val pageOffsetPx = wallpaperXOffset.coerceIn(0f, 1f) * extraWidthPx
                     val realX = pageOffsetPx + pos.x
-                    val pad = 0.18f
+                    val pad = 0.22f
                     val srcX = ((realX - size.width * pad) * scaleX).roundToInt()
                         .coerceIn(0, (wp.bitmapWidth - 1).coerceAtLeast(0))
                     val srcY = ((pos.y - size.height * pad) * scaleY).roundToInt()
