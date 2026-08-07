@@ -153,7 +153,8 @@ fun HomeScreen(
             }
         }
     }
-    LaunchedEffect(wallpaperXOffset) {
+    // Keep system wallpaper in lockstep with the pager (LaunchedEffect was 1+ frames late).
+    androidx.compose.runtime.SideEffect {
         runCatching {
             android.app.WallpaperManager.getInstance(context)
                 .setWallpaperOffsets(view.windowToken, wallpaperXOffset, 0.5f)

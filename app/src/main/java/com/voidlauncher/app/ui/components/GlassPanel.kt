@@ -32,11 +32,13 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -81,6 +83,7 @@ fun GlassPanel(
     val specularOn = enableSheen && glass.sheenEnabled
 
     var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var layerSize by remember { mutableStateOf(IntSize.Zero) }
     val shape = remember(cornerRadius) { SmoothCornerShape(radius = cornerRadius) }
 
     val runtimeShader = remember {
@@ -103,6 +106,74 @@ fun GlassPanel(
     }
     val effectiveBlurSigma =
         if (useWallpaperBackdrop) blurSigma else (blurSigma * 0.35f).coerceAtMost(7f)
+
+    // Build RenderEffect once per size/settings — NOT per wallpaperXOffset frame.
+    // Recreating blur+AGSL every pager tick was the dock parallax lag.
+    val panelRenderEffect: RenderEffect? = remember(
+        layerSize,
+        effectiveBlurSigma,
+        useOpticalShader,
+        useWallpaperBackdrop,
+        strong,
+        blurStrength,
+        frostAmount,
+        specularOn,
+        cornerRadiusPx,
+        runtimeShader
+    ) {
+        if (layerSize.width <= 1 || layerSize.height <= 1) return@remember null
+        val blurEffect =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && effectiveBlurSigma >= 1f) {
+                AndroidRenderEffect.createBlurEffect(
+                    effectiveBlurSigma,
+                    effectiveBlurSigma,
+                    Shader.TileMode.CLAMP
+                )
+            } else {
+                null
+            }
+        val shader = runtimeShader
+        val shaderEffect =
+            if (useOpticalShader && shader != null) {
+                val eta = if (useWallpaperBackdrop) {
+                    (if (strong) 0.14f else 0.12f) *
+                        (0.85f + 0.15f * blurStrength.coerceIn(0.4f, 1.4f))
+                } else {
+                    if (strong) 0.13f else 0.11f
+                }
+                LiquidRefractionShader.update(
+                    shader = shader,
+                    size = Size(layerSize.width.toFloat(), layerSize.height.toFloat()),
+                    cornerRadiusPx = cornerRadiusPx,
+                    eta = eta.coerceIn(0.07f, 0.17f),
+                    frost = frostAmount * (if (strong) 0.85f else 0.7f),
+                    fresnelMin = 0.025f,
+                    fresnelMax = if (strong) 0.28f else 0.22f,
+                    specularPower = 56f,
+                    specularStrength = if (specularOn) {
+                        if (strong) 0.62f else 0.5f
+                    } else {
+                        0f
+                    },
+                    chromatic = if (useWallpaperBackdrop) {
+                        if (strong) 1.55f else 1.2f
+                    } else {
+                        if (strong) 1.4f else 1.0f
+                    }
+                )
+                AndroidRenderEffect.createRuntimeShaderEffect(shader, "content")
+            } else {
+                null
+            }
+        when {
+            shaderEffect != null && blurEffect != null ->
+                AndroidRenderEffect.createChainEffect(shaderEffect, blurEffect)
+                    .asComposeRenderEffect()
+            shaderEffect != null -> shaderEffect.asComposeRenderEffect()
+            blurEffect != null -> blurEffect.asComposeRenderEffect()
+            else -> null
+        }
+    }
 
     Box(
         modifier = modifier
@@ -131,68 +202,11 @@ fun GlassPanel(
         Box(
             modifier = Modifier
                 .matchParentSize()
-                .graphicsLayer {
+                .onSizeChanged { layerSize = it }
+                .graphicsLayer(
+                    renderEffect = panelRenderEffect,
                     compositingStrategy = CompositingStrategy.Offscreen
-                    // Offscreen + RenderEffect can keep a stale recorded layer unless a
-                    // graphicsLayer property changes — bump a no-op so page parallax redraws.
-                    translationX = wallpaperXOffset * 0.0001f
-                    val blurPx = effectiveBlurSigma
-                    val blurEffect =
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && blurPx >= 1f) {
-                            AndroidRenderEffect.createBlurEffect(
-                                blurPx,
-                                blurPx,
-                                Shader.TileMode.CLAMP
-                            )
-                        } else {
-                            null
-                        }
-
-                    val shader = runtimeShader
-                    val shaderEffect =
-                        if (useOpticalShader && shader != null && size.width > 1f && size.height > 1f) {
-                            // eta → IOR in shader; Apple glass reads ~1.5 (eta≈0.1).
-                            val eta = if (useWallpaperBackdrop) {
-                                (if (strong) 0.14f else 0.12f) *
-                                    (0.85f + 0.15f * blurStrength.coerceIn(0.4f, 1.4f))
-                            } else {
-                                // Chrome frost plate needs stronger IOR or the lens is invisible.
-                                if (strong) 0.13f else 0.11f
-                            }
-                            LiquidRefractionShader.update(
-                                shader = shader,
-                                size = Size(size.width, size.height),
-                                cornerRadiusPx = cornerRadiusPx,
-                                eta = eta.coerceIn(0.07f, 0.17f),
-                                frost = frostAmount * (if (strong) 0.85f else 0.7f),
-                                fresnelMin = 0.025f,
-                                fresnelMax = if (strong) 0.28f else 0.22f,
-                                specularPower = 56f,
-                                specularStrength = if (specularOn) {
-                                    if (strong) 0.62f else 0.5f
-                                } else {
-                                    0f
-                                },
-                                chromatic = if (useWallpaperBackdrop) {
-                                    if (strong) 1.55f else 1.2f
-                                } else {
-                                    if (strong) 1.4f else 1.0f
-                                }
-                            )
-                            AndroidRenderEffect.createRuntimeShaderEffect(shader, "content")
-                        } else {
-                            null
-                        }
-
-                    renderEffect = when {
-                        shaderEffect != null && blurEffect != null ->
-                            AndroidRenderEffect.createChainEffect(shaderEffect, blurEffect)
-                                .asComposeRenderEffect()
-                        shaderEffect != null -> shaderEffect.asComposeRenderEffect()
-                        blurEffect != null -> blurEffect.asComposeRenderEffect()
-                        else -> null
-                    }
-                }
+                )
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 if (size.minDimension <= 2f) return@Canvas
@@ -208,7 +222,6 @@ fun GlassPanel(
                         panelY = pos.y,
                         panelW = size.width,
                         panelH = size.height,
-                        // Small pad for rim samples only — large pad mis-scaled wallpaper vs system.
                         pad = 0.08f
                     )
                     drawImage(
