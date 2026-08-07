@@ -1,8 +1,5 @@
 package com.voidlauncher.app.ui
 
-import android.graphics.RenderEffect as AndroidRenderEffect
-import android.graphics.Shader
-import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,9 +17,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.asComposeRenderEffect
-import androidx.compose.ui.graphics.graphicsLayer
 import com.google.accompanist.systemuicontroller.rememberSystemUiController
 import com.voidlauncher.app.data.AppInfo
 import com.voidlauncher.app.glass.LocalHazeState
@@ -99,63 +93,38 @@ fun LauncherRoot(
     }
 
     val hazeState = rememberHazeState()
-    // Fixed ~50% blur of the live home (icons + wallpaper), not a separate opaque layer.
-    val editorBlurSigma = 15f
 
     CompositionLocalProvider(
         LocalIconAppearance provides appearance,
         LocalHazeState provides hazeState
     ) {
         Box(modifier = modifier.fillMaxSize()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .then(
-                        if (state.iconEditorOpen &&
-                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-                        ) {
-                            Modifier.graphicsLayer {
-                                compositingStrategy = CompositingStrategy.Offscreen
-                                renderEffect = AndroidRenderEffect
-                                    .createBlurEffect(
-                                        editorBlurSigma,
-                                        editorBlurSigma,
-                                        Shader.TileMode.CLAMP
-                                    )
-                                    .asComposeRenderEffect()
-                            }
-                        } else {
-                            Modifier
-                        }
-                    )
-            ) {
-                HomeScreen(
-                    state = state,
-                    onLaunchApp = onLaunchApp,
-                    onAppLongClick = { actionApp = it },
-                    onOpenDrawer = { onDrawerOpenChange(true) },
-                    onOpenDrawerSearch = onOpenDrawerSearch,
-                    onEditModeChange = onEditModeChange,
-                    onRemoveHomeItem = onRemoveHomeItem,
-                    onSwapHomeItems = onSwapHomeItems,
-                    onCreateFolder = onCreateFolder,
-                    onAddAppToFolder = onAddAppToFolder,
-                    onAddPage = onAddPage,
-                    onAddAppToHome = { app, _ -> onAddAppToHome(app) },
-                    modifier = Modifier.fillMaxSize()
-                )
+            HomeScreen(
+                state = state,
+                onLaunchApp = onLaunchApp,
+                onAppLongClick = { actionApp = it },
+                onOpenDrawer = { onDrawerOpenChange(true) },
+                onOpenDrawerSearch = onOpenDrawerSearch,
+                onEditModeChange = onEditModeChange,
+                onRemoveHomeItem = onRemoveHomeItem,
+                onSwapHomeItems = onSwapHomeItems,
+                onCreateFolder = onCreateFolder,
+                onAddAppToFolder = onAddAppToFolder,
+                onAddPage = onAddPage,
+                onAddAppToHome = { app, _ -> onAddAppToHome(app) },
+                modifier = Modifier.fillMaxSize()
+            )
 
-                AppDrawer(
-                    visible = state.isDrawerOpen,
-                    state = state,
-                    onLaunchApp = onLaunchApp,
-                    onAppLongClick = { actionApp = it },
-                    onAddAppToHome = onAddAppToHome,
-                    onSearchQueryChange = onSearchQueryChange,
-                    onClose = { onDrawerOpenChange(false) },
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+            AppDrawer(
+                visible = state.isDrawerOpen,
+                state = state,
+                onLaunchApp = onLaunchApp,
+                onAppLongClick = { actionApp = it },
+                onAddAppToHome = onAddAppToHome,
+                onSearchQueryChange = onSearchQueryChange,
+                onClose = { onDrawerOpenChange(false) },
+                modifier = Modifier.fillMaxSize()
+            )
 
             AppActionsSheet(
                 app = actionApp,
@@ -167,10 +136,11 @@ fun LauncherRoot(
             )
 
             if (state.iconEditorOpen) {
+                // Light dim only — home stays sharp; panel glass carries the blur.
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.22f))
+                        .background(Color.Black.copy(alpha = 0.28f))
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,

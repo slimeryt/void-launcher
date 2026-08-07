@@ -72,6 +72,11 @@ fun GlassPanel(
     enableSheen: Boolean = true,
     enableRefraction: Boolean = true,
     sampleWallpaper: Boolean = true,
+    /**
+     * When set, overrides [LocalGlassSettings.blurStrength] (e.g. 0.5f = fixed 50% blur
+     * for the App Icons editor panel).
+     */
+    blurStrengthOverride: Float? = null,
     tint: Color = Color.Transparent,
     content: @Composable BoxScope.() -> Unit
 ) {
@@ -82,7 +87,7 @@ fun GlassPanel(
     val density = LocalDensity.current
     val cornerRadiusPx = with(density) { cornerRadius.toPx() }
 
-    val blurStrength = glass.blurStrength.coerceIn(0f, 1.6f)
+    val blurStrength = (blurStrengthOverride ?: glass.blurStrength).coerceIn(0f, 1.6f)
     val frostAmount = glass.frostAmount
     val refractionOn = enableRefraction && glass.refractionEnabled
     val specularOn = enableSheen && glass.sheenEnabled
@@ -105,13 +110,20 @@ fun GlassPanel(
 
     val blurSigma = when {
         blurStrength <= 0.01f -> 0f
+        // Fixed / overridden blur (e.g. icon editor at 50%): use the fuller σ range
+        // so “50%” is clearly frosted, not a tiny refraction blur.
+        blurStrengthOverride != null ->
+            (30f * blurStrength).coerceIn(0f, 30f)
         !useWallpaperBackdrop && refractionOn ->
             (6f * blurStrength).coerceIn(0f, 9f) * (if (strong) 1.05f else 1f)
         refractionOn -> (10f * blurStrength).coerceIn(0f, 16f) * (if (strong) 1.05f else 1f)
         else -> (22f * blurStrength).coerceIn(0f, 30f) * (if (strong) 1.05f else 0.92f)
     }
-    val effectiveBlurSigma =
-        if (useWallpaperBackdrop) blurSigma else (blurSigma * 0.45f).coerceAtMost(5f)
+    val effectiveBlurSigma = when {
+        blurStrengthOverride != null -> blurSigma
+        useWallpaperBackdrop -> blurSigma
+        else -> (blurSigma * 0.45f).coerceAtMost(5f)
+    }
 
     val panelRenderEffect: RenderEffect? = remember(
         layerSize,
@@ -120,6 +132,7 @@ fun GlassPanel(
         useWallpaperBackdrop,
         strong,
         blurStrength,
+        blurStrengthOverride,
         frostAmount,
         specularOn,
         cornerRadiusPx,

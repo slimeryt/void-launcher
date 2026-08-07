@@ -58,13 +58,15 @@ fun IconEditorPanel(
             .navigationBarsPadding(),
         contentAlignment = Alignment.BottomCenter
     ) {
-        // Tap outside handled by parent scrim
+        // App Icons editor: liquid glass with fixed 50% backdrop blur (not home blur).
         GlassPanel(
             modifier = Modifier.fillMaxWidth(),
             cornerRadius = 28.dp,
             strong = true,
             enableSheen = true,
-            enableRefraction = true
+            enableRefraction = true,
+            sampleWallpaper = true,
+            blurStrengthOverride = 0.5f
         ) {
             Column(
                 modifier = Modifier
