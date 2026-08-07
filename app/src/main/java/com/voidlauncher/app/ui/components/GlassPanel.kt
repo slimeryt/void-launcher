@@ -13,7 +13,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -198,6 +197,9 @@ fun GlassPanel(
             }
         }
 
+        // Glass fill — matchParentSize so it doesn't collapse the panel.
+        // Content must stay a *direct* child of the outer Box (below) or wrap-
+        // content callers (Back, Dock, Cancel/Done) measure to 0×0.
         Box(
             modifier = Modifier
                 .matchParentSize()
@@ -220,9 +222,11 @@ fun GlassPanel(
                             style = Stroke(width = 1.5.dp.toPx())
                         )
                     }
-                },
-            content = content
+                }
         )
+
+        // Sizes the panel; drawn above the glass layer.
+        content()
     }
 }
 
