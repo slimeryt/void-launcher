@@ -16,6 +16,9 @@ import android.os.Build
 import android.util.DisplayMetrics
 import android.view.WindowManager
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -50,13 +53,17 @@ data class BlurredWallpaper(
 val LocalBlurredWallpaper = staticCompositionLocalOf<BlurredWallpaper?> { null }
 
 /**
- * Current home-pager scroll progress as a 0..1 fraction across the *whole* wallpaper
- * width, mirroring what we tell [android.app.WallpaperManager.setWallpaperOffsets].
- * Defaults to 0.5 (dead-center) for windows that don't own paging, e.g. Settings.
- *
- * Must be [compositionLocalOf] (not static): dock / glass panels need to recompose
- * every page swipe so the wallpaper crop under the glass tracks parallax.
+ * Pager → wallpaper parallax (0..1). Held in a mutable state object so glass can
+ * read [offset] inside draw/graphicsLayer without recomposing the whole panel
+ * every scroll frame (that lag was the dock delay).
  */
+class WallpaperScrollState {
+    var offset by mutableFloatStateOf(0.5f)
+}
+
+val LocalWallpaperScrollState = staticCompositionLocalOf { WallpaperScrollState() }
+
+/** @deprecated Prefer [LocalWallpaperScrollState] for draw-phase reads. */
 val LocalWallpaperXOffset = compositionLocalOf { 0.5f }
 
 class WallpaperBlurController(

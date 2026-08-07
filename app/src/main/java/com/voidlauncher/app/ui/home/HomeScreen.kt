@@ -95,7 +95,9 @@ import com.voidlauncher.app.ui.components.AppIconShape
 import com.voidlauncher.app.ui.components.CapsuleShape
 import com.voidlauncher.app.ui.components.DockBar
 import com.voidlauncher.app.glass.LocalHazeState
+import com.voidlauncher.app.glass.LocalWallpaperScrollState
 import com.voidlauncher.app.glass.LocalWallpaperXOffset
+import com.voidlauncher.app.glass.WallpaperScrollState
 import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.components.HomeClock
 import com.voidlauncher.app.ui.components.SmoothCornerShape
@@ -140,6 +142,7 @@ fun HomeScreen(
     val pagerState = rememberPagerState(pageCount = { pageCount })
     val view = androidx.compose.ui.platform.LocalView.current
 
+    val wallpaperScroll = remember { WallpaperScrollState() }
     // 0..1 progress across the *whole* wallpaper width, matching what we tell the
     // system via setWallpaperOffsets, so our own glass sampling and the real
     // system-drawn wallpaper behind us always agree on which slice is visible.
@@ -153,11 +156,12 @@ fun HomeScreen(
             }
         }
     }
+    wallpaperScroll.offset = wallpaperXOffset
     // Keep system wallpaper in lockstep with the pager (LaunchedEffect was 1+ frames late).
     androidx.compose.runtime.SideEffect {
         runCatching {
             android.app.WallpaperManager.getInstance(context)
-                .setWallpaperOffsets(view.windowToken, wallpaperXOffset, 0.5f)
+                .setWallpaperOffsets(view.windowToken, wallpaperScroll.offset, 0.5f)
         }
     }
 
@@ -210,6 +214,7 @@ fun HomeScreen(
     val isDragging = dragIndex >= 0
 
     CompositionLocalProvider(
+        LocalWallpaperScrollState provides wallpaperScroll,
         LocalWallpaperXOffset provides wallpaperXOffset
     ) {
     val hazeState = LocalHazeState.current

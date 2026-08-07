@@ -17,9 +17,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -42,13 +43,14 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.voidlauncher.app.glass.LiquidRefractionShader
 import com.voidlauncher.app.glass.LocalBlurredWallpaper
 import com.voidlauncher.app.glass.LocalGlassSettings
-import com.voidlauncher.app.glass.LocalWallpaperXOffset
+import com.voidlauncher.app.glass.LocalWallpaperScrollState
 import com.voidlauncher.app.glass.WallpaperCrop
 import com.voidlauncher.app.ui.theme.VoidGlassBorder
 import kotlin.math.roundToInt
@@ -73,7 +75,8 @@ fun GlassPanel(
 ) {
     val wallpaper = LocalBlurredWallpaper.current
     val glass = LocalGlassSettings.current
-    val wallpaperXOffset = LocalWallpaperXOffset.current
+    // Stable holder — read .offset only inside graphicsLayer (no per-frame recomposition).
+    val wallpaperScroll = LocalWallpaperScrollState.current
     val density = LocalDensity.current
     val cornerRadiusPx = with(density) { cornerRadius.toPx() }
 
@@ -98,17 +101,16 @@ fun GlassPanel(
     val useWallpaperBackdrop = sampleWallpaper && wallpaper != null
     val useOpticalShader = refractionOn && runtimeShader != null
 
-    // iOS-like: light frost blur so magnification/rim lens stay sharp.
     val blurSigma = when {
         blurStrength <= 0.01f -> 0f
+        !useWallpaperBackdrop && refractionOn ->
+            (6f * blurStrength).coerceIn(0f, 9f) * (if (strong) 1.05f else 1f)
         refractionOn -> (10f * blurStrength).coerceIn(0f, 16f) * (if (strong) 1.05f else 1f)
         else -> (22f * blurStrength).coerceIn(0f, 30f) * (if (strong) 1.05f else 0.92f)
     }
     val effectiveBlurSigma =
-        if (useWallpaperBackdrop) blurSigma else (blurSigma * 0.35f).coerceAtMost(7f)
+        if (useWallpaperBackdrop) blurSigma else (blurSigma * 0.45f).coerceAtMost(5f)
 
-    // Build RenderEffect once per size/settings — NOT per wallpaperXOffset frame.
-    // Recreating blur+AGSL every pager tick was the dock parallax lag.
     val panelRenderEffect: RenderEffect? = remember(
         layerSize,
         effectiveBlurSigma,
@@ -139,26 +141,38 @@ fun GlassPanel(
                     (if (strong) 0.14f else 0.12f) *
                         (0.85f + 0.15f * blurStrength.coerceIn(0.4f, 1.4f))
                 } else {
-                    if (strong) 0.13f else 0.11f
+                    if (strong) 0.155f else 0.135f
                 }
                 LiquidRefractionShader.update(
                     shader = shader,
                     size = Size(layerSize.width.toFloat(), layerSize.height.toFloat()),
                     cornerRadiusPx = cornerRadiusPx,
-                    eta = eta.coerceIn(0.07f, 0.17f),
-                    frost = frostAmount * (if (strong) 0.85f else 0.7f),
-                    fresnelMin = 0.025f,
-                    fresnelMax = if (strong) 0.28f else 0.22f,
-                    specularPower = 56f,
+                    eta = eta.coerceIn(0.07f, 0.18f),
+                    frost = frostAmount * (if (useWallpaperBackdrop) {
+                        if (strong) 0.85f else 0.7f
+                    } else {
+                        if (strong) 0.55f else 0.45f
+                    }),
+                    fresnelMin = if (useWallpaperBackdrop) 0.025f else 0.04f,
+                    fresnelMax = if (useWallpaperBackdrop) {
+                        if (strong) 0.28f else 0.22f
+                    } else {
+                        if (strong) 0.36f else 0.3f
+                    },
+                    specularPower = if (useWallpaperBackdrop) 56f else 42f,
                     specularStrength = if (specularOn) {
-                        if (strong) 0.62f else 0.5f
+                        if (useWallpaperBackdrop) {
+                            if (strong) 0.62f else 0.5f
+                        } else {
+                            if (strong) 0.78f else 0.65f
+                        }
                     } else {
                         0f
                     },
                     chromatic = if (useWallpaperBackdrop) {
                         if (strong) 1.55f else 1.2f
                     } else {
-                        if (strong) 1.4f else 1.0f
+                        if (strong) 2.1f else 1.7f
                     }
                 )
                 AndroidRenderEffect.createRuntimeShaderEffect(shader, "content")
@@ -175,6 +189,18 @@ fun GlassPanel(
         }
     }
 
+    val panelX = coords?.takeIf { it.isAttached }?.positionInWindow()?.x ?: 0f
+    val panelY = coords?.takeIf { it.isAttached }?.positionInWindow()?.y ?: 0f
+    val extraWidthPx = wallpaper?.let {
+        (it.fullWidthPx - it.screenWidth).coerceAtLeast(0).toFloat()
+    } ?: 0f
+    val stripWidthPx = wallpaper?.fullWidthPx?.toFloat()?.coerceAtLeast(1f)
+        ?: layerSize.width.toFloat().coerceAtLeast(1f)
+    val stripHeightPx = layerSize.height.toFloat().coerceAtLeast(1f)
+    val stripDp = with(density) {
+        DpSize(stripWidthPx.toDp(), stripHeightPx.toDp())
+    }
+
     Box(
         modifier = modifier
             .shadow(
@@ -187,14 +213,23 @@ fun GlassPanel(
             .clip(shape)
             .onGloballyPositioned { coords = it }
             .border(
-                width = 1.dp,
+                width = if (useOpticalShader) 0.8.dp else 1.dp,
                 brush = Brush.linearGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = 0.55f),
-                        VoidGlassBorder.copy(alpha = 0.5f),
-                        Color.White.copy(alpha = 0.08f),
-                        Color.Black.copy(alpha = 0.14f)
-                    )
+                    colors = if (useOpticalShader) {
+                        listOf(
+                            Color.White.copy(alpha = 0.42f),
+                            VoidGlassBorder.copy(alpha = 0.35f),
+                            Color.White.copy(alpha = 0.06f),
+                            Color.Black.copy(alpha = 0.1f)
+                        )
+                    } else {
+                        listOf(
+                            Color.White.copy(alpha = 0.55f),
+                            VoidGlassBorder.copy(alpha = 0.5f),
+                            Color.White.copy(alpha = 0.08f),
+                            Color.Black.copy(alpha = 0.14f)
+                        )
+                    }
                 ),
                 shape = shape
             )
@@ -208,60 +243,83 @@ fun GlassPanel(
                     compositingStrategy = CompositingStrategy.Offscreen
                 )
         ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                if (size.minDimension <= 2f) return@Canvas
-                if (useWallpaperBackdrop) {
-                    val panel = coords
-                    val wp = wallpaper ?: return@Canvas
-                    if (panel == null || !panel.isAttached) return@Canvas
-                    val pos = panel.positionInWindow()
-                    val src = WallpaperCrop.panelSrc(
-                        wp = wp,
-                        wallpaperXOffset = wallpaperXOffset,
-                        panelX = pos.x,
-                        panelY = pos.y,
-                        panelW = size.width,
-                        panelH = size.height,
-                        pad = 0.08f
-                    )
+            if (useWallpaperBackdrop && wallpaper != null && layerSize.height > 1) {
+                // Full-width strip; parallax is translationX only (no per-frame re-crop).
+                Canvas(
+                    modifier = Modifier
+                        .requiredSize(stripDp)
+                        .graphicsLayer {
+                            val originX = wallpaperScroll.offset.coerceIn(0f, 1f) * extraWidthPx
+                            translationX = -(originX + panelX)
+                        }
+                ) {
+                    val wp = wallpaper
+                    val (_, originY) = WallpaperCrop.viewportOrigin(wp, wallpaperXOffset = 0.5f)
+                    val scaleY = wp.bitmapHeight.toFloat() / wp.fullHeightPx.toFloat().coerceAtLeast(1f)
+                    val srcY = ((originY + panelY) * scaleY).roundToInt()
+                        .coerceIn(0, (wp.bitmapHeight - 1).coerceAtLeast(0))
+                    val srcH = (stripHeightPx * scaleY).roundToInt().coerceAtLeast(1)
+                        .coerceAtMost((wp.bitmapHeight - srcY).coerceAtLeast(1))
                     drawImage(
                         image = wp.image,
-                        srcOffset = IntOffset(src.x, src.y),
-                        srcSize = IntSize(src.w, src.h),
+                        srcOffset = IntOffset(0, srcY),
+                        srcSize = IntSize(wp.bitmapWidth.coerceAtLeast(1), srcH),
                         dstOffset = IntOffset.Zero,
                         dstSize = IntSize(
-                            size.width.roundToInt().coerceAtLeast(1),
-                            size.height.roundToInt().coerceAtLeast(1)
+                            stripWidthPx.roundToInt().coerceAtLeast(1),
+                            stripHeightPx.roundToInt().coerceAtLeast(1)
                         ),
                         alpha = 1f
                     )
-                } else {
-                    // Structured frost plate so chrome refraction has detail to bend.
-                    drawRect(Color(0xFF1C1C1E))
+                }
+            } else {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    if (size.minDimension <= 2f) return@Canvas
+                    // High-frequency frost plate so chrome rim bend / CA reads like dock glass.
+                    drawRect(Color(0xFF141416))
                     drawRect(
                         brush = Brush.linearGradient(
                             colors = listOf(
-                                Color.White.copy(alpha = 0.28f),
+                                Color.White.copy(alpha = 0.34f),
+                                Color(0xFF6EB0E8).copy(alpha = 0.2f),
                                 Color.Transparent,
-                                Color(0xFF5B9BD5).copy(alpha = 0.22f),
-                                Color.White.copy(alpha = 0.12f),
-                                Color(0xFF2A2A2E).copy(alpha = 0.9f)
+                                Color(0xFF8B5CF6).copy(alpha = 0.12f),
+                                Color.White.copy(alpha = 0.18f)
                             ),
                             start = Offset.Zero,
-                            end = Offset(size.width * 1.05f, size.height * 1.15f)
+                            end = Offset(size.width * 1.1f, size.height * 1.2f)
+                        )
+                    )
+                    val bands = 14
+                    for (i in 0 until bands) {
+                        val y = size.height * (i + 0.5f) / bands
+                        drawRect(
+                            color = Color.White.copy(alpha = if (i % 2 == 0) 0.045f else 0.02f),
+                            topLeft = Offset(0f, y),
+                            size = Size(size.width, 1.25f)
+                        )
+                    }
+                    drawRect(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.22f),
+                                Color.Transparent
+                            ),
+                            center = Offset(size.width * 0.18f, size.height * 0.2f),
+                            radius = size.minDimension * 0.95f
                         )
                     )
                     drawRect(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                Color.White.copy(alpha = 0.16f),
+                                Color(0xFF4A90D9).copy(alpha = 0.14f),
                                 Color.Transparent
                             ),
-                            center = Offset(size.width * 0.2f, size.height * 0.15f),
-                            radius = size.minDimension * 0.85f
+                            center = Offset(size.width * 0.85f, size.height * 0.75f),
+                            radius = size.minDimension * 0.8f
                         )
                     )
-                    drawRect(Color.White.copy(alpha = 0.06f * frostAmount.coerceIn(0.3f, 1.5f)))
+                    drawRect(Color.White.copy(alpha = 0.04f * frostAmount.coerceIn(0.3f, 1.5f)))
                 }
             }
         }
