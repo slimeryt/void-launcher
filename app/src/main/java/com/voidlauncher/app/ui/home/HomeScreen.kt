@@ -805,13 +805,23 @@ private fun EditFooterButton(
     modifier: Modifier = Modifier
 ) {
     GlassPanel(
-        modifier = modifier.size(56.dp),
+        modifier = modifier
+            .size(56.dp)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            ),
         cornerRadius = 28.dp,
         strong = true,
         enableSheen = true,
-        enableRefraction = true
+        enableRefraction = true,
+        sampleWallpaper = true
     ) {
-        IconButton(onClick = onClick, modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
             Icon(
                 imageVector = icon,
                 contentDescription = contentDescription,

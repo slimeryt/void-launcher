@@ -18,14 +18,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -212,26 +215,70 @@ fun GlassPanel(
             )
             .clip(shape)
             .onGloballyPositioned { coords = it }
-            .border(
-                width = if (useOpticalShader) 0.8.dp else 1.dp,
-                brush = Brush.linearGradient(
-                    colors = if (useOpticalShader) {
-                        listOf(
-                            Color.White.copy(alpha = 0.42f),
-                            VoidGlassBorder.copy(alpha = 0.35f),
-                            Color.White.copy(alpha = 0.06f),
-                            Color.Black.copy(alpha = 0.1f)
+            .then(
+                if (useOpticalShader) {
+                    // Liquid Glass stroke: luminous outer rim + dark inner hairline.
+                    Modifier.drawWithContent {
+                        drawContent()
+                        val cr = CornerRadius(cornerRadius.toPx(), cornerRadius.toPx())
+                        val inset = 0.75.dp.toPx()
+                        // Soft specular glass edge (top-left catch light).
+                        drawRoundRect(
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = if (strong) 0.72f else 0.58f),
+                                    Color.White.copy(alpha = 0.22f),
+                                    Color.White.copy(alpha = 0.08f),
+                                    Color.Black.copy(alpha = 0.22f)
+                                ),
+                                start = Offset.Zero,
+                                end = Offset(size.width, size.height)
+                            ),
+                            cornerRadius = cr,
+                            style = Stroke(width = 1.35.dp.toPx())
                         )
-                    } else {
-                        listOf(
-                            Color.White.copy(alpha = 0.55f),
-                            VoidGlassBorder.copy(alpha = 0.5f),
-                            Color.White.copy(alpha = 0.08f),
-                            Color.Black.copy(alpha = 0.14f)
+                        // Inner hairline — Apple glass depth cue.
+                        drawRoundRect(
+                            color = Color.Black.copy(alpha = 0.28f),
+                            topLeft = Offset(inset, inset),
+                            size = Size(
+                                (size.width - inset * 2f).coerceAtLeast(0f),
+                                (size.height - inset * 2f).coerceAtLeast(0f)
+                            ),
+                            cornerRadius = CornerRadius(
+                                (cornerRadius.toPx() - inset).coerceAtLeast(1f),
+                                (cornerRadius.toPx() - inset).coerceAtLeast(1f)
+                            ),
+                            style = Stroke(width = 0.7.dp.toPx())
+                        )
+                        // Bright top lip.
+                        drawRoundRect(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.35f),
+                                    Color.Transparent
+                                ),
+                                startY = 0f,
+                                endY = size.height * 0.45f
+                            ),
+                            cornerRadius = cr,
+                            style = Stroke(width = 0.9.dp.toPx())
                         )
                     }
-                ),
-                shape = shape
+                } else {
+                    Modifier.border(
+                        width = 1.dp,
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.55f),
+                                VoidGlassBorder.copy(alpha = 0.5f),
+                                Color.White.copy(alpha = 0.08f),
+                                Color.Black.copy(alpha = 0.14f)
+                            )
+                        ),
+                        shape = shape
+                    )
+                }
             )
     ) {
         Box(
@@ -244,9 +291,11 @@ fun GlassPanel(
                 )
         ) {
             if (useWallpaperBackdrop && wallpaper != null && layerSize.height > 1) {
-                // Full-width strip; parallax is translationX only (no per-frame re-crop).
+                // Unbounded so the strip can be wider than the panel (matchParentSize
+                // would otherwise crush small edit circles to 56×56 and kill refraction).
                 Canvas(
                     modifier = Modifier
+                        .wrapContentSize(unbounded = true, align = Alignment.TopStart)
                         .requiredSize(stripDp)
                         .graphicsLayer {
                             val originX = wallpaperScroll.offset.coerceIn(0f, 1f) * extraWidthPx
@@ -275,7 +324,6 @@ fun GlassPanel(
             } else {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     if (size.minDimension <= 2f) return@Canvas
-                    // High-frequency frost plate so chrome rim bend / CA reads like dock glass.
                     drawRect(Color(0xFF141416))
                     drawRect(
                         brush = Brush.linearGradient(
