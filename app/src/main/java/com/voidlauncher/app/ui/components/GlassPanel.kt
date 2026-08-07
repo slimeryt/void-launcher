@@ -149,16 +149,16 @@ fun GlassPanel(
                         if (useOpticalShader && shader != null && size.width > 1f && size.height > 1f) {
                             // eta → IOR in shader; Apple glass reads ~1.5 (eta≈0.1).
                             val eta = if (useWallpaperBackdrop) {
-                                (if (strong) 0.13f else 0.11f) *
-                                    (0.8f + 0.2f * blurStrength.coerceIn(0.4f, 1.4f))
+                                (if (strong) 0.14f else 0.12f) *
+                                    (0.85f + 0.15f * blurStrength.coerceIn(0.4f, 1.4f))
                             } else {
-                                0.07f
+                                0.08f
                             }
                             LiquidRefractionShader.update(
                                 shader = shader,
                                 size = Size(size.width, size.height),
                                 cornerRadiusPx = cornerRadiusPx,
-                                eta = eta.coerceIn(0.06f, 0.16f),
+                                eta = eta.coerceIn(0.07f, 0.17f),
                                 frost = frostAmount * (if (strong) 0.85f else 0.7f),
                                 fresnelMin = 0.025f,
                                 fresnelMax = if (strong) 0.28f else 0.22f,
@@ -168,11 +168,11 @@ fun GlassPanel(
                                 } else {
                                     0f
                                 },
-                                // Dispersion multiplier — iOS fringe is soft, not prismatic.
+                                // Dispersion — enough to read on dock, not neon.
                                 chromatic = if (useWallpaperBackdrop) {
-                                    if (strong) 1.35f else 1.05f
+                                    if (strong) 1.55f else 1.2f
                                 } else {
-                                    0.6f
+                                    0.7f
                                 }
                             )
                             AndroidRenderEffect.createRuntimeShaderEffect(shader, "content")
