@@ -774,8 +774,8 @@ private fun EditPillButton(
             ),
         cornerRadius = 99.dp,
         strong = true,
-        enableSheen = false,
-        enableRefraction = !blue,
+        enableSheen = true,
+        enableRefraction = true,
         tint = if (blue) IosBlueGlass else Color.Transparent
     ) {
         Box(
@@ -802,8 +802,8 @@ private fun EditFooterButton(
         modifier = modifier.size(56.dp),
         cornerRadius = 28.dp,
         strong = true,
-        enableSheen = false,
-        enableRefraction = false
+        enableSheen = true,
+        enableRefraction = true
     ) {
         IconButton(onClick = onClick, modifier = Modifier.fillMaxSize()) {
             Icon(

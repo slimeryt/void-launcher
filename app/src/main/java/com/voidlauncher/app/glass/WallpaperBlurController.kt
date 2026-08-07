@@ -139,20 +139,12 @@ class WallpaperBlurController(
         if (screenW <= 0 || screenH <= 0) return null
 
         val drawable = loadWallpaperDrawable() ?: return null
-        val wm = WallpaperManager.getInstance(context)
-        // System wallpaper engines pan across desiredMinimumWidth (often ~2× screen).
-        // Fitting height-only left many wallpapers at exactly one screen wide, so glass
-        // crops never moved while the real wallpaper behind the dock did.
-        val desiredW = wm.desiredMinimumWidth.coerceAtLeast(screenW)
-        val desiredH = wm.desiredMinimumHeight.coerceAtLeast(screenH)
-        val source = drawableToParallaxBitmap(drawable, screenW, screenH, desiredW, desiredH)
-            ?: return null
+        // Height-fit, preserve natural width. Do NOT upscale to desiredMinimumWidth —
+        // that over-zoomed the buffer so glass parallax raced ahead of the real wallpaper.
+        val source = drawableToScreenHeightBitmap(drawable, screenW, screenH) ?: return null
         val fullWidthPx = source.width
         val fullHeightPx = source.height
 
-        // Downscale only for perf/memory -- this buffer must stay a clean, accurate
-        // copy of the real wallpaper. All visual blur/frost is applied live by
-        // GlassPanel from the user's actual slider values.
         val targetH = (fullHeightPx / 1.5f).roundToInt().coerceIn(400, 2400)
         val targetW = (fullWidthPx * (targetH.toFloat() / fullHeightPx)).roundToInt().coerceAtLeast(400)
         val scaled = Bitmap.createScaledBitmap(source, targetW, targetH, true)
@@ -180,16 +172,13 @@ class WallpaperBlurController(
     }
 
     /**
-     * Scale wallpaper to **cover** [desiredW]×[desiredH] (same model as the system
-     * wallpaper engine). That guarantees horizontal parallax room even when
-     * [WallpaperManager.getDrawable] returns a single-screen bitmap.
+     * Scale so height == screen height; keep aspect (parallax width intact when the
+     * drawable is already multi-screen wide). Never invent extra width.
      */
-    private fun drawableToParallaxBitmap(
+    private fun drawableToScreenHeightBitmap(
         drawable: Drawable,
         screenW: Int,
-        screenH: Int,
-        desiredW: Int,
-        desiredH: Int
+        screenH: Int
     ): Bitmap? {
         val src = if (drawable is BitmapDrawable && drawable.bitmap != null && !drawable.bitmap.isRecycled) {
             drawable.bitmap
@@ -203,11 +192,9 @@ class WallpaperBlurController(
             bmp
         }
 
-        val coverW = desiredW.coerceAtLeast(screenW).toFloat()
-        val coverH = desiredH.coerceAtLeast(screenH).toFloat()
-        val scale = max(coverW / src.width.toFloat(), coverH / src.height.toFloat())
-        val scaledW = (src.width * scale).roundToInt().coerceAtLeast(screenW)
-        val scaledH = (src.height * scale).roundToInt().coerceAtLeast(screenH)
+        val scale = screenH.toFloat() / src.height.toFloat().coerceAtLeast(1f)
+        val scaledW = (src.width * scale).roundToInt().coerceAtLeast(1)
+        val scaledH = screenH
         if (scaledW == src.width && scaledH == src.height) return src
         val scaled = Bitmap.createScaledBitmap(src, scaledW, scaledH, true)
         if (scaled !== src) src.recycle()

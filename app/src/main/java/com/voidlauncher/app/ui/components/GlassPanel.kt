@@ -156,7 +156,8 @@ fun GlassPanel(
                                 (if (strong) 0.14f else 0.12f) *
                                     (0.85f + 0.15f * blurStrength.coerceIn(0.4f, 1.4f))
                             } else {
-                                0.08f
+                                // Chrome frost plate needs stronger IOR or the lens is invisible.
+                                if (strong) 0.13f else 0.11f
                             }
                             LiquidRefractionShader.update(
                                 shader = shader,
@@ -172,11 +173,10 @@ fun GlassPanel(
                                 } else {
                                     0f
                                 },
-                                // Dispersion — enough to read on dock, not neon.
                                 chromatic = if (useWallpaperBackdrop) {
                                     if (strong) 1.55f else 1.2f
                                 } else {
-                                    0.7f
+                                    if (strong) 1.4f else 1.0f
                                 }
                             )
                             AndroidRenderEffect.createRuntimeShaderEffect(shader, "content")
@@ -208,7 +208,8 @@ fun GlassPanel(
                         panelY = pos.y,
                         panelW = size.width,
                         panelH = size.height,
-                        pad = 0.26f
+                        // Small pad for rim samples only — large pad mis-scaled wallpaper vs system.
+                        pad = 0.08f
                     )
                     drawImage(
                         image = wp.image,
@@ -222,20 +223,32 @@ fun GlassPanel(
                         alpha = 1f
                     )
                 } else {
+                    // Structured frost plate so chrome refraction has detail to bend.
                     drawRect(Color(0xFF1C1C1E))
                     drawRect(
                         brush = Brush.linearGradient(
                             colors = listOf(
-                                Color.White.copy(alpha = 0.18f),
+                                Color.White.copy(alpha = 0.28f),
                                 Color.Transparent,
-                                Color(0xFF4A90D9).copy(alpha = 0.14f),
-                                Color.White.copy(alpha = 0.08f)
+                                Color(0xFF5B9BD5).copy(alpha = 0.22f),
+                                Color.White.copy(alpha = 0.12f),
+                                Color(0xFF2A2A2E).copy(alpha = 0.9f)
                             ),
                             start = Offset.Zero,
-                            end = Offset(size.width, size.height)
+                            end = Offset(size.width * 1.05f, size.height * 1.15f)
                         )
                     )
-                    drawRect(Color.White.copy(alpha = 0.08f * frostAmount.coerceIn(0.3f, 1.5f)))
+                    drawRect(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.16f),
+                                Color.Transparent
+                            ),
+                            center = Offset(size.width * 0.2f, size.height * 0.15f),
+                            radius = size.minDimension * 0.85f
+                        )
+                    )
+                    drawRect(Color.White.copy(alpha = 0.06f * frostAmount.coerceIn(0.3f, 1.5f)))
                 }
             }
         }
