@@ -94,6 +94,7 @@ dependencies {
     implementation("androidx.compose.animation:animation")
     implementation("androidx.graphics:graphics-shapes:1.0.1")
     implementation("dev.chrisbanes.haze:haze:1.6.10")
+    implementation("io.github.abdullajon1881:liquidglass-compose")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("com.google.accompanist:accompanist-drawablepainter:0.36.0")
     implementation("com.google.accompanist:accompanist-systemuicontroller:0.36.0")

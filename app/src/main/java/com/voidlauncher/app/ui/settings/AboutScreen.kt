@@ -281,6 +281,13 @@ License: Apache License 2.0
 Kotlin standard library & coroutines
 License: Apache License 2.0
 
+Haze (chrisbanes)
+License: Apache License 2.0
+
+LiquidGlass (Abdullajon1881) — AGSL liquid glass / SDF lens
+https://github.com/Abdullajon1881/LiquidGlass
+License: Apache License 2.0
+
 Full Apache License 2.0 text:
 https://www.apache.org/licenses/LICENSE-2.0
 """.trimIndent()
@@ -288,7 +295,8 @@ https://www.apache.org/licenses/LICENSE-2.0
 private val AcknowledgmentsText = """
 Thanks for using Polar.
 
-Built with Jetpack Compose and inspired by the clarity of modern system settings UIs.
+Built with Jetpack Compose. Liquid Glass optics use Abdullajon1881/LiquidGlass
+(Apache 2.0), inspired by Apple's Liquid Glass design language.
 
-Wallpaper blur, liquid glass, and software updates are maintained as part of Polar.
+Wallpaper blur and software updates are maintained as part of Polar.
 """.trimIndent()

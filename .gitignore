@@ -23,3 +23,8 @@ dist/
 workers/**/node_modules/
 workers/**/.wrangler/
 
+# Vendored LiquidGlass build outputs
+third_party/**/build/
+third_party/**/.gradle/
+third_party/**/.kotlin/
+

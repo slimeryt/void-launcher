@@ -414,7 +414,8 @@ private fun LiquidGlassPage(
     }
 
     Text(
-        text = "Preview above updates live. Home dock / pills use the same settings.",
+        text = "Preview above updates live. Home dock / pills use the same settings " +
+            "(Abdullajon LiquidGlass AGSL lens).",
         style = MaterialTheme.typography.bodyMedium,
         color = VoidMuted,
         modifier = Modifier.padding(horizontal = 8.dp)
