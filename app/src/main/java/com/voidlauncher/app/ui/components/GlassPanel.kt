@@ -13,11 +13,14 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -29,7 +32,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -47,12 +52,11 @@ import dev.liquidglass.compose.rememberLiquidGlassProviderState
 import kotlin.math.roundToInt
 
 /**
- * Liquid glass panel powered by Abdullajon1881/LiquidGlass (AGSL SDF lens).
+ * Liquid glass via Abdullajon1881/LiquidGlass.
  *
- * Backdrop selection:
- * - [sampleWallpaper] true → wallpaper crop (home / Liquid Glass preview)
- * - false + [LocalLiquidGlassProvider] → live UI behind chrome (settings)
- * - false, no shared provider → structured frost plate (still shows rim/lens)
+ * The backdrop [liquidGlassProvider] is intentionally *larger* than the glass
+ * silhouette so edge refraction can sample content outside the panel — same-size
+ * provider+glass only magnifies rim pixels and reads as "no lens."
  */
 @Composable
 fun GlassPanel(
@@ -68,39 +72,37 @@ fun GlassPanel(
     val wallpaper = LocalBlurredWallpaper.current
     val glass = LocalGlassSettings.current
     val wallpaperXOffset = LocalWallpaperXOffset.current
+    val density = LocalDensity.current
 
     val blurStrength = glass.blurStrength.coerceIn(0f, 1.6f)
     val frostAmount = glass.frostAmount.coerceIn(0f, 1.5f)
     val refractionOn = enableRefraction && glass.refractionEnabled
     val specularOn = enableSheen && glass.sheenEnabled
     val useWallpaper = sampleWallpaper && wallpaper != null
-    // Settings chrome stays on a local structured plate (no wallpaper portals).
-    // Live UI sampling needs chrome outside the provider subtree — follow-up.
 
     val shape = remember(cornerRadius) { SmoothCornerShape(radius = cornerRadius) }
     val provider = rememberLiquidGlassProviderState()
 
-    // Independent knobs — wide ranges so Settings sliders are obvious.
-    val blurRadius = (32.dp * blurStrength * (if (strong) 1.1f else 1f)).coerceIn(0.dp, 48.dp)
-    // Frost → tint wash + slight extra blur (not a hard floor).
-    val frostBlurBoost = (12.dp * frostAmount).coerceIn(0.dp, 18.dp)
-    val effectiveBlur = blurRadius + frostBlurBoost
+    // Keep blur modest — heavy Gaussian erases the frequencies refraction needs.
+    val blurRadius = if (blurStrength <= 0.01f) {
+        0.dp
+    } else {
+        (12.dp * blurStrength * (if (strong) 1.05f else 1f)).coerceIn(0.dp, 20.dp)
+    }
+    val frostTint = (0.02f + 0.16f * frostAmount).coerceIn(0f, 0.3f)
 
     val refraction = if (refractionOn) {
-        // Edge band + pixel offset — library defaults are 12/16; push harder so
-        // wallpaper detail and chromatic fringe actually read.
-        val amount = (if (strong) 28.dp else 22.dp) * (0.65f + 0.35f * blurStrength.coerceIn(0.4f, 1.4f))
         GlassRefraction(
-            height = if (strong) 18.dp else 14.dp,
-            amount = amount.coerceIn(14.dp, 36.dp)
+            height = if (strong) 48.dp else 40.dp,
+            amount = if (strong) 56.dp else 48.dp
         )
     } else {
         GlassRefraction.None
     }
     val highlight = if (specularOn) {
         GlassHighlight(
-            width = if (strong) 3.dp else 2.2.dp,
-            alpha = (if (strong) 0.72f else 0.55f) * frostAmount.coerceIn(0.5f, 1.2f).coerceAtMost(1f),
+            width = if (strong) 3.dp else 2.4.dp,
+            alpha = if (strong) 0.78f else 0.62f,
             lightAngleDegrees = 245f
         )
     } else {
@@ -108,29 +110,31 @@ fun GlassPanel(
     }
     val chromatic = when {
         !refractionOn -> 0f
-        useWallpaper -> if (strong) 0.55f else 0.4f
-        else -> 0.28f // plate path: fringe still readable when toggling refraction
+        useWallpaper -> if (strong) 0.9f else 0.75f
+        else -> 0.5f
     }
     val style = GlassStyle(
         shape = GlassShape.RoundedRectangle(cornerRadius),
-        blurRadius = effectiveBlur,
+        blurRadius = blurRadius,
         refraction = refraction,
-        saturation = if (useWallpaper) 1.55f else 1.2f,
+        saturation = if (useWallpaper) 1.65f else 1.25f,
         tint = when {
             tint.alpha > 0.01f -> tint
-            frostAmount > 0.05f -> Color.White.copy(
-                alpha = (0.04f + 0.14f * frostAmount).coerceIn(0.04f, 0.28f)
-            )
+            frostAmount > 0.02f -> Color.White.copy(alpha = frostTint)
             else -> Color.Unspecified
         },
         highlight = highlight,
-        noiseAlpha = 0.018f,
+        noiseAlpha = 0.02f,
         chromaticAberration = chromatic,
         isInteractive = false,
         fallbackScrim = Color(0xFF2C2C2E).copy(alpha = 0.72f)
     )
 
+    // Extra margin around the glass so the lens can pull outside detail.
+    val providerPad = if (refractionOn) 72.dp else 24.dp
+
     var panelPos by remember { mutableStateOf<Offset?>(null) }
+    var panelSize by remember { mutableStateOf(IntSize.Zero) }
 
     Box(
         modifier = modifier
@@ -146,6 +150,7 @@ fun GlassPanel(
                 if (coords.isAttached) {
                     val p = coords.positionInWindow()
                     panelPos = Offset(p.x, p.y)
+                    panelSize = coords.size
                 }
             }
             .border(
@@ -161,56 +166,72 @@ fun GlassPanel(
                 shape = shape
             )
     ) {
-        Canvas(
-            modifier = Modifier
-                .matchParentSize()
-                .liquidGlassProvider(provider)
-        ) {
-            if (size.minDimension <= 2f) return@Canvas
-            if (useWallpaper) {
-                val wp = wallpaper ?: return@Canvas
-                val pos = panelPos ?: return@Canvas
-                val scaleX = wp.bitmapWidth.toFloat() / wp.fullWidthPx.toFloat()
-                val scaleY = wp.bitmapHeight.toFloat() / wp.fullHeightPx.toFloat()
-                val extraWidthPx = (wp.fullWidthPx - wp.screenWidth).coerceAtLeast(0)
-                val pageOffsetPx = wallpaperXOffset.coerceIn(0f, 1f) * extraWidthPx
-                val realX = pageOffsetPx + pos.x
-                val pad = 0.12f
-                val srcX = ((realX - size.width * pad) * scaleX).roundToInt()
-                    .coerceIn(0, (wp.bitmapWidth - 1).coerceAtLeast(0))
-                val srcY = ((pos.y - size.height * pad) * scaleY).roundToInt()
-                    .coerceIn(0, (wp.bitmapHeight - 1).coerceAtLeast(0))
-                val srcW = ((size.width * (1f + pad * 2f)) * scaleX).roundToInt().coerceAtLeast(1)
-                    .coerceAtMost((wp.bitmapWidth - srcX).coerceAtLeast(1))
-                val srcH = ((size.height * (1f + pad * 2f)) * scaleY).roundToInt().coerceAtLeast(1)
-                    .coerceAtMost((wp.bitmapHeight - srcY).coerceAtLeast(1))
-                drawImage(
-                    image = wp.image,
-                    srcOffset = IntOffset(srcX, srcY),
-                    srcSize = IntSize(srcW, srcH),
-                    dstOffset = IntOffset.Zero,
-                    dstSize = IntSize(
-                        size.width.roundToInt().coerceAtLeast(1),
-                        size.height.roundToInt().coerceAtLeast(1)
-                    ),
-                    alpha = 1f
+        val providerDpSize = with(density) {
+            if (panelSize.width > 0 && panelSize.height > 0) {
+                DpSize(
+                    panelSize.width.toDp() + providerPad * 2,
+                    panelSize.height.toDp() + providerPad * 2
                 )
             } else {
-                // Structured plate so edge refraction / chromatic still read
-                // without wallpaper portals.
-                drawRect(Color(0xFF1C1C1E))
-                drawRect(
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.16f),
-                            Color.Transparent,
-                            Color.White.copy(alpha = 0.07f)
-                        ),
-                        start = Offset.Zero,
-                        end = Offset(size.width, size.height)
-                    )
-                )
-                drawRect(Color.White.copy(alpha = 0.06f * frostAmount.coerceIn(0.3f, 1.5f)))
+                DpSize(0.dp, 0.dp)
+            }
+        }
+
+        if (providerDpSize.width > 0.dp && providerDpSize.height > 0.dp) {
+            Box(
+                modifier = Modifier
+                    .requiredSize(providerDpSize)
+                    .align(Alignment.Center)
+                    .liquidGlassProvider(provider)
+            ) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    if (size.minDimension <= 2f) return@Canvas
+                    if (useWallpaper) {
+                        val wp = wallpaper ?: return@Canvas
+                        val pos = panelPos ?: return@Canvas
+                        val padPx = with(density) { providerPad.toPx() }
+                        val scaleX = wp.bitmapWidth.toFloat() / wp.fullWidthPx.toFloat()
+                        val scaleY = wp.bitmapHeight.toFloat() / wp.fullHeightPx.toFloat()
+                        val extraWidthPx = (wp.fullWidthPx - wp.screenWidth).coerceAtLeast(0)
+                        val pageOffsetPx = wallpaperXOffset.coerceIn(0f, 1f) * extraWidthPx
+                        // Provider is centered on the panel; its top-left is panel - pad.
+                        val realX = pageOffsetPx + pos.x - padPx
+                        val realY = pos.y - padPx
+                        val srcX = (realX * scaleX).roundToInt()
+                            .coerceIn(0, (wp.bitmapWidth - 1).coerceAtLeast(0))
+                        val srcY = (realY * scaleY).roundToInt()
+                            .coerceIn(0, (wp.bitmapHeight - 1).coerceAtLeast(0))
+                        val srcW = (size.width * scaleX).roundToInt().coerceAtLeast(1)
+                            .coerceAtMost((wp.bitmapWidth - srcX).coerceAtLeast(1))
+                        val srcH = (size.height * scaleY).roundToInt().coerceAtLeast(1)
+                            .coerceAtMost((wp.bitmapHeight - srcY).coerceAtLeast(1))
+                        drawImage(
+                            image = wp.image,
+                            srcOffset = IntOffset(srcX, srcY),
+                            srcSize = IntSize(srcW, srcH),
+                            dstOffset = IntOffset.Zero,
+                            dstSize = IntSize(
+                                size.width.roundToInt().coerceAtLeast(1),
+                                size.height.roundToInt().coerceAtLeast(1)
+                            ),
+                            alpha = 1f
+                        )
+                    } else {
+                        drawRect(Color(0xFF1C1C1E))
+                        drawRect(
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.22f),
+                                    Color.Transparent,
+                                    Color(0xFF4A90D9).copy(alpha = 0.18f),
+                                    Color.White.copy(alpha = 0.1f)
+                                ),
+                                start = Offset.Zero,
+                                end = Offset(size.width, size.height)
+                            )
+                        )
+                    }
+                }
             }
         }
 
