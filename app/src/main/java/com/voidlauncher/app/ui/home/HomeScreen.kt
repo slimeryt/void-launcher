@@ -149,6 +149,8 @@ fun HomeScreen(
     onOpenDrawerSearch: () -> Unit,
     onOpenNotificationCenter: () -> Unit = {},
     onOpenControlCenter: () -> Unit = {},
+    onControlCenterPull: (Float) -> Unit = {},
+    onControlCenterPullEnd: (Boolean) -> Unit = {},
     onSearchApps: (query: String) -> Unit,
     onEditModeChange: (Boolean) -> Unit,
     onRemoveHomeItem: (page: Int, index: Int) -> Unit,
@@ -197,6 +199,7 @@ fun HomeScreen(
     var swipeUp by remember { mutableFloatStateOf(0f) }
     var swipeDown by remember { mutableFloatStateOf(0f) }
     var swipeStart by remember { mutableStateOf(Offset.Zero) }
+    var pullingCc by remember { mutableStateOf(false) }
     var selectedKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
     var removeZone by remember { mutableStateOf(Rect.Zero) }
     var overRemove by remember { mutableStateOf(false) }
@@ -299,15 +302,26 @@ fun HomeScreen(
         modifier = modifier
             .fillMaxSize()
             .onGloballyPositioned { homeRootPos = it.positionInWindow() }
-            .pointerInput(state.isEditMode, state.isDrawerOpen) {
+            .pointerInput(state.isEditMode, state.isDrawerOpen, state.isControlCenterOpen) {
                 if (state.isEditMode) return@pointerInput
                 detectVerticalDragGestures(
                     onDragStart = { offset ->
                         swipeStart = offset
                         swipeUp = 0f
                         swipeDown = 0f
+                        pullingCc = !state.isControlCenterOpen &&
+                            offset.y < size.height * 0.38f &&
+                            offset.x >= size.width * 0.5f
                     },
                     onDragEnd = {
+                        if (pullingCc) {
+                            val revealPx = size.height * 0.38f
+                            onControlCenterPullEnd(swipeDown > revealPx * 0.32f)
+                            pullingCc = false
+                            swipeUp = 0f
+                            swipeDown = 0f
+                            return@detectVerticalDragGestures
+                        }
                         // Swipe down from top band: left half → NC, right half → CC
                         val fromTop = swipeStart.y < size.height * 0.38f
                         when {
@@ -321,10 +335,20 @@ fun HomeScreen(
                         swipeDown = 0f
                     },
                     onDragCancel = {
+                        if (pullingCc) {
+                            onControlCenterPullEnd(false)
+                            pullingCc = false
+                        }
                         swipeUp = 0f
                         swipeDown = 0f
                     },
                     onVerticalDrag = { _, amount ->
+                        if (pullingCc) {
+                            swipeDown = (swipeDown + amount).coerceAtLeast(0f)
+                            val revealPx = size.height * 0.38f
+                            onControlCenterPull((swipeDown / revealPx).coerceIn(0f, 1.08f))
+                            return@detectVerticalDragGestures
+                        }
                         when {
                             amount > 0f -> {
                                 swipeDown += amount

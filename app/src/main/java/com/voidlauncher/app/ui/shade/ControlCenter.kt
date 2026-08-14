@@ -5,13 +5,6 @@ import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -67,6 +60,7 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -81,12 +75,12 @@ import com.voidlauncher.app.notifications.NotificationMirror
 import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.components.WallpaperHazeSource
 import com.voidlauncher.app.ui.theme.IosBlue
-import com.voidlauncher.app.ui.theme.IosBlueGlass
 import com.voidlauncher.app.ui.theme.VoidMist
 import com.voidlauncher.app.ui.theme.VoidMuted
 import kotlinx.coroutines.delay
 
 private const val CcSmoothing = 0.78f
+private val CcRed = Color(0xFFFF3B30)
 
 /**
  * 4×4 Control Center:
@@ -98,12 +92,15 @@ private const val CcSmoothing = 0.78f
 @Composable
 fun ControlCenter(
     visible: Boolean,
+    expansion: Float,
     controller: ControlCenterController,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    BackHandler(enabled = visible, onBack = onClose)
+    val shown = visible || expansion > 0.001f
+    val interactive = expansion >= 0.98f
+    BackHandler(enabled = shown && expansion > 0.45f, onBack = onClose)
     var pull by remember { mutableFloatStateOf(0f) }
 
     val requestBluetooth = rememberLauncherForActivityResult(
@@ -118,13 +115,13 @@ fun ControlCenter(
         ActivityResultContracts.RequestPermission()
     ) { controller.refresh() }
 
-    DisposableEffect(visible) {
-        if (visible) controller.startListening()
+    DisposableEffect(shown) {
+        if (shown) controller.startListening()
         onDispose { controller.stopListening() }
     }
 
-    LaunchedEffect(visible) {
-        if (visible) {
+    LaunchedEffect(shown) {
+        if (shown) {
             controller.refresh()
             pull = 0f
             while (true) {
@@ -134,59 +131,71 @@ fun ControlCenter(
         }
     }
 
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(tween(200)) +
-            slideInVertically(tween(340, easing = FastOutSlowInEasing)) { -it / 6 },
-        exit = fadeOut(tween(160)) +
-            slideOutVertically(tween(240, easing = FastOutSlowInEasing)) { -it / 8 },
-        modifier = modifier.fillMaxSize()
+    if (!shown) return
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .then(
+                if (interactive) {
+                    Modifier
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onClose
+                        )
+                        .pointerInput(Unit) {
+                            detectVerticalDragGestures(
+                                onDragEnd = {
+                                    if (pull < -100f) onClose()
+                                    pull = 0f
+                                },
+                                onDragCancel = { pull = 0f },
+                                onVerticalDrag = { change, amount ->
+                                    change.consume()
+                                    if (amount < 0f) pull += amount
+                                    else pull = (pull + amount).coerceAtMost(0f)
+                                }
+                            )
+                        }
+                } else {
+                    Modifier
+                }
+            )
     ) {
+        WallpaperHazeSource(
+            modifier = Modifier
+                .matchParentSize()
+                .graphicsLayer { alpha = expansion.coerceIn(0f, 1f) }
+                .blur(42.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
+        )
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onClose
-                )
-                .pointerInput(Unit) {
-                    detectVerticalDragGestures(
-                        onDragEnd = {
-                            if (pull < -100f) onClose()
-                            pull = 0f
-                        },
-                        onDragCancel = { pull = 0f },
-                        onVerticalDrag = { change, amount ->
-                            change.consume()
-                            if (amount < 0f) pull += amount
-                            else pull = (pull + amount).coerceAtMost(0f)
-                        }
-                    )
+                .background(Color.Black.copy(alpha = 0.42f * expansion.coerceIn(0f, 1f)))
+        )
+        BoxWithConstraints(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth(0.74f)
+                .statusBarsPadding()
+                .padding(top = 76.dp)
+                .graphicsLayer {
+                    translationY = (1f - expansion.coerceIn(0f, 1f)) * -size.height + pull
+                    alpha = (expansion * 1.15f).coerceIn(0f, 1f)
                 }
+                .then(
+                    if (interactive) {
+                        Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {}
+                        )
+                    } else {
+                        Modifier
+                    }
+                )
         ) {
-            WallpaperHazeSource(
-                modifier = Modifier
-                    .matchParentSize()
-                    .blur(42.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.42f))
-            )
-            BoxWithConstraints(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth(0.74f)
-                    .statusBarsPadding()
-                    .padding(top = 76.dp)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {}
-                    )
-            ) {
                 val gap = 14.dp
                 val cell = (maxWidth - gap * 3) / 4
                 val gridH = cell * 4 + gap * 3
@@ -316,7 +325,6 @@ fun ControlCenter(
             }
         }
     }
-}
 
 @Composable
 private fun CcGlass(
@@ -341,8 +349,10 @@ private fun CcGlass(
         ),
         cornerRadius = cornerRadius,
         strong = true,
-        enableSheen = true,
-        enableRefraction = true,
+        enableSheen = false,
+        enableRefraction = false,
+        blurStrengthOverride = 1.15f,
+        liquidStroke = true,
         cornerSmoothing = CcSmoothing,
         capsule = capsule,
         tint = activeTint,
@@ -553,14 +563,14 @@ private fun IconTile(
     CcGlass(
         modifier = modifier,
         capsule = true,
-        activeTint = if (active) IosBlueGlass else Color.Transparent,
+        activeTint = if (active) Color.White else Color.Transparent,
         onClick = onClick
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Icon(
                 icon,
                 contentDescription = null,
-                tint = Color.White,
+                tint = if (active) CcRed else Color.White,
                 modifier = Modifier.size(28.dp)
             )
         }
@@ -596,12 +606,12 @@ private fun VerticalLevelSlider(
                     .fillMaxWidth()
                     .fillMaxHeight(local.coerceIn(0.04f, 1f))
                     .align(Alignment.BottomCenter)
-                    .background(Color.White.copy(alpha = 0.38f))
+                    .background(Color.White)
             )
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = Color.White,
+                tint = Color.Black,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 16.dp)

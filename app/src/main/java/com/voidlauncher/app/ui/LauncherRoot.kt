@@ -2,9 +2,11 @@ package com.voidlauncher.app.ui
 
 import android.app.Activity
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,6 +21,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,6 +55,7 @@ import com.voidlauncher.app.ui.shade.ControlCenterController
 import com.voidlauncher.app.ui.shade.NotificationCenter
 import com.voidlauncher.app.viewmodel.LauncherUiState
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 @Composable
@@ -91,6 +95,20 @@ fun LauncherRoot(
     val activity = context as? Activity
     val controlCenter = remember(context) {
         ControlCenterController(context, activity?.window)
+    }
+    val scope = rememberCoroutineScope()
+    val ccExpansion = remember { Animatable(0f) }
+    var ccDragging by remember { mutableStateOf(false) }
+
+    LaunchedEffect(state.isControlCenterOpen) {
+        if (ccDragging) return@LaunchedEffect
+        val target = if (state.isControlCenterOpen) 1f else 0f
+        if (kotlin.math.abs(ccExpansion.value - target) > 0.01f) {
+            ccExpansion.animateTo(
+                target,
+                spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = 0.86f)
+            )
+        }
     }
 
     var actionApp by remember { mutableStateOf<AppInfo?>(null) }
@@ -167,15 +185,10 @@ fun LauncherRoot(
         animationSpec = tween(280, easing = FastOutSlowInEasing),
         label = "homeFocusZoom"
     )
-    val homeBlur by animateDpAsState(
-        targetValue = when {
-            menuSettled -> 20.dp
-            state.isControlCenterOpen -> 48.dp
-            else -> 0.dp
-        },
-        animationSpec = tween(280, easing = FastOutSlowInEasing),
-        label = "homeFocusBlur"
-    )
+    val homeBlur = when {
+        menuSettled -> 20.dp
+        else -> (48f * ccExpansion.value).dp
+    }
 
     CompositionLocalProvider(
         LocalIconAppearance provides appearance,
@@ -220,7 +233,27 @@ fun LauncherRoot(
                         onOpenDrawer = { onDrawerOpenChange(true) },
                         onOpenDrawerSearch = onOpenDrawerSearch,
                         onOpenNotificationCenter = { onNotificationCenterOpenChange(true) },
-                        onOpenControlCenter = { onControlCenterOpenChange(true) },
+                        onOpenControlCenter = {
+                            ccDragging = false
+                            onControlCenterOpenChange(true)
+                        },
+                        onControlCenterPull = { progress ->
+                            ccDragging = true
+                            scope.launch { ccExpansion.snapTo(progress.coerceIn(0f, 1f)) }
+                        },
+                        onControlCenterPullEnd = { open ->
+                            ccDragging = false
+                            onControlCenterOpenChange(open)
+                            scope.launch {
+                                ccExpansion.animateTo(
+                                    if (open) 1f else 0f,
+                                    spring(
+                                        stiffness = Spring.StiffnessMediumLow,
+                                        dampingRatio = 0.86f
+                                    )
+                                )
+                            }
+                        },
                         onSearchApps = { query ->
                             onSearchQueryChange(query)
                             onOpenDrawerSearch()
@@ -270,7 +303,8 @@ fun LauncherRoot(
             )
 
             ControlCenter(
-                visible = state.isControlCenterOpen,
+                visible = state.isControlCenterOpen || ccExpansion.value > 0.001f,
+                expansion = ccExpansion.value,
                 controller = controlCenter,
                 onClose = { onControlCenterOpenChange(false) },
                 modifier = Modifier

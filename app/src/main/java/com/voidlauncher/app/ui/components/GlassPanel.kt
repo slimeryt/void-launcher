@@ -83,6 +83,8 @@ fun GlassPanel(
     cornerSmoothing: Float = DefaultCornerSmoothing,
     /** Stadium ends (50% radius) — use for 1×2 / 2×1 CC tiles. */
     capsule: Boolean = false,
+    /** Keep the Liquid Glass rim even when refraction/sheen are off (CC frost tiles). */
+    liquidStroke: Boolean = false,
     content: @Composable BoxScope.() -> Unit
 ) {
     val wallpaper = LocalBlurredWallpaper.current
@@ -255,7 +257,7 @@ fun GlassPanel(
                 clip = false
             )
             .then(
-                if (useOpticalShader) {
+                if (useOpticalShader || liquidStroke) {
                     Modifier.liquidGlassStroke(shape = shape, strong = strong)
                 } else {
                     Modifier.border(
@@ -357,7 +359,7 @@ fun GlassPanel(
             modifier = Modifier
                 .matchParentSize()
                 .drawBehind {
-                    if (!useOpticalShader) {
+                    if (!useOpticalShader && !liquidStroke) {
                         if (useWallpaperBackdrop) {
                             drawRect(Color.White.copy(alpha = 0.06f * frostAmount))
                             val rim = if (strong) 0.28f else 0.18f
