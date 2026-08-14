@@ -298,10 +298,6 @@ fun HomeScreen(
         modifier = modifier
             .fillMaxSize()
             .onGloballyPositioned { homeRootPos = it.positionInWindow() }
-            .pointerInput(state.isEditMode) {
-                if (state.isEditMode) return@pointerInput
-                detectTapGestures(onLongPress = { onEditModeChange(true) })
-            }
             .pointerInput(state.isEditMode, state.isDrawerOpen) {
                 if (state.isEditMode) return@pointerInput
                 detectVerticalDragGestures(
@@ -368,9 +364,12 @@ fun HomeScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    // Tall enough that corner slides aren't clipped mid-flight.
                     .height(72.dp)
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 16.dp)
+                    .pointerInput(state.isEditMode) {
+                        if (state.isEditMode) return@pointerInput
+                        detectTapGestures(onLongPress = { onEditModeChange(true) })
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 val editChromeVisible = state.isEditMode && !isDragging
@@ -897,7 +896,11 @@ fun HomeScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 10.dp)
-                    .height(26.dp),
+                    .height(26.dp)
+                    .pointerInput(state.isEditMode) {
+                        if (state.isEditMode) return@pointerInput
+                        detectTapGestures(onLongPress = { onEditModeChange(true) })
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 // Search & dots share the screen center. Assistant sits to the right of Search

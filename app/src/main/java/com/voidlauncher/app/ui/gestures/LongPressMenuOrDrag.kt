@@ -82,7 +82,7 @@ suspend fun PointerInputScope.detectLongPressMenuOrDrag(
                 }
             }
         } catch (t: Throwable) {
-            if (dragging) onDragCancel()
+            if (dragging) onDragCancel() else onLongPressRelease()
             throw t
         }
     }

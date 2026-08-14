@@ -175,7 +175,7 @@ fun ControlCenter(
                         onClick = {}
                     )
             ) {
-                val gap = 7.dp
+                val gap = 14.dp
                 val cell = (maxWidth - gap * 3) / 4
                 val gridH = cell * 4 + gap * 3
 

@@ -147,6 +147,13 @@ fun LauncherRoot(
     BackHandler(enabled = state.iconEditorOpen) {
         onIconEditorOpenChange(false)
     }
+    BackHandler(enabled = actionApp != null && !state.iconEditorOpen) {
+        dismissAppMenu()
+    }
+
+    LaunchedEffect(state.isEditMode) {
+        if (state.isEditMode) dismissAppMenu()
+    }
 
     val hazeState = rememberHazeState()
     val menuOpen = actionApp != null
