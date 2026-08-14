@@ -55,6 +55,7 @@ import com.voidlauncher.app.glass.LocalGlassSettings
 import com.voidlauncher.app.glass.LocalWallpaperScrollState
 import com.voidlauncher.app.glass.WallpaperCrop
 import com.voidlauncher.app.ui.theme.VoidGlassBorder
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
@@ -78,6 +79,10 @@ fun GlassPanel(
      */
     blurStrengthOverride: Float? = null,
     tint: Color = Color.Transparent,
+    /** 0 = circular corners, 1 = max continuous smoothing. */
+    cornerSmoothing: Float = DefaultCornerSmoothing,
+    /** Stadium ends (50% radius) — use for 1×2 / 2×1 CC tiles. */
+    capsule: Boolean = false,
     content: @Composable BoxScope.() -> Unit
 ) {
     val wallpaper = LocalBlurredWallpaper.current
@@ -85,7 +90,6 @@ fun GlassPanel(
     // Stable holder — read .offset only inside graphicsLayer (no per-frame recomposition).
     val wallpaperScroll = LocalWallpaperScrollState.current
     val density = LocalDensity.current
-    val cornerRadiusPx = with(density) { cornerRadius.toPx() }
 
     val blurStrength = (blurStrengthOverride ?: glass.blurStrength).coerceIn(0f, 1.6f)
     val frostAmount = glass.frostAmount
@@ -96,7 +100,16 @@ fun GlassPanel(
     // Store numeric pos so wallpaper recomposes when layout settles (folder open, etc.).
     var panelPos by remember { mutableStateOf(Offset.Zero) }
     var layoutCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
-    val shape = remember(cornerRadius) { SmoothCornerShape(radius = cornerRadius) }
+    val smoothing = cornerSmoothing.coerceIn(0f, 1f)
+    val shape = remember(cornerRadius, smoothing, capsule) {
+        if (capsule) SmoothCornerShape(percent = 50, smoothing = smoothing)
+        else SmoothCornerShape(radius = cornerRadius, smoothing = smoothing)
+    }
+    val cornerRadiusPx = if (capsule && layerSize.width > 1 && layerSize.height > 1) {
+        min(layerSize.width, layerSize.height) / 2f
+    } else {
+        with(density) { cornerRadius.toPx() }
+    }
 
     val runtimeShader = remember {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -138,6 +151,7 @@ fun GlassPanel(
         frostAmount,
         specularOn,
         cornerRadiusPx,
+        capsule,
         runtimeShader
     ) {
         if (layerSize.width <= 1 || layerSize.height <= 1) return@remember null

@@ -154,12 +154,20 @@ fun LauncherRoot(
     // rebuilds the home modifier tree and cancels the hold→drag pointer.
     val menuSettled = menuOpen && menuOutsideDismiss
     val homeFocusScale by animateFloatAsState(
-        targetValue = if (menuSettled) 0.96f else 1f,
+        targetValue = when {
+            menuSettled -> 0.96f
+            state.isControlCenterOpen -> 0.97f
+            else -> 1f
+        },
         animationSpec = tween(280, easing = FastOutSlowInEasing),
         label = "homeFocusZoom"
     )
     val homeBlur by animateDpAsState(
-        targetValue = if (menuSettled) 20.dp else 0.dp,
+        targetValue = when {
+            menuSettled -> 20.dp
+            state.isControlCenterOpen -> 36.dp
+            else -> 0.dp
+        },
         animationSpec = tween(280, easing = FastOutSlowInEasing),
         label = "homeFocusBlur"
     )
