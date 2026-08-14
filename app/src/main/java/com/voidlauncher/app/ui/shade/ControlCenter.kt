@@ -446,7 +446,6 @@ fun ControlCenter(
             }
         }
     }
-}
 
 @Composable
 private fun CcGlass(
@@ -902,7 +901,7 @@ private fun ExpandedModuleCard(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = onSettings
+                        onClick = { onSettings() }
                     )
                     .padding(vertical = 8.dp)
             )
