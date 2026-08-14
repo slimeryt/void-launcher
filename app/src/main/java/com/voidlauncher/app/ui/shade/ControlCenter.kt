@@ -82,7 +82,7 @@ import com.voidlauncher.app.ui.theme.VoidMist
 import com.voidlauncher.app.ui.theme.VoidMuted
 import kotlinx.coroutines.delay
 
-private const val CcSmoothing = 1f
+private const val CcSmoothing = 0.78f
 
 /**
  * 4×4 Control Center:
@@ -214,7 +214,8 @@ fun ControlCenter(
                             else -> "On"
                         },
                         active = controller.wifiEnabled,
-                        onClick = { controller.toggleWifi() },
+                        onToggle = { controller.toggleWifi() },
+                        onOpen = { controller.openWifi() },
                         modifier = Modifier.place(2, 0, 2, 1)
                     )
                     ConnectivityPill(
@@ -226,7 +227,7 @@ fun ControlCenter(
                             else -> "On"
                         },
                         active = controller.bluetoothEnabled,
-                        onClick = {
+                        onToggle = {
                             controller.toggleBluetooth {
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                                     requestBluetooth.launch(
@@ -238,6 +239,7 @@ fun ControlCenter(
                                 }
                             }
                         },
+                        onOpen = { controller.openBluetooth() },
                         modifier = Modifier.place(2, 1, 2, 1)
                     )
                     IconTile(
@@ -269,11 +271,12 @@ fun ControlCenter(
                             else -> "On"
                         },
                         active = controller.mobileDataEnabled,
-                        onClick = {
+                        onToggle = {
                             controller.toggleMobileData {
                                 requestPhone.launch(Manifest.permission.READ_PHONE_STATE)
                             }
                         },
+                        onOpen = { controller.openNetwork() },
                         modifier = Modifier.place(0, 3, 2, 1)
                     )
                     VerticalLevelSlider(
@@ -463,40 +466,46 @@ private fun ConnectivityPill(
     title: String,
     subtitle: String,
     active: Boolean,
-    onClick: () -> Unit,
+    onToggle: () -> Unit,
+    onOpen: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     CcGlass(
         modifier = modifier,
         capsule = true,
-        onClick = onClick
+        onClick = onOpen
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp),
+                .padding(start = 10.dp, end = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(52.dp)
                     .clip(CircleShape)
-                    .background(if (active) IosBlue else Color.White.copy(alpha = 0.16f)),
+                    .background(if (active) IosBlue else Color.White.copy(alpha = 0.16f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onToggle
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     icon,
                     contentDescription = title,
                     tint = Color.White,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(26.dp)
                 )
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
                     color = VoidMist,
-                    fontSize = 13.sp,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -504,7 +513,7 @@ private fun ConnectivityPill(
                 Text(
                     text = subtitle,
                     color = VoidMuted,
-                    fontSize = 11.sp,
+                    fontSize = 13.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -522,8 +531,7 @@ private fun IconTile(
 ) {
     CcGlass(
         modifier = modifier,
-        capsule = false,
-        cornerRadius = 28.dp,
+        capsule = true,
         activeTint = if (active) IosBlueGlass else Color.Transparent,
         onClick = onClick
     ) {
@@ -532,7 +540,7 @@ private fun IconTile(
                 icon,
                 contentDescription = null,
                 tint = Color.White,
-                modifier = Modifier.size(26.dp)
+                modifier = Modifier.size(28.dp)
             )
         }
     }
