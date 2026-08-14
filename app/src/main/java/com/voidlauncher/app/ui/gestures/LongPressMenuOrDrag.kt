@@ -94,11 +94,14 @@ suspend fun PointerInputScope.detectLongPressMenuOrDrag(
  * consume the pointer first — otherwise holding an app would also enter edit mode.
  */
 suspend fun PointerInputScope.detectUnconsumedLongPress(onLongPress: () -> Unit) {
-    awaitEachGesture {
-        val down = awaitFirstDown(requireUnconsumed = true)
-        val longPress = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
+    while (true) {
+        val (down, longPress) = awaitPointerEventScope {
+            val down = awaitFirstDown(requireUnconsumed = true)
+            down to awaitLongPressOrCancellation(down.id)
+        }
+        if (longPress == null) continue
         delay(1)
-        if (down.isConsumed || longPress.isConsumed) return@awaitEachGesture
+        if (down.isConsumed || longPress.isConsumed) continue
         down.consume()
         longPress.consume()
         onLongPress()
