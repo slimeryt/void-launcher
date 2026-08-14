@@ -187,7 +187,7 @@ fun LauncherRoot(
     )
     val homeBlur = when {
         menuSettled -> 20.dp
-        else -> (48f * ccExpansion.value).dp
+        else -> (48f * ccExpansion.value.coerceIn(0f, 1f)).dp
     }
 
     CompositionLocalProvider(
@@ -239,7 +239,7 @@ fun LauncherRoot(
                         },
                         onControlCenterPull = { progress ->
                             ccDragging = true
-                            scope.launch { ccExpansion.snapTo(progress.coerceIn(0f, 1f)) }
+                            scope.launch { ccExpansion.snapTo(progress.coerceAtLeast(0f)) }
                         },
                         onControlCenterPullEnd = { open ->
                             ccDragging = false

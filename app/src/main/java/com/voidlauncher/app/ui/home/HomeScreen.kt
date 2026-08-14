@@ -105,6 +105,7 @@ import com.voidlauncher.app.ui.assistant.AssistantOverlay
 import com.voidlauncher.app.ui.components.AppIcon
 import com.voidlauncher.app.ui.gestures.detectLongPressMenuOrDrag
 import com.voidlauncher.app.ui.gestures.detectUnconsumedLongPress
+import com.voidlauncher.app.ui.shade.ccRubberBand
 import com.voidlauncher.app.util.PendingLaunchBounds
 import com.voidlauncher.app.ui.components.AppIconShape
 import com.voidlauncher.app.ui.components.CapsuleShape
@@ -346,7 +347,12 @@ fun HomeScreen(
                         if (pullingCc) {
                             swipeDown = (swipeDown + amount).coerceAtLeast(0f)
                             val revealPx = size.height * 0.38f
-                            onControlCenterPull((swipeDown / revealPx).coerceIn(0f, 1.08f))
+                            val progress = if (swipeDown <= revealPx) {
+                                swipeDown / revealPx
+                            } else {
+                                1f + ccRubberBand(swipeDown - revealPx, 220f) / revealPx
+                            }
+                            onControlCenterPull(progress)
                             return@detectVerticalDragGestures
                         }
                         when {

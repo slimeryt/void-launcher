@@ -5,6 +5,9 @@ import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -52,6 +55,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +63,7 @@ import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -78,9 +83,20 @@ import com.voidlauncher.app.ui.theme.IosBlue
 import com.voidlauncher.app.ui.theme.VoidMist
 import com.voidlauncher.app.ui.theme.VoidMuted
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private const val CcSmoothing = 0.78f
 private val CcRed = Color(0xFFFF3B30)
+private val CcStretchSpring = spring<Float>(
+    dampingRatio = 0.78f,
+    stiffness = Spring.StiffnessMediumLow
+)
+
+/** iOS-style rubber band: extra drag maps to a diminishing offset. */
+internal fun ccRubberBand(overscroll: Float, limit: Float = 160f): Float {
+    if (overscroll <= 0f) return 0f
+    return (overscroll * limit) / (overscroll + limit)
+}
 
 /**
  * 4×4 Control Center:
@@ -98,10 +114,11 @@ fun ControlCenter(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val shown = visible || expansion > 0.001f
     val interactive = expansion >= 0.98f
     BackHandler(enabled = shown && expansion > 0.45f, onBack = onClose)
-    var pull by remember { mutableFloatStateOf(0f) }
+    val pull = remember { Animatable(0f) }
 
     val requestBluetooth = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -123,7 +140,7 @@ fun ControlCenter(
     LaunchedEffect(shown) {
         if (shown) {
             controller.refresh()
-            pull = 0f
+            pull.snapTo(0f)
             while (true) {
                 delay(900)
                 controller.refresh()
@@ -147,14 +164,17 @@ fun ControlCenter(
                         .pointerInput(Unit) {
                             detectVerticalDragGestures(
                                 onDragEnd = {
-                                    if (pull < -100f) onClose()
-                                    pull = 0f
+                                    if (pull.value < -120f) {
+                                        onClose()
+                                    }
+                                    scope.launch { pull.animateTo(0f, CcStretchSpring) }
                                 },
-                                onDragCancel = { pull = 0f },
+                                onDragCancel = {
+                                    scope.launch { pull.animateTo(0f, CcStretchSpring) }
+                                },
                                 onVerticalDrag = { change, amount ->
                                     change.consume()
-                                    if (amount < 0f) pull += amount
-                                    else pull = (pull + amount).coerceAtMost(0f)
+                                    scope.launch { pull.snapTo(pull.value + amount) }
                                 }
                             )
                         }
@@ -181,7 +201,21 @@ fun ControlCenter(
                 .statusBarsPadding()
                 .padding(top = 76.dp)
                 .graphicsLayer {
-                    translationY = (1f - expansion.coerceIn(0f, 1f)) * -size.height + pull
+                    val over = (expansion - 1f).coerceAtLeast(0f)
+                    val stretch = ccRubberBand(over * size.height) +
+                        if (pull.value > 0f) ccRubberBand(pull.value) else 0f
+                    val dragUp = if (pull.value < 0f) pull.value else 0f
+                    translationY =
+                        (1f - expansion.coerceIn(0f, 1f)) * -size.height + stretch + dragUp
+                    val grow = stretch / size.height.coerceAtLeast(1f)
+                    val shrink = if (dragUp < 0f) {
+                        (-dragUp) / size.height.coerceAtLeast(1f) * 0.08f
+                    } else {
+                        0f
+                    }
+                    scaleX = 1f + grow * 0.06f - shrink * 0.35f
+                    scaleY = 1f + grow * 0.18f - shrink
+                    transformOrigin = TransformOrigin(0.5f, 0f)
                     alpha = (expansion * 1.15f).coerceIn(0f, 1f)
                 }
                 .then(
