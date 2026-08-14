@@ -4,7 +4,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,7 +27,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -73,18 +71,7 @@ fun AppIcon(
 
     val clickModifier = when {
         editMode -> Modifier
-        !longPressEnabled -> {
-            // Tap-only via detectTapGestures: cancels itself after long-press timeout,
-            // so it does NOT steal hold→drag from the parent pointerInput.
-            Modifier.pointerInput(app.key) {
-                detectTapGestures(
-                    onTap = {
-                        PendingLaunchBounds.rect = boundsHolder.value
-                        onClick()
-                    }
-                )
-            }
-        }
+        !longPressEnabled -> Modifier
         else -> Modifier.combinedClickable(
             interactionSource = remember { MutableInteractionSource() },
             indication = null,

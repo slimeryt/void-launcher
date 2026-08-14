@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.voidlauncher.app.data.AppInfo
 import com.voidlauncher.app.ui.gestures.detectLongPressMenuOrDrag
+import com.voidlauncher.app.util.PendingLaunchBounds
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 
@@ -133,8 +134,20 @@ fun DockBar(
                                 slotCenters = slotCenters + (displayIndex to Offset(pos.x + w / 2f, pos.y + h / 2f))
                             }
                             .pointerInput(sourceIndex, apps.size) {
-                                detectLongPressMenuOrDrag(
-                                    onLongPress = {
+                            detectLongPressMenuOrDrag(
+                                onTap = {
+                                    val src = apps.getOrNull(sourceIndex) ?: return@detectLongPressMenuOrDrag
+                                    cellBounds[displayIndex]?.let { r ->
+                                        PendingLaunchBounds.rect = android.graphics.Rect(
+                                            r.left.toInt(),
+                                            r.top.toInt(),
+                                            r.right.toInt(),
+                                            r.bottom.toInt()
+                                        )
+                                    }
+                                    onAppClick(src)
+                                },
+                                onLongPress = {
                                         val src = apps.getOrNull(sourceIndex)
                                             ?: return@detectLongPressMenuOrDrag
                                         onAppLongClick(src, cellBounds[displayIndex] ?: Rect.Zero)

@@ -71,6 +71,7 @@ import com.voidlauncher.app.ui.components.AppIcon
 import com.voidlauncher.app.ui.components.CapsuleShape
 import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.gestures.detectLongPressMenuOrDrag
+import com.voidlauncher.app.util.PendingLaunchBounds
 import com.voidlauncher.app.ui.theme.VoidCyan
 import com.voidlauncher.app.ui.theme.VoidMist
 import com.voidlauncher.app.ui.theme.VoidMuted
@@ -374,6 +375,18 @@ fun AppDrawer(
                                             .pointerInput(app.key, state.isEditMode, index) {
                                                 if (state.isEditMode) return@pointerInput
                                                 detectLongPressMenuOrDrag(
+                                                    onTap = {
+                                                        iconBounds[index]?.let { r ->
+                                                            PendingLaunchBounds.rect =
+                                                                android.graphics.Rect(
+                                                                    r.left.toInt(),
+                                                                    r.top.toInt(),
+                                                                    r.right.toInt(),
+                                                                    r.bottom.toInt()
+                                                                )
+                                                        }
+                                                        onLaunchApp(app)
+                                                    },
                                                     onLongPress = {
                                                         onAppLongClick(
                                                             app,

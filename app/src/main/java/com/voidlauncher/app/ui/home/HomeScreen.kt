@@ -104,6 +104,7 @@ import com.voidlauncher.app.data.HomeItem
 import com.voidlauncher.app.ui.assistant.AssistantOverlay
 import com.voidlauncher.app.ui.components.AppIcon
 import com.voidlauncher.app.ui.gestures.detectLongPressMenuOrDrag
+import com.voidlauncher.app.util.PendingLaunchBounds
 import com.voidlauncher.app.ui.components.AppIconShape
 import com.voidlauncher.app.ui.components.CapsuleShape
 import com.voidlauncher.app.ui.components.DockBar
@@ -570,6 +571,31 @@ fun HomeScreen(
                                 .pointerInput(state.isEditMode, page, sourceIndex, item) {
                                     if (state.isEditMode) return@pointerInput
                                     detectLongPressMenuOrDrag(
+                                        onTap = {
+                                            when (item) {
+                                                is HomeItem.App -> {
+                                                    val app = state.appsByKey[item.key]
+                                                    if (app != null) {
+                                                        cellBounds[index]?.let { r ->
+                                                            PendingLaunchBounds.rect =
+                                                                android.graphics.Rect(
+                                                                    r.left.toInt(),
+                                                                    r.top.toInt(),
+                                                                    r.right.toInt(),
+                                                                    r.bottom.toInt()
+                                                                )
+                                                        }
+                                                        onLaunchApp(app)
+                                                    }
+                                                }
+                                                is HomeItem.Folder -> {
+                                                    openFolderSource =
+                                                        folderBounds[item.id] ?: Rect.Zero
+                                                    folderClosing = false
+                                                    openFolderId = item.id
+                                                }
+                                            }
+                                        },
                                         onLongPress = {
                                             when (item) {
                                                 is HomeItem.App -> {
@@ -845,6 +871,7 @@ fun HomeScreen(
                                             }
                                         },
                                         onLongClick = { onEditModeChange(true) },
+                                        handlePresses = false,
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .alpha(if (dragging) 0f else 1f)
@@ -1446,7 +1473,8 @@ private fun FolderIcon(
     selected: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    handlePresses: Boolean = true
 ) {
     val appearance = LocalIconAppearance.current
     val effectiveScale = appearance.scale
@@ -1469,7 +1497,7 @@ private fun FolderIcon(
             .width(80.dp)
             .padding(vertical = 6.dp)
             .then(
-                if (editMode) Modifier
+                if (editMode || !handlePresses) Modifier
                 else Modifier.pointerInput(Unit) {
                     detectTapGestures(onLongPress = { onLongClick() }, onTap = { onClick() })
                 }
@@ -1853,6 +1881,10 @@ private fun FolderPanelContent(
                         .pointerInput(i, apps.size, closing) {
                             if (closing) return@pointerInput
                             detectLongPressMenuOrDrag(
+                                onTap = {
+                                    onRequestClose()
+                                    onLaunchApp(app)
+                                },
                                 onLongPress = { },
                                 onDragStart = { onDragStart(i) },
                                 onDrag = { change, amount ->

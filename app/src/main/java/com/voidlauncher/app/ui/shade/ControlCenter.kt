@@ -74,6 +74,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.voidlauncher.app.notifications.NotificationMirror
 import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.theme.IosBlue
@@ -165,7 +166,7 @@ fun ControlCenter(
             BoxWithConstraints(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .fillMaxWidth(0.84f)
+                    .fillMaxWidth(0.68f)
                     .statusBarsPadding()
                     .padding(top = 84.dp)
                     .clickable(
@@ -174,7 +175,7 @@ fun ControlCenter(
                         onClick = {}
                     )
             ) {
-                val gap = 8.dp
+                val gap = 7.dp
                 val cell = (maxWidth - gap * 3) / 4
                 val gridH = cell * 4 + gap * 3
 
@@ -472,19 +473,19 @@ private fun ConnectivityPill(
 ) {
     CcGlass(
         modifier = modifier,
-        capsule = true,
-        onClick = onOpen
+        capsule = true
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = 10.dp, end = 14.dp),
+                .padding(start = 8.dp, end = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(52.dp)
+                    .zIndex(2f)
+                    .size(44.dp)
                     .clip(CircleShape)
                     .background(if (active) IosBlue else Color.White.copy(alpha = 0.16f))
                     .clickable(
@@ -498,14 +499,22 @@ private fun ConnectivityPill(
                     icon,
                     contentDescription = title,
                     tint = Color.White,
-                    modifier = Modifier.size(26.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onOpen
+                    )
+            ) {
                 Text(
                     text = title,
                     color = VoidMist,
-                    fontSize = 16.sp,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -513,7 +522,7 @@ private fun ConnectivityPill(
                 Text(
                     text = subtitle,
                     color = VoidMuted,
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

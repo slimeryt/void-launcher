@@ -1,12 +1,15 @@
 package com.voidlauncher.app.ui.shade
 
 import android.Manifest
+import android.app.Activity
 import android.app.NotificationManager
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
+import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.hardware.camera2.CameraCharacteristics
@@ -97,6 +100,21 @@ class ControlCenterController(
     private var mediaController: MediaController? = null
     private var listening = false
 
+    private val radioReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            refresh()
+        }
+    }
+
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: android.net.Network) = refresh()
+        override fun onLost(network: android.net.Network) = refresh()
+        override fun onCapabilitiesChanged(
+            network: android.net.Network,
+            caps: NetworkCapabilities
+        ) = refresh()
+    }
+
     private val mediaCallback = object : MediaController.Callback() {
         override fun onPlaybackStateChanged(state: PlaybackState?) = publishNowPlaying()
         override fun onMetadataChanged(metadata: MediaMetadata?) = publishNowPlaying()
@@ -133,6 +151,23 @@ class ControlCenterController(
             bindMedia(mediaSessionManager.getActiveSessions(listener))
         }
         refresh()
+        val filter = IntentFilter().apply {
+            addAction(WifiManager.WIFI_STATE_CHANGED_ACTION)
+            addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION)
+            addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
+            addAction(ConnectivityManager.CONNECTIVITY_ACTION)
+        }
+        runCatching {
+            ContextCompat.registerReceiver(
+                context,
+                radioReceiver,
+                filter,
+                ContextCompat.RECEIVER_EXPORTED
+            )
+        }
+        runCatching {
+            connectivityManager.registerDefaultNetworkCallback(networkCallback, mainHandler)
+        }
     }
 
     fun stopListening() {
@@ -141,6 +176,8 @@ class ControlCenterController(
         runCatching {
             mediaSessionManager.removeOnActiveSessionsChangedListener(sessionsChanged)
         }
+        runCatching { context.unregisterReceiver(radioReceiver) }
+        runCatching { connectivityManager.unregisterNetworkCallback(networkCallback) }
         mediaController?.unregisterCallback(mediaCallback)
         mediaController = null
     }
@@ -236,14 +273,24 @@ class ControlCenterController(
     }
 
     fun toggleWifi() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            openPanel(Settings.Panel.ACTION_WIFI)
+        val next = !wifiManager.isWifiEnabled
+        val applied = runCatching {
+            @Suppress("DEPRECATION")
+            wifiManager.setWifiEnabled(next)
+        }.getOrDefault(false)
+        if (applied || wifiManager.isWifiEnabled == next) {
+            wifiEnabled = next
+            wifiSsid = readWifiSsid()
             return
         }
-        val ok = runCatching { @Suppress("DEPRECATION") wifiManager.setWifiEnabled(!wifiEnabled) }
-            .getOrDefault(false)
-        if (!ok) open(Settings.ACTION_WIFI_SETTINGS)
-        refresh()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (!startUi(Intent(Settings.Panel.ACTION_WIFI))) {
+                open(Settings.ACTION_WIFI_SETTINGS)
+            }
+        } else {
+            open(Settings.ACTION_WIFI_SETTINGS)
+        }
+        mainHandler.postDelayed({ refresh() }, 600)
     }
 
     fun toggleBluetooth(requestConnect: () -> Unit) {
@@ -258,26 +305,56 @@ class ControlCenterController(
             open(Settings.ACTION_BLUETOOTH_SETTINGS)
             return
         }
-        val toggled = runCatching {
+        val turningOn = !adapter.isEnabled
+        val applied = runCatching {
             @Suppress("DEPRECATION")
-            if (adapter.isEnabled) adapter.disable() else adapter.enable()
-            true
+            if (turningOn) adapter.enable() else adapter.disable()
         }.getOrDefault(false)
-        if (!toggled) {
+        if (applied || adapter.isEnabled == turningOn) {
+            bluetoothEnabled = turningOn
+            bluetoothName = readBluetoothName()
+            return
+        }
+        if (turningOn) {
+            if (!startUi(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))) {
+                open(Settings.ACTION_BLUETOOTH_SETTINGS)
+            }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (!startUi(Intent(BluetoothAdapter.ACTION_REQUEST_DISABLE))) {
+                open(Settings.ACTION_BLUETOOTH_SETTINGS)
+            }
+        } else {
             open(Settings.ACTION_BLUETOOTH_SETTINGS)
         }
-        mainHandler.postDelayed({ refresh() }, 400)
+        mainHandler.postDelayed({ refresh() }, 600)
     }
 
     fun toggleMobileData(requestPhone: () -> Unit) {
         if (!hasPermission(Manifest.permission.READ_PHONE_STATE)) {
             requestPhone()
         }
+        val next = !readMobileData()
+        val applied = runCatching {
+            val tm = telephonyManager ?: return@runCatching false
+            val method = tm.javaClass.getMethod(
+                "setDataEnabled",
+                Boolean::class.javaPrimitiveType
+            )
+            method.invoke(tm, next)
+            true
+        }.getOrDefault(false)
+        if (applied) {
+            mobileDataEnabled = next
+            return
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            openPanel(Settings.Panel.ACTION_INTERNET_CONNECTIVITY)
+            if (!startUi(Intent(Settings.Panel.ACTION_INTERNET_CONNECTIVITY))) {
+                open(Settings.ACTION_DATA_ROAMING_SETTINGS)
+            }
         } else {
             open(Settings.ACTION_DATA_ROAMING_SETTINGS)
         }
+        mainHandler.postDelayed({ refresh() }, 600)
     }
 
     fun toggleDnd() {
@@ -368,16 +445,24 @@ class ControlCenterController(
         ComponentName(context, PolarNotificationListener::class.java)
 
     private fun openPanel(action: String) {
-        if (!open(action)) open(Settings.ACTION_SETTINGS)
+        if (!startUi(Intent(action))) open(Settings.ACTION_SETTINGS)
     }
 
     private fun open(action: String): Boolean {
-        return openIntent(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        return startUi(Intent(action))
     }
 
-    private fun openIntent(intent: Intent): Boolean {
+    private fun openIntent(intent: Intent): Boolean = startUi(intent)
+
+    /** Panels overlay the launcher; NEW_TASK from a HOME activity often swallows them. */
+    private fun startUi(intent: Intent): Boolean {
+        val act = (context as? Activity) ?: window?.context as? Activity
         return runCatching {
-            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            if (act != null) {
+                act.startActivity(intent)
+            } else {
+                context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
             true
         }.getOrDefault(false)
     }
