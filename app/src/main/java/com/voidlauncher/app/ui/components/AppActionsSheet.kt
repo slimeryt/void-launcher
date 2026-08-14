@@ -33,7 +33,7 @@ import com.voidlauncher.app.ui.theme.VoidMist
 import kotlin.math.roundToInt
 
 private val SheetShape = SmoothCornerShape(32.dp)
-private val MenuBlack = Color.Black.copy(alpha = 0.85f)
+private val MenuBlack = Color(0xFF1C1C1E)
 
 /**
  * Compact floating context menu near the focused icon.
@@ -132,7 +132,6 @@ fun AppActionsSheet(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.22f))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,

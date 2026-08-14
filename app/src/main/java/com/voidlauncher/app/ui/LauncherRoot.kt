@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -39,6 +40,7 @@ import com.voidlauncher.app.data.AppInfo
 import com.voidlauncher.app.glass.LocalHazeState
 import com.voidlauncher.app.ui.components.AppActionsSheet
 import com.voidlauncher.app.ui.components.AppIcon
+import com.voidlauncher.app.ui.components.LocalHiddenAppKey
 import com.voidlauncher.app.ui.drawer.AppDrawer
 import com.voidlauncher.app.ui.home.HomeScreen
 import com.voidlauncher.app.ui.icons.IconAppearance
@@ -161,18 +163,14 @@ fun LauncherRoot(
     // rebuilds the home modifier tree and cancels the hold→drag pointer.
     val menuSettled = menuOpen && menuOutsideDismiss
     val homeFocusScale by animateFloatAsState(
-        targetValue = when {
-            menuSettled -> 0.96f
-            state.isControlCenterOpen -> 0.97f
-            else -> 1f
-        },
+        targetValue = if (menuSettled) 0.96f else 1f,
         animationSpec = tween(280, easing = FastOutSlowInEasing),
         label = "homeFocusZoom"
     )
     val homeBlur by animateDpAsState(
         targetValue = when {
             menuSettled -> 20.dp
-            state.isControlCenterOpen -> 36.dp
+            state.isControlCenterOpen -> 48.dp
             else -> 0.dp
         },
         animationSpec = tween(280, easing = FastOutSlowInEasing),
@@ -192,13 +190,13 @@ fun LauncherRoot(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .blur(homeBlur)
+                    .blur(homeBlur, edgeTreatment = BlurredEdgeTreatment.Unbounded)
             ) {
                 if (menuSettled) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.42f))
+                            .background(Color.Black.copy(alpha = 0.55f))
                     )
                 }
                 Box(
@@ -210,6 +208,9 @@ fun LauncherRoot(
                             transformOrigin = TransformOrigin.Center
                         }
                 ) {
+                    CompositionLocalProvider(
+                        LocalHiddenAppKey provides if (menuSettled) actionApp?.key else null
+                    ) {
                     HomeScreen(
                         state = state,
                         onLaunchApp = onLaunchApp,
@@ -238,10 +239,14 @@ fun LauncherRoot(
                         onAddAppToHome = { app, _ -> onAddAppToHome(app) },
                         modifier = Modifier.fillMaxSize()
                     )
+                    }
                 }
             }
 
             // Drawer outside the home blur/zoom layer so opening it stays snappy
+            CompositionLocalProvider(
+                LocalHiddenAppKey provides if (menuSettled) actionApp?.key else null
+            ) {
             AppDrawer(
                 visible = state.isDrawerOpen,
                 state = state,
@@ -254,6 +259,7 @@ fun LauncherRoot(
                 onClose = { onDrawerOpenChange(false) },
                 modifier = Modifier.fillMaxSize()
             )
+            }
 
             NotificationCenter(
                 visible = state.isNotificationCenterOpen,
@@ -277,6 +283,7 @@ fun LauncherRoot(
             val focused = actionApp
             val bounds = focusBounds
             if (menuSettled && focused != null && bounds != null) {
+                CompositionLocalProvider(LocalHiddenAppKey provides null) {
                 Box(
                     modifier = Modifier
                         .zIndex(8f)
@@ -296,6 +303,7 @@ fun LauncherRoot(
                         onLongClick = {},
                         longPressEnabled = false
                     )
+                }
                 }
             }
 

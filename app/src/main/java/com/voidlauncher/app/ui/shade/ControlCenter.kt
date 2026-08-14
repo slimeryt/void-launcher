@@ -62,6 +62,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -77,6 +79,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.voidlauncher.app.notifications.NotificationMirror
 import com.voidlauncher.app.ui.components.GlassPanel
+import com.voidlauncher.app.ui.components.WallpaperHazeSource
 import com.voidlauncher.app.ui.theme.IosBlue
 import com.voidlauncher.app.ui.theme.IosBlueGlass
 import com.voidlauncher.app.ui.theme.VoidMist
@@ -142,7 +145,6 @@ fun ControlCenter(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.28f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -163,12 +165,22 @@ fun ControlCenter(
                     )
                 }
         ) {
+            WallpaperHazeSource(
+                modifier = Modifier
+                    .matchParentSize()
+                    .blur(42.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.42f))
+            )
             BoxWithConstraints(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .fillMaxWidth(0.68f)
+                    .fillMaxWidth(0.74f)
                     .statusBarsPadding()
-                    .padding(top = 84.dp)
+                    .padding(top = 76.dp)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,

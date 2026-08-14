@@ -19,10 +19,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
@@ -39,6 +41,9 @@ import com.voidlauncher.app.ui.theme.IosBlue
 import com.voidlauncher.app.util.PendingLaunchBounds
 import kotlin.math.roundToInt
 
+/** When set, matching home/dock/drawer icons are hidden so only the focused overlay shows. */
+val LocalHiddenAppKey = compositionLocalOf<String?> { null }
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AppIcon(
@@ -54,6 +59,7 @@ fun AppIcon(
     longPressEnabled: Boolean = true
 ) {
     val appearance = LocalIconAppearance.current
+    val hideInPlace = LocalHiddenAppKey.current == app.key
     val effectiveScale = appearance.scale
     val iconSize = (58 * effectiveScale).dp
     val radiusRatio = appearance.cornerRadiusRatio
@@ -89,6 +95,7 @@ fun AppIcon(
     Column(
         modifier = modifier
             .width(80.dp)
+            .graphicsLayer { alpha = if (hideInPlace) 0f else 1f }
             .onGloballyPositioned { coords ->
                 val pos = coords.positionInWindow()
                 boundsHolder.value = android.graphics.Rect(
