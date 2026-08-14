@@ -264,11 +264,7 @@ class ControlCenterController(
             true
         }.getOrDefault(false)
         if (!toggled) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                openPanel(Settings.Panel.ACTION_BLUETOOTH)
-            } else {
-                open(Settings.ACTION_BLUETOOTH_SETTINGS)
-            }
+            open(Settings.ACTION_BLUETOOTH_SETTINGS)
         }
         mainHandler.postDelayed({ refresh() }, 400)
     }
@@ -430,13 +426,14 @@ class ControlCenterController(
     }
 
     private fun readBluetoothName(): String {
-        if (bluetoothAdapter?.isEnabled != true) return ""
+        val adapter = bluetoothAdapter ?: return ""
+        if (!adapter.isEnabled) return ""
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             !hasPermission(Manifest.permission.BLUETOOTH_CONNECT)
         ) {
             return ""
         }
-        return runCatching { bluetoothAdapter.name }.getOrNull().orEmpty()
+        return runCatching { adapter.name }.getOrNull().orEmpty()
     }
 
     private fun readMobileData(): Boolean {
