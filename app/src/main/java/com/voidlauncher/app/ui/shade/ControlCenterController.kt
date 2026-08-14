@@ -396,6 +396,46 @@ class ControlCenterController(
 
     fun openWifi() = open(Settings.ACTION_WIFI_SETTINGS)
     fun openBluetooth() = open(Settings.ACTION_BLUETOOTH_SETTINGS)
+
+    fun nearbyWifiNames(): List<String> {
+        val current = readWifiSsid()
+        val scans = runCatching {
+            @Suppress("DEPRECATION")
+            wifiManager.scanResults
+        }.getOrDefault(emptyList())
+        val names = scans.mapNotNull { result ->
+            val raw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                result.wifiSsid?.toString()
+            } else {
+                @Suppress("DEPRECATION")
+                result.SSID
+            }
+            raw?.trim('"')?.takeIf { it.isNotBlank() && it != "<unknown ssid>" }
+        }.distinct()
+        return (listOfNotNull(current.takeIf { it.isNotBlank() }) +
+            names.filter { it != current }).take(8)
+    }
+
+    fun requestWifiScan() {
+        runCatching {
+            @Suppress("DEPRECATION")
+            wifiManager.startScan()
+        }
+    }
+
+    fun pairedBluetoothNames(): List<String> {
+        val adapter = bluetoothAdapter ?: return emptyList()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            !hasPermission(Manifest.permission.BLUETOOTH_CONNECT)
+        ) {
+            return emptyList()
+        }
+        return runCatching { adapter.bondedDevices }.getOrNull()
+            ?.mapNotNull { it.name?.takeIf { name -> name.isNotBlank() } }
+            ?.distinct()
+            ?.take(8)
+            ?: emptyList()
+    }
     fun openAirplane() = open(Settings.ACTION_AIRPLANE_MODE_SETTINGS)
     fun openSound() = open(Settings.ACTION_SOUND_SETTINGS)
     fun openDisplay() = open(Settings.ACTION_DISPLAY_SETTINGS)

@@ -2,15 +2,23 @@ package com.voidlauncher.app.ui.shade
 
 import android.Manifest
 import android.os.Build
+import android.view.HapticFeedbackConstants
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -19,10 +27,12 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -54,6 +64,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -70,6 +81,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -98,6 +110,8 @@ internal fun ccRubberBand(overscroll: Float, limit: Float = 160f): Float {
     return (overscroll * limit) / (overscroll + limit)
 }
 
+private enum class CcExpandedModule { Wifi, Bluetooth, Mobile }
+
 /**
  * 4×4 Control Center:
  *  [ Music 2×2 ] [ Wi‑Fi 1×2 ]
@@ -114,10 +128,17 @@ fun ControlCenter(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     val scope = rememberCoroutineScope()
     val shown = visible || expansion > 0.001f
     val interactive = expansion >= 0.98f
-    BackHandler(enabled = shown && expansion > 0.45f, onBack = onClose)
+    var expanded by remember { mutableStateOf<CcExpandedModule?>(null) }
+    var lastExpanded by remember { mutableStateOf<CcExpandedModule?>(null) }
+    LaunchedEffect(expanded) {
+        if (expanded != null) lastExpanded = expanded
+    }
+    BackHandler(enabled = expanded != null) { expanded = null }
+    BackHandler(enabled = shown && expansion > 0.45f && expanded == null, onBack = onClose)
     val pull = remember { Animatable(0f) }
 
     val requestBluetooth = rememberLauncherForActivityResult(
@@ -141,6 +162,7 @@ fun ControlCenter(
         if (shown) {
             controller.refresh()
             pull.snapTo(0f)
+            expanded = null
             while (true) {
                 delay(900)
                 controller.refresh()
@@ -270,6 +292,11 @@ fun ControlCenter(
                         active = controller.wifiEnabled,
                         onToggle = { controller.toggleWifi() },
                         onOpen = { controller.openWifi() },
+                        onLongPress = {
+                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                            controller.requestWifiScan()
+                            expanded = CcExpandedModule.Wifi
+                        },
                         modifier = Modifier.place(2, 0, 2, 1)
                     )
                     ConnectivityPill(
@@ -294,6 +321,10 @@ fun ControlCenter(
                             }
                         },
                         onOpen = { controller.openBluetooth() },
+                        onLongPress = {
+                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                            expanded = CcExpandedModule.Bluetooth
+                        },
                         modifier = Modifier.place(2, 1, 2, 1)
                     )
                     IconTile(
@@ -331,6 +362,10 @@ fun ControlCenter(
                             }
                         },
                         onOpen = { controller.openNetwork() },
+                        onLongPress = {
+                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                            expanded = CcExpandedModule.Mobile
+                        },
                         modifier = Modifier.place(0, 3, 2, 1)
                     )
                     VerticalLevelSlider(
@@ -355,8 +390,63 @@ fun ControlCenter(
                     )
                 }
             }
+
+            AnimatedVisibility(
+                visible = expanded != null,
+                enter = fadeIn() + scaleIn(initialScale = 0.86f, transformOrigin = TransformOrigin.Center),
+                exit = fadeOut() + scaleOut(targetScale = 0.92f, transformOrigin = TransformOrigin.Center),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(20f)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.38f))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { expanded = null }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val module = expanded ?: lastExpanded
+                    if (module != null) {
+                        ExpandedModuleCard(
+                            module = module,
+                            controller = controller,
+                            onToggleWifi = { controller.toggleWifi() },
+                            onToggleBluetooth = {
+                                controller.toggleBluetooth {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                        requestBluetooth.launch(
+                                            arrayOf(
+                                                Manifest.permission.BLUETOOTH_CONNECT,
+                                                Manifest.permission.BLUETOOTH_SCAN
+                                            )
+                                        )
+                                    }
+                                }
+                            },
+                            onToggleMobile = {
+                                controller.toggleMobileData {
+                                    requestPhone.launch(Manifest.permission.READ_PHONE_STATE)
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth(0.82f)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = {}
+                                )
+                        )
+                    }
+                }
+            }
         }
     }
+}
 
 @Composable
 private fun CcGlass(
@@ -515,6 +605,7 @@ private fun MusicTile(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ConnectivityPill(
     icon: ImageVector,
@@ -523,6 +614,7 @@ private fun ConnectivityPill(
     active: Boolean,
     onToggle: () -> Unit,
     onOpen: () -> Unit,
+    onLongPress: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     CcGlass(
@@ -542,10 +634,11 @@ private fun ConnectivityPill(
                     .size(44.dp)
                     .clip(CircleShape)
                     .background(if (active) IosBlue else Color.White.copy(alpha = 0.16f))
-                    .clickable(
+                    .combinedClickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = onToggle
+                        onClick = onToggle,
+                        onLongClick = onLongPress
                     ),
                 contentAlignment = Alignment.Center
             ) {
@@ -559,10 +652,11 @@ private fun ConnectivityPill(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .clickable(
+                    .combinedClickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = onOpen
+                        onClick = onOpen,
+                        onLongClick = onLongPress
                     )
             ) {
                 Text(
@@ -648,6 +742,169 @@ private fun VerticalLevelSlider(
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 16.dp)
                     .size(22.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExpandedModuleCard(
+    module: CcExpandedModule,
+    controller: ControlCenterController,
+    onToggleWifi: () -> Unit,
+    onToggleBluetooth: () -> Unit,
+    onToggleMobile: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val icon = when (module) {
+        CcExpandedModule.Wifi -> Icons.Rounded.Wifi
+        CcExpandedModule.Bluetooth -> Icons.Rounded.Bluetooth
+        CcExpandedModule.Mobile -> Icons.Rounded.SignalCellularAlt
+    }
+    val title = when (module) {
+        CcExpandedModule.Wifi -> "Wi‑Fi"
+        CcExpandedModule.Bluetooth -> "Bluetooth"
+        CcExpandedModule.Mobile -> "Mobile Data"
+    }
+    val active = when (module) {
+        CcExpandedModule.Wifi -> controller.wifiEnabled
+        CcExpandedModule.Bluetooth -> controller.bluetoothEnabled
+        CcExpandedModule.Mobile -> controller.mobileDataEnabled
+    }
+    val subtitle = when (module) {
+        CcExpandedModule.Wifi -> when {
+            !controller.wifiEnabled -> "Off"
+            controller.wifiSsid.isNotBlank() -> controller.wifiSsid
+            else -> "Not Connected"
+        }
+        CcExpandedModule.Bluetooth -> when {
+            !controller.bluetoothEnabled -> "Off"
+            controller.bluetoothName.isNotBlank() -> controller.bluetoothName
+            else -> "On"
+        }
+        CcExpandedModule.Mobile -> when {
+            !controller.mobileDataEnabled -> "Off"
+            controller.mobileCarrier.isNotBlank() -> controller.mobileCarrier
+            else -> "On"
+        }
+    }
+    val rows = when (module) {
+        CcExpandedModule.Wifi -> controller.nearbyWifiNames()
+        CcExpandedModule.Bluetooth -> controller.pairedBluetoothNames()
+        CcExpandedModule.Mobile -> listOfNotNull(
+            controller.mobileCarrier.takeIf { it.isNotBlank() }
+        )
+    }
+    val settingsLabel = when (module) {
+        CcExpandedModule.Wifi -> "Wi‑Fi Settings"
+        CcExpandedModule.Bluetooth -> "Bluetooth Settings"
+        CcExpandedModule.Mobile -> "Cellular Settings"
+    }
+    val onToggle = when (module) {
+        CcExpandedModule.Wifi -> onToggleWifi
+        CcExpandedModule.Bluetooth -> onToggleBluetooth
+        CcExpandedModule.Mobile -> onToggleMobile
+    }
+    val onSettings = when (module) {
+        CcExpandedModule.Wifi -> controller::openWifi
+        CcExpandedModule.Bluetooth -> controller::openBluetooth
+        CcExpandedModule.Mobile -> controller::openNetwork
+    }
+
+    CcGlass(
+        modifier = modifier.heightIn(min = 220.dp),
+        capsule = false,
+        cornerRadius = 36.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(if (active) IosBlue else Color.White.copy(alpha = 0.16f))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onToggle
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        icon,
+                        contentDescription = title,
+                        tint = Color.White,
+                        modifier = Modifier.size(30.dp)
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        color = VoidMist,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = subtitle,
+                        color = VoidMuted,
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            if (rows.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(18.dp))
+                rows.forEachIndexed { index, name ->
+                    val selected = when (module) {
+                        CcExpandedModule.Wifi -> name == controller.wifiSsid
+                        else -> index == 0 && active
+                    }
+                    Text(
+                        text = name,
+                        color = if (selected) IosBlue else VoidMist,
+                        fontSize = 16.sp,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                    )
+                }
+            } else {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = when (module) {
+                        CcExpandedModule.Wifi -> "No networks to show"
+                        CcExpandedModule.Bluetooth -> "No paired devices"
+                        CcExpandedModule.Mobile -> "Carrier unavailable"
+                    },
+                    color = VoidMuted,
+                    fontSize = 14.sp
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = settingsLabel,
+                color = IosBlue,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onSettings
+                    )
+                    .padding(vertical = 8.dp)
             )
         }
     }
