@@ -104,6 +104,7 @@ import com.voidlauncher.app.data.HomeItem
 import com.voidlauncher.app.ui.assistant.AssistantOverlay
 import com.voidlauncher.app.ui.components.AppIcon
 import com.voidlauncher.app.ui.gestures.detectLongPressMenuOrDrag
+import com.voidlauncher.app.ui.gestures.detectUnconsumedLongPress
 import com.voidlauncher.app.util.PendingLaunchBounds
 import com.voidlauncher.app.ui.components.AppIconShape
 import com.voidlauncher.app.ui.components.CapsuleShape
@@ -360,6 +361,10 @@ fun HomeScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
+                .pointerInput(state.isEditMode, state.isDrawerOpen) {
+                    if (state.isEditMode || state.isDrawerOpen) return@pointerInput
+                    detectUnconsumedLongPress { onEditModeChange(true) }
+                }
         ) {
             Box(
                 modifier = Modifier

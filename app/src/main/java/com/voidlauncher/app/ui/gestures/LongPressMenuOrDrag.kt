@@ -11,6 +11,7 @@ import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.positionChangeIgnoreConsumed
 import androidx.compose.ui.util.fastFirstOrNull
 import kotlin.math.hypot
+import kotlinx.coroutines.delay
 
 /**
  * Short press → [onTap].
@@ -85,5 +86,21 @@ suspend fun PointerInputScope.detectLongPressMenuOrDrag(
             if (dragging) onDragCancel() else onLongPressRelease()
             throw t
         }
+    }
+}
+
+/**
+ * Long-press on empty space (wallpaper / gaps). Waits a tick so icon handlers can
+ * consume the pointer first — otherwise holding an app would also enter edit mode.
+ */
+suspend fun PointerInputScope.detectUnconsumedLongPress(onLongPress: () -> Unit) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = true)
+        val longPress = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
+        delay(1)
+        if (down.isConsumed || longPress.isConsumed) return@awaitEachGesture
+        down.consume()
+        longPress.consume()
+        onLongPress()
     }
 }
