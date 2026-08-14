@@ -207,14 +207,12 @@ fun ControlCenter(
                     val dragUp = if (pull.value < 0f) pull.value else 0f
                     translationY =
                         (1f - expansion.coerceIn(0f, 1f)) * -size.height + stretch + dragUp
-                    val grow = stretch / size.height.coerceAtLeast(1f)
-                    val shrink = if (dragUp < 0f) {
-                        (-dragUp) / size.height.coerceAtLeast(1f) * 0.08f
-                    } else {
-                        0f
-                    }
-                    scaleX = 1f + grow * 0.06f - shrink * 0.35f
-                    scaleY = 1f + grow * 0.18f - shrink
+                    val h = size.height.coerceAtLeast(1f)
+                    val down = stretch / h
+                    val up = if (dragUp < 0f) (-dragUp) / h else 0f
+                    // Pull down: taller + narrower. Pull up: shorter + wider. Content scales with the panel.
+                    scaleX = (1f - down * 0.14f + up * 0.16f).coerceIn(0.82f, 1.22f)
+                    scaleY = (1f + down * 0.32f - up * 0.18f).coerceIn(0.78f, 1.4f)
                     transformOrigin = TransformOrigin(0.5f, 0f)
                     alpha = (expansion * 1.15f).coerceIn(0f, 1f)
                 }
