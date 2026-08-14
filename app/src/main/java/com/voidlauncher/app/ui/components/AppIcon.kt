@@ -3,8 +3,8 @@ package com.voidlauncher.app.ui.components
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -50,7 +51,9 @@ fun AppIcon(
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
     editMode: Boolean = false,
-    selected: Boolean = false
+    selected: Boolean = false,
+    /** When false, only tap is handled here — parent owns long-press / drag. */
+    longPressEnabled: Boolean = true
 ) {
     val appearance = LocalIconAppearance.current
     val effectiveScale = appearance.scale
@@ -68,17 +71,31 @@ fun AppIcon(
 
     val boundsHolder = remember { mutableStateOf<android.graphics.Rect?>(null) }
 
-    val clickModifier = if (editMode) {
-        Modifier
-    } else {
-        Modifier.combinedClickable(
+    val clickModifier = when {
+        editMode -> Modifier
+        !longPressEnabled -> {
+            // Tap-only via detectTapGestures: cancels itself after long-press timeout,
+            // so it does NOT steal hold→drag from the parent pointerInput.
+            Modifier.pointerInput(app.key) {
+                detectTapGestures(
+                    onTap = {
+                        PendingLaunchBounds.rect = boundsHolder.value
+                        onClick()
+                    }
+                )
+            }
+        }
+        else -> Modifier.combinedClickable(
             interactionSource = remember { MutableInteractionSource() },
             indication = null,
             onClick = {
                 PendingLaunchBounds.rect = boundsHolder.value
                 onClick()
             },
-            onLongClick = onLongClick
+            onLongClick = {
+                PendingLaunchBounds.rect = boundsHolder.value
+                onLongClick()
+            }
         )
     }
 
@@ -108,8 +125,9 @@ fun AppIcon(
                 colorFilter = colorFilter,
                 modifier = Modifier
                     .size(iconSize)
+                    // Stroke outside clip so the rim follows the squircle edge (no gap / crop).
+                    .liquidGlassStroke(shape = shape, strong = true)
                     .clip(shape)
-                    .liquidGlassStrokeRatio(cornerRadiusRatio = radiusRatio, strong = true)
             )
             if (editMode) {
                 Box(
@@ -118,12 +136,7 @@ fun AppIcon(
                         .offset(x = 4.dp, y = (-4).dp)
                         .size(22.dp)
                         .clip(CircleShape)
-                        .background(if (selected) IosBlue else Color(0xE6FFFFFF))
-                        .border(
-                            width = 1.5.dp,
-                            color = if (selected) IosBlue else Color(0x66FFFFFF),
-                            shape = CircleShape
-                        ),
+                        .background(if (selected) IosBlue else Color(0xE63A3A3C)),
                     contentAlignment = Alignment.Center
                 ) {
                     if (selected) {

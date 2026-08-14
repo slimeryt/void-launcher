@@ -59,7 +59,20 @@ jobs:
           CORE="${NAME%%-*}"
           IFS='.' read -r MAJOR MINOR PATCH <<< "${CORE}"
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            CODE=$(( ${MAJOR:-0} * 1000000 + ${MINOR:-0} * 1000 + ${PATCH:-0} ))
+            # 0.2.46 → base 2_046_000 so patch lines stay monotonic:
+            #   -dev.N  → base + N
+            #   -beta.N → base + 500 + N
+            #   stable  → base + 900
+            # 0.2.47 stable → 2_047_900 > any 0.2.46 build
+            BASE=$(( ${MAJOR:-0} * 1000000 + ${MINOR:-0} * 1000 + ${PATCH:-0} ))
+            CODE_BASE=$(( BASE * 1000 ))
+            if [[ "$NAME" =~ -dev\.([0-9]+)$ ]]; then
+              CODE=$(( CODE_BASE + ${BASH_REMATCH[1]} ))
+            elif [[ "$NAME" =~ -beta\.([0-9]+)$ ]] || [[ "$NAME" =~ -rc\.([0-9]+)$ ]]; then
+              CODE=$(( CODE_BASE + 500 + ${BASH_REMATCH[1]} ))
+            else
+              CODE=$(( CODE_BASE + 900 ))
+            fi
           else
             CODE="${{ inputs.version_code }}"
           fi
@@ -89,7 +102,25 @@ jobs:
           echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
           echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
 
+      # Local `gh release create` ships often push the same tag; don't overwrite those APKs
+      # with a CI build that used a different versionCode encoding.
+      - name: Skip if release already has APK
+        id: skip
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${{ steps.ver.outputs.tag }}" >/dev/null 2>&1; then
+            if gh release view "${{ steps.ver.outputs.tag }}" --json assets \
+              --jq '.assets[].name' | grep -qx 'Polar.apk'; then
+              echo "exists=true" >> "$GITHUB_OUTPUT"
+              echo "Release ${{ steps.ver.outputs.tag }} already has Polar.apk — skipping CI rebuild."
+              exit 0
+            fi
+          fi
+          echo "exists=false" >> "$GITHUB_OUTPUT"
+
       - name: Build signed APK
+        if: steps.skip.outputs.exists != 'true'
         run: |
           chmod +x gradlew
           ./gradlew :app:assembleRelease --no-daemon \
@@ -97,6 +128,7 @@ jobs:
             -PversionCode=${{ steps.ver.outputs.code }}
 
       - name: Stage APK
+        if: steps.skip.outputs.exists != 'true'
         run: |
           mkdir -p dist
           cp app/build/outputs/apk/release/app-release.apk dist/Polar.apk
@@ -108,6 +140,7 @@ jobs:
           "$BT/zipalign" -c -v 4 dist/Polar.apk
 
       - name: Create GitHub Release
+        if: steps.skip.outputs.exists != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}

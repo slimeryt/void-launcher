@@ -92,8 +92,10 @@ fun GlassPanel(
     val refractionOn = enableRefraction && glass.refractionEnabled
     val specularOn = enableSheen && glass.sheenEnabled
 
-    var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var layerSize by remember { mutableStateOf(IntSize.Zero) }
+    // Store numeric pos so wallpaper recomposes when layout settles (folder open, etc.).
+    var panelPos by remember { mutableStateOf(Offset.Zero) }
+    var layoutCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val shape = remember(cornerRadius) { SmoothCornerShape(radius = cornerRadius) }
 
     val runtimeShader = remember {
@@ -205,14 +207,18 @@ fun GlassPanel(
         }
     }
 
-    val panelX = coords?.takeIf { it.isAttached }?.positionInWindow()?.x ?: 0f
-    val panelY = coords?.takeIf { it.isAttached }?.positionInWindow()?.y ?: 0f
     val extraWidthPx = wallpaper?.let {
         (it.fullWidthPx - it.screenWidth).coerceAtLeast(0).toFloat()
     } ?: 0f
+    val extraHeightPx = wallpaper?.let {
+        (it.fullHeightPx - it.screenHeight).coerceAtLeast(0).toFloat()
+    } ?: 0f
     val stripWidthPx = wallpaper?.fullWidthPx?.toFloat()?.coerceAtLeast(1f)
         ?: layerSize.width.toFloat().coerceAtLeast(1f)
-    val stripHeightPx = layerSize.height.toFloat().coerceAtLeast(1f)
+    // Full wallpaper height so Y can be aligned via translation (same as X) — avoids
+    // crop/offset mismatch that displaced folder glass.
+    val stripHeightPx = wallpaper?.fullHeightPx?.toFloat()?.coerceAtLeast(1f)
+        ?: layerSize.height.toFloat().coerceAtLeast(1f)
     val stripDp = with(density) {
         DpSize(stripWidthPx.toDp(), stripHeightPx.toDp())
     }
@@ -234,11 +240,9 @@ fun GlassPanel(
                 ),
                 clip = false
             )
-            .clip(shape)
-            .onGloballyPositioned { coords = it }
             .then(
                 if (useOpticalShader) {
-                    Modifier.liquidGlassStroke(cornerRadius = cornerRadius, strong = strong)
+                    Modifier.liquidGlassStroke(shape = shape, strong = strong)
                 } else {
                     Modifier.border(
                         width = 1.dp,
@@ -254,6 +258,13 @@ fun GlassPanel(
                     )
                 }
             )
+            .clip(shape)
+            .onGloballyPositioned {
+                layoutCoords = it
+                if (it.isAttached) {
+                    panelPos = it.positionInWindow()
+                }
+            }
     ) {
         Box(
             modifier = Modifier
@@ -272,21 +283,23 @@ fun GlassPanel(
                         .wrapContentSize(unbounded = true, align = Alignment.TopStart)
                         .requiredSize(stripDp)
                         .graphicsLayer {
+                            val live = layoutCoords?.takeIf { it.isAttached }
+                                ?.positionInWindow()
+                                ?: panelPos
                             val originX = wallpaperScroll.offset.coerceIn(0f, 1f) * extraWidthPx
-                            translationX = -(originX + panelX)
+                            val originY = 0.5f * extraHeightPx
+                            translationX = -(originX + live.x)
+                            translationY = -(originY + live.y)
                         }
                 ) {
                     val wp = wallpaper
-                    val (_, originY) = WallpaperCrop.viewportOrigin(wp, wallpaperXOffset = 0.5f)
-                    val scaleY = wp.bitmapHeight.toFloat() / wp.fullHeightPx.toFloat().coerceAtLeast(1f)
-                    val srcY = ((originY + panelY) * scaleY).roundToInt()
-                        .coerceIn(0, (wp.bitmapHeight - 1).coerceAtLeast(0))
-                    val srcH = (stripHeightPx * scaleY).roundToInt().coerceAtLeast(1)
-                        .coerceAtMost((wp.bitmapHeight - srcY).coerceAtLeast(1))
                     drawImage(
                         image = wp.image,
-                        srcOffset = IntOffset(0, srcY),
-                        srcSize = IntSize(wp.bitmapWidth.coerceAtLeast(1), srcH),
+                        srcOffset = IntOffset.Zero,
+                        srcSize = IntSize(
+                            wp.bitmapWidth.coerceAtLeast(1),
+                            wp.bitmapHeight.coerceAtLeast(1)
+                        ),
                         dstOffset = IntOffset.Zero,
                         dstSize = IntSize(
                             stripWidthPx.roundToInt().coerceAtLeast(1),

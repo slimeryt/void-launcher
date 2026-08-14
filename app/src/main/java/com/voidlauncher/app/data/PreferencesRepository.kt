@@ -31,7 +31,8 @@ data class HomeFolder(
 )
 
 data class LauncherPreferences(
-    val favorites: Set<String> = emptySet(),
+    /** Ordered dock / favorites keys (first slots show in the dock). */
+    val favorites: List<String> = emptyList(),
     val hidden: Set<String> = emptySet(),
     val showLabels: Boolean = true,
     val gridColumns: Int = 4,
@@ -74,6 +75,8 @@ class PreferencesRepository(private val context: Context) {
 
     private object Keys {
         val Favorites = stringSetPreferencesKey("favorites")
+        /** Ordered favorites JSON array — preferred over [Favorites] set when present. */
+        val FavoritesOrder = stringPreferencesKey("favorites_order")
         val Hidden = stringSetPreferencesKey("hidden")
         val ShowLabels = booleanPreferencesKey("show_labels")
         val GridColumns = intPreferencesKey("grid_columns")
@@ -104,7 +107,7 @@ class PreferencesRepository(private val context: Context) {
 
     val preferences: Flow<LauncherPreferences> = context.dataStore.data.map { prefs ->
         LauncherPreferences(
-            favorites = prefs[Keys.Favorites] ?: emptySet(),
+            favorites = decodeFavorites(prefs[Keys.FavoritesOrder], prefs[Keys.Favorites]),
             hidden = prefs[Keys.Hidden] ?: emptySet(),
             showLabels = prefs[Keys.ShowLabels] ?: true,
             gridColumns = prefs[Keys.GridColumns] ?: 4,
@@ -134,8 +137,25 @@ class PreferencesRepository(private val context: Context) {
         )
     }
 
-    suspend fun setFavorites(keys: Set<String>) {
-        context.dataStore.edit { it[Keys.Favorites] = keys }
+    suspend fun setFavorites(keys: List<String>) {
+        val ordered = keys.distinct()
+        context.dataStore.edit {
+            it[Keys.FavoritesOrder] = JSONArray(ordered).toString()
+            it[Keys.Favorites] = ordered.toSet()
+        }
+    }
+
+    private fun decodeFavorites(orderJson: String?, legacySet: Set<String>?): List<String> {
+        if (!orderJson.isNullOrBlank()) {
+            val fromOrder = runCatching {
+                val arr = JSONArray(orderJson)
+                buildList {
+                    for (i in 0 until arr.length()) add(arr.getString(i))
+                }
+            }.getOrNull()
+            if (fromOrder != null) return fromOrder.distinct()
+        }
+        return (legacySet ?: emptySet()).toList()
     }
 
     suspend fun setHidden(keys: Set<String>) {

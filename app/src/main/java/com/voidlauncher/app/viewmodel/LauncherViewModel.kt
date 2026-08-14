@@ -27,6 +27,8 @@ data class LauncherUiState(
     val searchQuery: String = "",
     val isDrawerOpen: Boolean = false,
     val drawerFocusSearch: Boolean = false,
+    val isNotificationCenterOpen: Boolean = false,
+    val isControlCenterOpen: Boolean = false,
     val isEditMode: Boolean = false,
     val isLoading: Boolean = true,
     val showLabels: Boolean = true,
@@ -57,6 +59,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val searchQuery = MutableStateFlow("")
     private val isDrawerOpen = MutableStateFlow(false)
     private val drawerFocusSearch = MutableStateFlow(false)
+    private val isNotificationCenterOpen = MutableStateFlow(false)
+    private val isControlCenterOpen = MutableStateFlow(false)
     private val isEditMode = MutableStateFlow(false)
     private val isLoading = MutableStateFlow(true)
     private val iconEditorOpen = MutableStateFlow(false)
@@ -64,8 +68,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val state: StateFlow<LauncherUiState> = combine(
         combine(allApps, searchQuery, isDrawerOpen) { a, q, d -> Triple(a, q, d) },
         combine(drawerFocusSearch, isEditMode, isLoading) { f, e, l -> Triple(f, e, l) },
-        combine(iconEditorOpen, prefsRepository.preferences) { editor, prefs -> editor to prefs }
-    ) { t1, t2, editorPrefs ->
+        combine(iconEditorOpen, prefsRepository.preferences) { editor, prefs -> editor to prefs },
+        combine(isNotificationCenterOpen, isControlCenterOpen) { n, c -> n to c }
+    ) { t1, t2, editorPrefs, shade ->
         val apps = t1.first
         val query = t1.second
         val drawerOpen = t1.third
@@ -95,6 +100,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             searchQuery = query,
             isDrawerOpen = drawerOpen,
             drawerFocusSearch = focusSearch,
+            isNotificationCenterOpen = shade.first,
+            isControlCenterOpen = shade.second,
             isEditMode = editMode,
             isLoading = loading,
             showLabels = prefs.showLabels,
@@ -149,7 +156,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             prefsRepository.setHomeLayout(listOf(page), prefs.folders)
             if (prefs.favorites.isEmpty()) {
-                prefsRepository.setFavorites(apps.take(4).map { it.key }.toSet())
+                prefsRepository.setFavorites(apps.take(4).map { it.key })
             }
         }
     }
@@ -172,9 +179,49 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun toggleFavorite(app: AppInfo) {
         viewModelScope.launch {
-            val next = prefsCache.favorites.toMutableSet()
-            if (!next.add(app.key)) next.remove(app.key)
+            val next = prefsCache.favorites.toMutableList()
+            if (next.contains(app.key)) {
+                next.removeAll { it == app.key }
+            } else if (next.size < 5) {
+                next.add(app.key)
+            } else {
+                // Replace last dock slot when full
+                next[next.lastIndex] = app.key
+            }
             prefsRepository.setFavorites(next)
+        }
+    }
+
+    fun swapDockItems(a: Int, b: Int) {
+        if (a == b || a < 0 || b < 0) return
+        viewModelScope.launch {
+            val next = prefsCache.favorites.toMutableList()
+            if (a >= next.size || b >= next.size) return@launch
+            val tmp = next[a]
+            next[a] = next[b]
+            next[b] = tmp
+            prefsRepository.setFavorites(next)
+        }
+    }
+
+    /** Remove from dock; place on home if it isn't already there. */
+    fun moveDockAppToHome(app: AppInfo, pageIndex: Int = 0) {
+        viewModelScope.launch {
+            val nextFav = prefsCache.favorites.toMutableList()
+            if (!nextFav.removeAll { it == app.key }) return@launch
+            val pagesSnapshot = prefsCache.pages.toMutableList().ifEmpty { mutableListOf(emptyList()) }
+            val foldersSnapshot = prefsCache.folders
+            while (pagesSnapshot.size <= pageIndex) pagesSnapshot.add(emptyList())
+            val alreadyOnHome = pagesSnapshot.any { p ->
+                p.any { it is HomeItem.App && it.key == app.key }
+            }
+            prefsRepository.setFavorites(nextFav)
+            if (!alreadyOnHome) {
+                val page = pagesSnapshot[pageIndex].toMutableList()
+                page.add(HomeItem.App(app.key))
+                pagesSnapshot[pageIndex] = page
+                prefsRepository.setHomeLayout(pagesSnapshot, foldersSnapshot)
+            }
         }
     }
 
@@ -192,6 +239,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun setDrawerOpen(open: Boolean, focusSearch: Boolean = false) {
         isDrawerOpen.value = open
         drawerFocusSearch.value = open && focusSearch
+        if (open) {
+            isNotificationCenterOpen.value = false
+            isControlCenterOpen.value = false
+        }
         if (!open) {
             searchQuery.value = ""
             drawerFocusSearch.value = false
@@ -202,8 +253,32 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         setDrawerOpen(open = true, focusSearch = true)
     }
 
+    fun setNotificationCenterOpen(open: Boolean) {
+        isNotificationCenterOpen.value = open
+        if (open) {
+            isControlCenterOpen.value = false
+            isDrawerOpen.value = false
+            drawerFocusSearch.value = false
+            isEditMode.value = false
+        }
+    }
+
+    fun setControlCenterOpen(open: Boolean) {
+        isControlCenterOpen.value = open
+        if (open) {
+            isNotificationCenterOpen.value = false
+            isDrawerOpen.value = false
+            drawerFocusSearch.value = false
+            isEditMode.value = false
+        }
+    }
+
     fun setEditMode(edit: Boolean) {
         isEditMode.value = edit
+        if (edit) {
+            isNotificationCenterOpen.value = false
+            isControlCenterOpen.value = false
+        }
     }
 
     fun setShowLabels(show: Boolean) {
@@ -370,6 +445,77 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun addPage() {
         viewModelScope.launch {
             prefsRepository.setHomeLayout(prefsCache.pages + listOf(emptyList()), prefsCache.folders)
+        }
+    }
+
+    fun removePage(pageIndex: Int) {
+        viewModelScope.launch {
+            val pages = prefsCache.pages.toMutableList().ifEmpty { mutableListOf(emptyList()) }
+            if (pages.size <= 1 || pageIndex !in pages.indices) return@launch
+            val removed = pages.removeAt(pageIndex)
+            if (removed.isNotEmpty()) {
+                val dest = (pageIndex - 1).coerceAtLeast(0).coerceAtMost(pages.lastIndex)
+                pages[dest] = pages[dest] + removed
+            }
+            // Drop orphaned empty folders that are no longer referenced
+            val folderIdsOnHome = pages.flatten()
+                .mapNotNull { (it as? HomeItem.Folder)?.id }
+                .toSet()
+            val folders = prefsCache.folders.filterKeys { it in folderIdsOnHome }
+            prefsRepository.setHomeLayout(pages.ifEmpty { listOf(emptyList()) }, folders)
+        }
+    }
+
+    fun extractAppFromFolder(folderId: String, appKey: String, pageIndex: Int) {
+        viewModelScope.launch {
+            val folder = prefsCache.folders[folderId] ?: return@launch
+            if (appKey !in folder.appKeys) return@launch
+            val remaining = folder.appKeys.filterNot { it == appKey }
+
+            val pages = prefsCache.pages.map { it.toMutableList() }.toMutableList()
+                .ifEmpty { mutableListOf(mutableListOf()) }
+            while (pages.size <= pageIndex) pages.add(mutableListOf())
+
+            var folderPage = -1
+            var folderIndex = -1
+            for (pi in pages.indices) {
+                val idx = pages[pi].indexOfFirst { it is HomeItem.Folder && it.id == folderId }
+                if (idx >= 0) {
+                    folderPage = pi
+                    folderIndex = idx
+                    break
+                }
+            }
+
+            val destPage = pageIndex.coerceIn(0, pages.lastIndex)
+            fun placeApp(p: Int, key: String) {
+                if (pages[p].none { it is HomeItem.App && it.key == key }) {
+                    pages[p].add(HomeItem.App(key))
+                }
+            }
+            placeApp(destPage, appKey)
+
+            val folders = prefsCache.folders.toMutableMap()
+            when {
+                remaining.isEmpty() -> {
+                    if (folderPage >= 0) pages[folderPage].removeAt(folderIndex)
+                    folders.remove(folderId)
+                }
+                remaining.size == 1 -> {
+                    val lastKey = remaining[0]
+                    if (folderPage >= 0) {
+                        pages[folderPage][folderIndex] = HomeItem.App(lastKey)
+                    } else {
+                        placeApp(destPage, lastKey)
+                    }
+                    folders.remove(folderId)
+                }
+                else -> {
+                    folders[folderId] = folder.copy(appKeys = remaining)
+                }
+            }
+
+            prefsRepository.setHomeLayout(pages.map { it.toList() }, folders)
         }
     }
 

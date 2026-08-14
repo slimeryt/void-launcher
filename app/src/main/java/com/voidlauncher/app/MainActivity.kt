@@ -144,12 +144,19 @@ class MainActivity : ComponentActivity() {
                         onSearchQueryChange = viewModel::setSearchQuery,
                         onDrawerOpenChange = { viewModel.setDrawerOpen(it) },
                         onOpenDrawerSearch = viewModel::openDrawerSearch,
+                        onNotificationCenterOpenChange = viewModel::setNotificationCenterOpen,
+                        onControlCenterOpenChange = viewModel::setControlCenterOpen,
                         onEditModeChange = viewModel::setEditMode,
                         onRemoveHomeItem = viewModel::removeItemFromHome,
                         onSwapHomeItems = viewModel::swapItems,
+                        onMoveHomeItem = viewModel::moveItem,
+                        onSwapDockItems = viewModel::swapDockItems,
+                        onMoveDockAppToHome = viewModel::moveDockAppToHome,
                         onCreateFolder = viewModel::createFolderFromDrop,
                         onAddAppToFolder = viewModel::addAppToFolderFromDrop,
+                        onExtractAppFromFolder = viewModel::extractAppFromFolder,
                         onAddPage = viewModel::addPage,
+                        onRemovePage = viewModel::removePage,
                         onApplyIconAppearance = { appearance ->
                             viewModel.setIconAppearance(
                                 theme = appearance.theme.key,
@@ -331,6 +338,8 @@ class MainActivity : ComponentActivity() {
     override fun onBackPressed() {
         val s = viewModel.state.value
         when {
+            s.isNotificationCenterOpen -> viewModel.setNotificationCenterOpen(false)
+            s.isControlCenterOpen -> viewModel.setControlCenterOpen(false)
             s.isDrawerOpen -> viewModel.setDrawerOpen(false)
             s.isEditMode -> viewModel.setEditMode(false)
             else -> { /* stay on home */ }
