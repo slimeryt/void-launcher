@@ -320,7 +320,7 @@ class ControlCenterController(
                 open(Settings.ACTION_BLUETOOTH_SETTINGS)
             }
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (!startUi(Intent(BluetoothAdapter.ACTION_REQUEST_DISABLE))) {
+            if (!startUi(Intent("android.bluetooth.adapter.action.REQUEST_DISABLE"))) {
                 open(Settings.ACTION_BLUETOOTH_SETTINGS)
             }
         } else {

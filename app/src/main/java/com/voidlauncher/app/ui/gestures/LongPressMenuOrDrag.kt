@@ -47,7 +47,6 @@ suspend fun PointerInputScope.detectLongPressMenuOrDrag(
             return@awaitEachGesture
         }
 
-        // Consume so sibling tap handlers don't fire on release after a hold.
         down.consume()
         longPress.consume()
         onLongPress()
@@ -70,45 +69,6 @@ suspend fun PointerInputScope.detectLongPressMenuOrDrag(
                     if (dragging) onDragEnd() else onLongPressRelease()
                     return@awaitEachGesture
                 }
-                // IgnoreConsumed: overlays/clickables may have consumed the change already.
-                val delta = change.positionChangeIgnoreConsumed()
-                if (delta == Offset.Zero) continue
-                change.consume()
-                total += delta
-                if (!dragging && total.getDistance() > touchSlop) {
-                    dragging = true
-                    onDragStart()
-                }
-                if (dragging) {
-                    onDrag(change, delta)
-                }
-            }
-        } catch (t: Throwable) {
-            if (dragging) onDragCancel()
-            throw t
-        }
-    }
-}
-
-        val touchSlop = viewConfiguration.touchSlop
-        var dragging = false
-        var total = Offset.Zero
-        val pointerId = down.id
-
-        try {
-            while (true) {
-                val event = awaitPointerEvent(PointerEventPass.Main)
-                val change = event.changes.fastFirstOrNull { it.id == pointerId }
-                if (change == null) {
-                    if (dragging) onDragCancel() else onLongPressRelease()
-                    return@awaitEachGesture
-                }
-                if (change.changedToUpIgnoreConsumed()) {
-                    change.consume()
-                    if (dragging) onDragEnd() else onLongPressRelease()
-                    return@awaitEachGesture
-                }
-                // IgnoreConsumed: overlays/clickables may have consumed the change already.
                 val delta = change.positionChangeIgnoreConsumed()
                 if (delta == Offset.Zero) continue
                 change.consume()
