@@ -25,7 +25,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import com.voidlauncher.app.ui.statusbar.polarStatusPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -142,7 +142,7 @@ fun WidgetPickerOverlay(
         modifier = Modifier
             .fillMaxSize()
             .background(VoidInk)
-            .statusBarsPadding()
+            .polarStatusPadding()
             .navigationBarsPadding()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },

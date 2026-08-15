@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import com.voidlauncher.app.ui.statusbar.polarStatusPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -107,7 +107,7 @@ fun PageManagerOverlay(
         modifier = modifier
             .fillMaxSize()
             .background(VoidInk)
-            .statusBarsPadding()
+            .polarStatusPadding()
             .navigationBarsPadding()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },

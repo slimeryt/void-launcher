@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -53,6 +54,9 @@ import com.voidlauncher.app.ui.icons.LocalIconAppearance
 import com.voidlauncher.app.ui.shade.ControlCenter
 import com.voidlauncher.app.ui.shade.ControlCenterController
 import com.voidlauncher.app.ui.shade.NotificationCenter
+import com.voidlauncher.app.ui.statusbar.HideSystemStatusBar
+import com.voidlauncher.app.ui.statusbar.PolarStatusBar
+import com.voidlauncher.app.ui.statusbar.PolarStatusBarController
 import com.voidlauncher.app.viewmodel.LauncherUiState
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.launch
@@ -89,12 +93,19 @@ fun LauncherRoot(
     val systemUi = rememberSystemUiController()
     SideEffect {
         systemUi.setSystemBarsColor(Color.Transparent, darkIcons = false)
+        systemUi.isStatusBarVisible = false
     }
+    HideSystemStatusBar()
 
     val context = LocalContext.current
     val activity = context as? Activity
     val controlCenter = remember(context) {
         ControlCenterController(context, activity?.window)
+    }
+    val polarStatusBar = remember(context) { PolarStatusBarController(context) }
+    DisposableEffect(polarStatusBar) {
+        polarStatusBar.start()
+        onDispose { polarStatusBar.stop() }
     }
     val scope = rememberCoroutineScope()
     val ccExpansion = remember { Animatable(0f) }
@@ -310,6 +321,21 @@ fun LauncherRoot(
                 modifier = Modifier
                     .fillMaxSize()
                     .zIndex(12f)
+            )
+
+            PolarStatusBar(
+                controller = polarStatusBar,
+                shadeLocked = state.isNotificationCenterOpen ||
+                    state.isControlCenterOpen ||
+                    ccExpansion.value > 0.08f,
+                onPullNotificationCenter = { onNotificationCenterOpenChange(true) },
+                onPullControlCenter = {
+                    ccDragging = false
+                    onControlCenterOpenChange(true)
+                },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .zIndex(14f)
             )
 
             // Sharp focused icon only once the menu is sticky (finger up). Showing it under

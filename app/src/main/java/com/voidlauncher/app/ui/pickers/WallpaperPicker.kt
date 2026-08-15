@@ -32,7 +32,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import com.voidlauncher.app.ui.statusbar.polarStatusPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
@@ -185,7 +185,7 @@ fun WallpaperPickerOverlay(
         modifier = Modifier
             .fillMaxSize()
             .background(VoidInk)
-            .statusBarsPadding()
+            .polarStatusPadding()
             .navigationBarsPadding()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },

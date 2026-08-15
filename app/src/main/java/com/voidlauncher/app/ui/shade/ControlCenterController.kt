@@ -83,9 +83,13 @@ class ControlCenterController(
         private set
     var wifiSsid by mutableStateOf("")
         private set
+    var wifiNetworks by mutableStateOf<List<String>>(emptyList())
+        private set
     var bluetoothEnabled by mutableStateOf(false)
         private set
     var bluetoothName by mutableStateOf("")
+        private set
+    var bluetoothDevices by mutableStateOf<List<String>>(emptyList())
         private set
     var mobileDataEnabled by mutableStateOf(false)
         private set
@@ -154,6 +158,7 @@ class ControlCenterController(
         val filter = IntentFilter().apply {
             addAction(WifiManager.WIFI_STATE_CHANGED_ACTION)
             addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION)
+            addAction(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)
             addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
             addAction(ConnectivityManager.CONNECTIVITY_ACTION)
         }
@@ -189,8 +194,10 @@ class ControlCenterController(
         volume = readVolume()
         wifiEnabled = wifiManager.isWifiEnabled
         wifiSsid = readWifiSsid()
+        wifiNetworks = nearbyWifiNames()
         bluetoothEnabled = bluetoothAdapter?.isEnabled == true
         bluetoothName = readBluetoothName()
+        bluetoothDevices = pairedBluetoothNames()
         mobileDataEnabled = readMobileData()
         mobileCarrier = telephonyManager?.networkOperatorName.orEmpty()
         dndOn = readDnd()
@@ -403,17 +410,51 @@ class ControlCenterController(
             @Suppress("DEPRECATION")
             wifiManager.scanResults
         }.getOrDefault(emptyList())
-        val names = scans.mapNotNull { result ->
-            val raw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                result.wifiSsid?.toString()
-            } else {
-                @Suppress("DEPRECATION")
-                result.SSID
-            }
-            raw?.trim('"')?.takeIf { it.isNotBlank() && it != "<unknown ssid>" }
-        }.distinct()
-        return (listOfNotNull(current.takeIf { it.isNotBlank() }) +
-            names.filter { it != current }).take(8)
+        val scanned = scans.mapNotNull { parseScanSsid(it) }.distinct()
+        val saved = runCatching {
+            @Suppress("DEPRECATION")
+            wifiManager.configuredNetworks
+        }.getOrNull().orEmpty().mapNotNull { config ->
+            config.SSID?.trim('"')?.takeIf { it.isNotBlank() && it != "<unknown ssid>" }
+        }
+        return (listOfNotNull(current.takeIf { it.isNotBlank() }) + scanned + saved)
+            .distinct()
+            .take(8)
+    }
+
+    fun wifiScanPermissions(): Array<String> =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(
+                Manifest.permission.NEARBY_WIFI_DEVICES,
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            )
+        } else {
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            )
+        }
+
+    fun hasWifiScanAccess(): Boolean {
+        val location = hasPermission(Manifest.permission.ACCESS_FINE_LOCATION) ||
+            hasPermission(Manifest.permission.ACCESS_COARSE_LOCATION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return location && hasPermission(Manifest.permission.NEARBY_WIFI_DEVICES)
+        }
+        return location
+    }
+
+    fun isLocationEnabled(): Boolean {
+        val lm = context.getSystemService(android.location.LocationManager::class.java)
+            ?: return false
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            lm.isLocationEnabled
+        } else {
+            @Suppress("DEPRECATION")
+            lm.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER) ||
+                lm.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)
+        }
     }
 
     fun requestWifiScan() {
@@ -421,6 +462,7 @@ class ControlCenterController(
             @Suppress("DEPRECATION")
             wifiManager.startScan()
         }
+        wifiNetworks = nearbyWifiNames()
     }
 
     fun pairedBluetoothNames(): List<String> {
@@ -545,9 +587,39 @@ class ControlCenterController(
 
     private fun readWifiSsid(): String {
         if (!wifiManager.isWifiEnabled) return ""
-        val info = runCatching { wifiManager.connectionInfo }.getOrNull() ?: return ""
-        val raw = info.ssid?.trim('"').orEmpty()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val fromCaps = runCatching {
+                val caps = connectivityManager.getNetworkCapabilities(
+                    connectivityManager.activeNetwork
+                )
+                val info = caps?.transportInfo as? android.net.wifi.WifiInfo
+                info?.ssid?.trim('"').orEmpty()
+            }.getOrDefault("")
+            if (fromCaps.isNotBlank() && fromCaps != "<unknown ssid>") return fromCaps
+        }
+        val info = runCatching { wifiManager.connectionInfo }.getOrNull()
+        val raw = info?.ssid?.trim('"').orEmpty()
         return if (raw.isBlank() || raw == "<unknown ssid>") "" else raw
+    }
+
+    private fun parseScanSsid(result: android.net.wifi.ScanResult): String? {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val bytes = result.wifiSsid?.bytes
+            if (bytes != null && bytes.isNotEmpty()) {
+                val decoded = String(bytes, Charsets.UTF_8).trim().trim('"')
+                if (decoded.isNotBlank() && decoded != "<unknown ssid>") return decoded
+            }
+            val modern = result.wifiSsid?.toString()?.trim()?.trim('"').orEmpty()
+            if (modern.isNotBlank() &&
+                modern != "<unknown ssid>" &&
+                !modern.startsWith("WifiSsid")
+            ) {
+                return modern
+            }
+        }
+        @Suppress("DEPRECATION")
+        val legacy = result.SSID?.trim('"').orEmpty()
+        return legacy.takeIf { it.isNotBlank() && it != "<unknown ssid>" }
     }
 
     private fun readBluetoothName(): String {

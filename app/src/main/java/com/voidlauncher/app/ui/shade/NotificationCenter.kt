@@ -24,7 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import com.voidlauncher.app.ui.statusbar.polarStatusPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -141,7 +141,7 @@ fun NotificationCenter(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .statusBarsPadding()
+                    .polarStatusPadding()
                     .navigationBarsPadding()
                     .padding(horizontal = 16.dp)
                     .padding(top = 12.dp, bottom = 20.dp)

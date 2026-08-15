@@ -6,14 +6,9 @@ import android.view.HapticFeedbackConstants
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -32,13 +27,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import com.voidlauncher.app.ui.statusbar.polarStatusPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.BrightnessHigh
@@ -73,6 +69,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
@@ -80,27 +78,42 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.util.lerp
 import androidx.compose.ui.zIndex
 import com.voidlauncher.app.notifications.NotificationMirror
 import com.voidlauncher.app.ui.components.GlassPanel
+import com.voidlauncher.app.ui.components.SmoothCornerShape
 import com.voidlauncher.app.ui.components.WallpaperHazeSource
+import com.voidlauncher.app.ui.components.liquidGlassStroke
 import com.voidlauncher.app.ui.theme.IosBlue
 import com.voidlauncher.app.ui.theme.VoidMist
 import com.voidlauncher.app.ui.theme.VoidMuted
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private const val CcSmoothing = 0.78f
 private val CcRed = Color(0xFFFF3B30)
+private val CcExpandFill = Color(0xE61C1C1E)
 private val CcStretchSpring = spring<Float>(
     dampingRatio = 0.78f,
+    stiffness = Spring.StiffnessMediumLow
+)
+private val CcExpandSpring = spring<Float>(
+    dampingRatio = 0.86f,
     stiffness = Spring.StiffnessMediumLow
 )
 
@@ -129,16 +142,49 @@ fun ControlCenter(
 ) {
     val context = LocalContext.current
     val view = LocalView.current
+    val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val shown = visible || expansion > 0.001f
     val interactive = expansion >= 0.98f
     var expanded by remember { mutableStateOf<CcExpandedModule?>(null) }
     var lastExpanded by remember { mutableStateOf<CcExpandedModule?>(null) }
-    LaunchedEffect(expanded) {
-        if (expanded != null) lastExpanded = expanded
+    val expandProgress = remember { Animatable(0f) }
+    var overlayOrigin by remember { mutableStateOf(Offset.Zero) }
+    var overlaySize by remember { mutableStateOf(IntSize.Zero) }
+    var wifiRect by remember { mutableStateOf(Rect.Zero) }
+    var bluetoothRect by remember { mutableStateOf(Rect.Zero) }
+    var mobileRect by remember { mutableStateOf(Rect.Zero) }
+    var sourceRect by remember { mutableStateOf(Rect.Zero) }
+    val overlayOpen = expanded != null || expandProgress.value > 0.001f
+
+    fun rectFor(module: CcExpandedModule): Rect = when (module) {
+        CcExpandedModule.Wifi -> wifiRect
+        CcExpandedModule.Bluetooth -> bluetoothRect
+        CcExpandedModule.Mobile -> mobileRect
     }
-    BackHandler(enabled = expanded != null) { expanded = null }
-    BackHandler(enabled = shown && expansion > 0.45f && expanded == null, onBack = onClose)
+
+    fun openExpanded(module: CcExpandedModule) {
+        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        val from = rectFor(module)
+        if (from.width > 1f && from.height > 1f) sourceRect = from
+        lastExpanded = module
+        expanded = module
+        scope.launch {
+            expandProgress.snapTo(0f)
+            expandProgress.animateTo(1f, CcExpandSpring)
+        }
+    }
+
+    fun dismissExpanded() {
+        if (!overlayOpen) return
+        scope.launch {
+            expandProgress.animateTo(0f, CcExpandSpring)
+            expanded = null
+        }
+    }
+
+    BackHandler(enabled = overlayOpen) { dismissExpanded() }
+    BackHandler(enabled = shown && expansion > 0.45f && !overlayOpen, onBack = onClose)
     val pull = remember { Animatable(0f) }
 
     val requestBluetooth = rememberLauncherForActivityResult(
@@ -152,6 +198,12 @@ fun ControlCenter(
     val requestPhone = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { controller.refresh() }
+    val requestWifiScan = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        controller.requestWifiScan()
+        controller.refresh()
+    }
 
     DisposableEffect(shown) {
         if (shown) controller.startListening()
@@ -163,6 +215,7 @@ fun ControlCenter(
             controller.refresh()
             pull.snapTo(0f)
             expanded = null
+            expandProgress.snapTo(0f)
             while (true) {
                 delay(900)
                 controller.refresh()
@@ -220,7 +273,7 @@ fun ControlCenter(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth(0.74f)
-                .statusBarsPadding()
+                .polarStatusPadding()
                 .padding(top = 76.dp)
                 .graphicsLayer {
                     val over = (expansion - 1f).coerceAtLeast(0f)
@@ -290,13 +343,18 @@ fun ControlCenter(
                             else -> "On"
                         },
                         active = controller.wifiEnabled,
+                        hidden = expanded == CcExpandedModule.Wifi,
                         onToggle = { controller.toggleWifi() },
                         onOpen = { controller.openWifi() },
                         onLongPress = {
-                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                            controller.requestWifiScan()
-                            expanded = CcExpandedModule.Wifi
+                            if (!controller.hasWifiScanAccess()) {
+                                requestWifiScan.launch(controller.wifiScanPermissions())
+                            } else {
+                                controller.requestWifiScan()
+                            }
+                            openExpanded(CcExpandedModule.Wifi)
                         },
+                        onBounds = { wifiRect = it },
                         modifier = Modifier.place(2, 0, 2, 1)
                     )
                     ConnectivityPill(
@@ -308,6 +366,7 @@ fun ControlCenter(
                             else -> "On"
                         },
                         active = controller.bluetoothEnabled,
+                        hidden = expanded == CcExpandedModule.Bluetooth,
                         onToggle = {
                             controller.toggleBluetooth {
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -321,10 +380,8 @@ fun ControlCenter(
                             }
                         },
                         onOpen = { controller.openBluetooth() },
-                        onLongPress = {
-                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                            expanded = CcExpandedModule.Bluetooth
-                        },
+                        onLongPress = { openExpanded(CcExpandedModule.Bluetooth) },
+                        onBounds = { bluetoothRect = it },
                         modifier = Modifier.place(2, 1, 2, 1)
                     )
                     IconTile(
@@ -356,16 +413,15 @@ fun ControlCenter(
                             else -> "On"
                         },
                         active = controller.mobileDataEnabled,
+                        hidden = expanded == CcExpandedModule.Mobile,
                         onToggle = {
                             controller.toggleMobileData {
                                 requestPhone.launch(Manifest.permission.READ_PHONE_STATE)
                             }
                         },
                         onOpen = { controller.openNetwork() },
-                        onLongPress = {
-                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                            expanded = CcExpandedModule.Mobile
-                        },
+                        onLongPress = { openExpanded(CcExpandedModule.Mobile) },
+                        onBounds = { mobileRect = it },
                         modifier = Modifier.place(0, 3, 2, 1)
                     )
                     VerticalLevelSlider(
@@ -391,30 +447,38 @@ fun ControlCenter(
                 }
             }
 
-            AnimatedVisibility(
-                visible = expanded != null,
-                enter = fadeIn() + scaleIn(initialScale = 0.86f, transformOrigin = TransformOrigin.Center),
-                exit = fadeOut() + scaleOut(targetScale = 0.92f, transformOrigin = TransformOrigin.Center),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .zIndex(20f)
-            ) {
+            if (overlayOpen) {
+                val t = expandProgress.value
+                val from = sourceRect
+                val destW = overlaySize.width * 0.82f
+                val destH = with(density) { 280.dp.toPx() }.coerceAtLeast(from.height)
+                val destLeft = overlayOrigin.x + (overlaySize.width - destW) / 2f
+                val destTop = overlayOrigin.y + (overlaySize.height - destH) / 2f
+                val left = lerp(from.left, destLeft, t)
+                val top = lerp(from.top, destTop, t)
+                val width = lerp(from.width, destW, t)
+                val height = lerp(from.height, destH, t)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.38f))
+                        .zIndex(20f)
+                        .onGloballyPositioned {
+                            overlayOrigin = it.positionInWindow()
+                            overlaySize = it.size
+                        }
+                        .background(Color.Black.copy(alpha = 0.38f * t))
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
-                            onClick = { expanded = null }
-                        ),
-                    contentAlignment = Alignment.Center
+                            onClick = { dismissExpanded() }
+                        )
                 ) {
                     val module = expanded ?: lastExpanded
-                    if (module != null) {
+                    if (module != null && width > 1f && height > 1f) {
                         ExpandedModuleCard(
                             module = module,
                             controller = controller,
+                            contentAlpha = ((t - 0.28f) / 0.72f).coerceIn(0f, 1f),
                             onToggleWifi = { controller.toggleWifi() },
                             onToggleBluetooth = {
                                 controller.toggleBluetooth {
@@ -434,7 +498,16 @@ fun ControlCenter(
                                 }
                             },
                             modifier = Modifier
-                                .fillMaxWidth(0.82f)
+                                .offset {
+                                    IntOffset(
+                                        (left - overlayOrigin.x).roundToInt(),
+                                        (top - overlayOrigin.y).roundToInt()
+                                    )
+                                }
+                                .size(
+                                    with(density) { width.toDp() },
+                                    with(density) { height.toDp() }
+                                )
                                 .clickable(
                                     interactionSource = remember { MutableInteractionSource() },
                                     indication = null,
@@ -614,10 +687,14 @@ private fun ConnectivityPill(
     onToggle: () -> Unit,
     onOpen: () -> Unit,
     onLongPress: () -> Unit = {},
+    onBounds: (Rect) -> Unit = {},
+    hidden: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     CcGlass(
-        modifier = modifier,
+        modifier = modifier
+            .onGloballyPositioned { onBounds(it.boundsInWindow()) }
+            .graphicsLayer { alpha = if (hidden) 0f else 1f },
         capsule = true
     ) {
         Row(
@@ -753,6 +830,7 @@ private fun ExpandedModuleCard(
     onToggleWifi: () -> Unit,
     onToggleBluetooth: () -> Unit,
     onToggleMobile: () -> Unit,
+    contentAlpha: Float = 1f,
     modifier: Modifier = Modifier
 ) {
     val icon = when (module) {
@@ -788,8 +866,8 @@ private fun ExpandedModuleCard(
         }
     }
     val rows = when (module) {
-        CcExpandedModule.Wifi -> controller.nearbyWifiNames()
-        CcExpandedModule.Bluetooth -> controller.pairedBluetoothNames()
+        CcExpandedModule.Wifi -> controller.wifiNetworks
+        CcExpandedModule.Bluetooth -> controller.bluetoothDevices
         CcExpandedModule.Mobile -> listOfNotNull(
             controller.mobileCarrier.takeIf { it.isNotBlank() }
         )
@@ -810,14 +888,18 @@ private fun ExpandedModuleCard(
         CcExpandedModule.Mobile -> controller::openNetwork
     }
 
-    CcGlass(
-        modifier = modifier.heightIn(min = 220.dp),
-        capsule = false,
-        cornerRadius = 36.dp
+    val shape = SmoothCornerShape(radius = 36.dp, smoothing = CcSmoothing)
+    Box(
+        modifier = modifier
+            .liquidGlassStroke(shape = shape, strong = true)
+            .clip(shape)
+            .background(CcExpandFill)
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
+                .graphicsLayer { alpha = contentAlpha }
+                .verticalScroll(rememberScrollState())
                 .padding(20.dp)
         ) {
             Row(
@@ -882,7 +964,13 @@ private fun ExpandedModuleCard(
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = when (module) {
-                        CcExpandedModule.Wifi -> "No networks to show"
+                        CcExpandedModule.Wifi -> when {
+                            !controller.hasWifiScanAccess() ->
+                                "Allow location to see networks"
+                            !controller.isLocationEnabled() ->
+                                "Turn on Location to see networks"
+                            else -> "No networks to show"
+                        }
                         CcExpandedModule.Bluetooth -> "No paired devices"
                         CcExpandedModule.Mobile -> "Carrier unavailable"
                     },
