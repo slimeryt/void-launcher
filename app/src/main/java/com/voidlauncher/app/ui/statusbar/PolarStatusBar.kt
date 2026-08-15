@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AirplanemodeActive
 import androidx.compose.material.icons.rounded.SignalCellularAlt
@@ -62,6 +61,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.voidlauncher.app.ui.components.CapsuleShape
 import com.voidlauncher.app.ui.components.SmoothCornerShape
 import com.voidlauncher.app.ui.theme.VoidBody
 import kotlinx.coroutines.delay
@@ -75,8 +75,8 @@ private val BatteryLowPowerFill = Color(0xFFFFD60A)
 private val BatteryCriticalFill = Color(0xFFFF3B30)
 private val StatusGlyph = Color(0xFFF5F5F7)
 
-/** iOS 27 body: rounded rectangle, not a stadium / circle. */
-private val BatteryBodyShape = SmoothCornerShape(3.2.dp)
+/** Rounded rect (~38% of 13dp height). Pill would be 50%. */
+private val BatteryBodyShape = SmoothCornerShape(5.dp, smoothing = 0.6f)
 
 /** Keep content out of the cutout even after the system status bar is hidden. */
 @OptIn(ExperimentalLayoutApi::class)
@@ -168,7 +168,7 @@ fun PolarStatusBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight()
-                .padding(start = 22.dp, end = 14.dp),
+                .padding(start = 34.dp, end = 28.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -187,18 +187,22 @@ fun PolarStatusBar(
                 if (controller.airplane) {
                     StatusCcIcon(Icons.Rounded.AirplanemodeActive)
                 } else {
-                    StatusCcIcon(
-                        when (controller.cellularBars) {
-                            0, 1 -> Icons.Rounded.SignalCellularAlt1Bar
+                    StatusBarsIcon(
+                        ghost = Icons.Rounded.SignalCellularAlt,
+                        lit = when (controller.cellularBars) {
+                            0 -> null
+                            1 -> Icons.Rounded.SignalCellularAlt1Bar
                             2 -> Icons.Rounded.SignalCellularAlt2Bar
                             else -> Icons.Rounded.SignalCellularAlt
                         }
                     )
                 }
                 if (controller.wifiConnected) {
-                    StatusCcIcon(
-                        when (controller.wifiBars) {
-                            0, 1 -> Icons.Rounded.Wifi1Bar
+                    StatusBarsIcon(
+                        ghost = Icons.Rounded.Wifi,
+                        lit = when (controller.wifiBars) {
+                            0 -> null
+                            1 -> Icons.Rounded.Wifi1Bar
                             2 -> Icons.Rounded.Wifi2Bar
                             else -> Icons.Rounded.Wifi
                         }
@@ -221,6 +225,29 @@ private fun StatusCcIcon(image: ImageVector) {
         tint = StatusGlyph,
         modifier = Modifier.size(15.dp)
     )
+}
+
+@Composable
+private fun StatusBarsIcon(ghost: ImageVector, lit: ImageVector?) {
+    Box(
+        modifier = Modifier.size(15.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = ghost,
+            contentDescription = null,
+            tint = StatusGlyph.copy(alpha = 0.34f),
+            modifier = Modifier.size(15.dp)
+        )
+        if (lit != null) {
+            Icon(
+                imageVector = lit,
+                contentDescription = null,
+                tint = StatusGlyph,
+                modifier = Modifier.size(15.dp)
+            )
+        }
+    }
 }
 
 /**
@@ -285,12 +312,12 @@ fun Ios27BatteryIcon(
                 maxLines = 1
             )
         }
-        Spacer(Modifier.width(0.9.dp))
+        Spacer(Modifier.width(0.85.dp))
         Box(
             modifier = Modifier
-                .width(1.6.dp)
-                .height(5.2.dp)
-                .clip(RoundedCornerShape(0.7.dp))
+                .width(1.7.dp)
+                .height(5.4.dp)
+                .clip(CapsuleShape)
                 .background(if (fillFrac >= 0.97f) track else BatteryEmpty)
         )
     }
