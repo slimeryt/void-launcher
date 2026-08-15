@@ -152,7 +152,7 @@ internal fun AccessibilitySettingsPage(
     SettingsGroup(label = "Motion") {
         ToggleRow(
             title = "Reduce motion",
-            subtitle = "Snappier Polar animations",
+            subtitle = "Snappier Polar animations, no app morph",
             checked = state.reduceMotion,
             onCheckedChange = onReduceMotionChange,
             showDivider = false

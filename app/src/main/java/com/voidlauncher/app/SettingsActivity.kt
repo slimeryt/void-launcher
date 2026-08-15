@@ -91,6 +91,7 @@ class SettingsActivity : ComponentActivity() {
                             onShowBatteryPercentChange = viewModel::setShowBatteryPercent,
                             onReduceMotionChange = viewModel::setReduceMotion,
                             onReduceTransparencyChange = viewModel::setReduceTransparency,
+                            onCustomAppAnimationsChange = viewModel::setCustomAppAnimations,
                             onUnhideApp = viewModel::unhideApp,
                             onAutoCheckUpdatesChange = viewModel::setAutoCheckUpdates,
                             onGlassBlurChange = viewModel::setGlassBlurStrength,

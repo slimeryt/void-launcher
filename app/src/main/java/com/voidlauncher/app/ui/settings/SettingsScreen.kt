@@ -83,6 +83,7 @@ fun SettingsContent(
     onShowBatteryPercentChange: (Boolean) -> Unit,
     onReduceMotionChange: (Boolean) -> Unit,
     onReduceTransparencyChange: (Boolean) -> Unit,
+    onCustomAppAnimationsChange: (Boolean) -> Unit,
     onUnhideApp: (String) -> Unit,
     onAutoCheckUpdatesChange: (Boolean) -> Unit,
     onGlassBlurChange: (Float) -> Unit,
@@ -221,7 +222,8 @@ fun SettingsContent(
                         onShowLabelsChange = onShowLabelsChange,
                         onDockLabelsChange = onDockLabelsChange,
                         onGridColumnsChange = onGridColumnsChange,
-                        onIconScaleChange = onIconScaleChange
+                        onIconScaleChange = onIconScaleChange,
+                        onCustomAppAnimationsChange = onCustomAppAnimationsChange
                     )
                     SettingsPage.Updates -> Unit
                     SettingsPage.Account -> Unit
@@ -301,7 +303,7 @@ private fun RootPage(
     val showWallpaper = matches("Wallpaper", "Appearance")
     val showLiquid = matches("Liquid Glass", "Blur", "frost", "refraction", "Appearance")
     val showIcons = matches("App Icons", "Icons", "theme", "tint", "Appearance")
-    val showHome = matches("Home Screen", "labels", "grid", "Appearance")
+    val showHome = matches("Home Screen", "labels", "grid", "Appearance", "animations")
     val showSearch = matches("Search", "Assistant", "Home")
     val showStatusBar = matches("Status Bar", "battery", "time")
     val showPolarApps = matches("Polar Apps", "Phone", "Messages", "dialer", "SMS")
@@ -683,7 +685,8 @@ private fun HomeLayoutPage(
     onShowLabelsChange: (Boolean) -> Unit,
     onDockLabelsChange: (Boolean) -> Unit,
     onGridColumnsChange: (Int) -> Unit,
-    onIconScaleChange: (Float) -> Unit
+    onIconScaleChange: (Float) -> Unit,
+    onCustomAppAnimationsChange: (Boolean) -> Unit
 ) {
     Text(
         text = "Home Screen",
@@ -705,6 +708,20 @@ private fun HomeLayoutPage(
             subtitle = "Names on dock icons",
             checked = state.dockLabels,
             onCheckedChange = onDockLabelsChange,
+            showDivider = false
+        )
+    }
+
+    SettingsGroup(label = "Motion") {
+        ToggleRow(
+            title = "App animations",
+            subtitle = if (state.reduceMotion) {
+                "Reduce Motion skips the morph"
+            } else {
+                "Icon morphs into the app window"
+            },
+            checked = state.customAppAnimations,
+            onCheckedChange = onCustomAppAnimationsChange,
             showDivider = false
         )
     }

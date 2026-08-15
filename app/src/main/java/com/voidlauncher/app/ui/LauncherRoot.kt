@@ -3,6 +3,7 @@ package com.voidlauncher.app.ui
 import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -20,6 +21,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -36,9 +38,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.google.accompanist.systemuicontroller.rememberSystemUiController
 import com.voidlauncher.app.data.AppInfo
 import com.voidlauncher.app.glass.LocalHazeState
@@ -57,10 +62,15 @@ import com.voidlauncher.app.ui.shade.NotificationCenter
 import com.voidlauncher.app.ui.statusbar.HideSystemStatusBar
 import com.voidlauncher.app.ui.statusbar.PolarStatusBar
 import com.voidlauncher.app.ui.statusbar.PolarStatusBarController
+import com.voidlauncher.app.util.PendingLaunchBounds
 import com.voidlauncher.app.viewmodel.LauncherUiState
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+
+private val AppOpenEasing = CubicBezierEasing(0.32f, 0.72f, 0f, 1f)
+private val AppCloseEasing = CubicBezierEasing(0.32f, 0.08f, 0.16f, 1f)
 
 @Composable
 fun LauncherRoot(
@@ -129,6 +139,38 @@ fun LauncherRoot(
     var menuOutsideDismiss by remember { mutableStateOf(true) }
     var rootPos by remember { mutableStateOf(Offset.Zero) }
     var iconDraft by remember { mutableStateOf(IconAppearance.Default) }
+    val launchProgress = remember { Animatable(0f) }
+    var overlayApp by remember { mutableStateOf<AppInfo?>(null) }
+    var overlayStart by remember { mutableStateOf<android.graphics.Rect?>(null) }
+    var polarLeftForClose by remember { mutableStateOf(false) }
+    var launchGen by remember { mutableIntStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val customAppAnim = state.customAppAnimations && !state.reduceMotion
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && polarLeftForClose) {
+                polarLeftForClose = false
+                val closing = overlayApp
+                if (closing != null && launchProgress.value > 0.04f) {
+                    launchGen += 1
+                    scope.launch {
+                        launchProgress.animateTo(0f, tween(380, easing = AppCloseEasing))
+                        if (overlayApp == closing) {
+                            overlayApp = null
+                            overlayStart = null
+                        }
+                    }
+                } else {
+                    overlayApp = null
+                    overlayStart = null
+                    scope.launch { launchProgress.snapTo(0f) }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     fun openAppMenu(app: AppInfo, bounds: Rect?) {
         actionApp = app
@@ -145,6 +187,35 @@ fun LauncherRoot(
         actionApp = null
         focusBounds = null
         menuOutsideDismiss = true
+    }
+
+    fun requestLaunch(app: AppInfo) {
+        dismissAppMenu()
+        if (state.isDrawerOpen) onDrawerOpenChange(false)
+        if (state.isNotificationCenterOpen) onNotificationCenterOpenChange(false)
+        if (state.isControlCenterOpen) onControlCenterOpenChange(false)
+        if (!customAppAnim) {
+            polarLeftForClose = false
+            overlayApp = null
+            overlayStart = null
+            onLaunchApp(app)
+            return
+        }
+        overlayStart = PendingLaunchBounds.copy(app.key)
+        overlayApp = app
+        polarLeftForClose = true
+        val gen = launchGen + 1
+        launchGen = gen
+        scope.launch {
+            launchProgress.stop()
+            launchProgress.snapTo(0f)
+            launch {
+                delay(120)
+                if (gen != launchGen) return@launch
+                onLaunchApp(app)
+            }
+            launchProgress.animateTo(1f, tween(420, easing = AppOpenEasing))
+        }
     }
 
     LaunchedEffect(state.iconEditorOpen) {
@@ -192,6 +263,7 @@ fun LauncherRoot(
     // Blur/zoom only after finger lifts (menu sticky). Applying blur while still holding
     // rebuilds the home modifier tree and cancels the hold→drag pointer.
     val menuSettled = menuOpen && menuOutsideDismiss
+    val launchT = launchProgress.value.coerceIn(0f, 1f)
     val homeFocusScale by animateFloatAsState(
         targetValue = if (menuSettled) 0.96f else 1f,
         animationSpec = tween(280, easing = FastOutSlowInEasing),
@@ -199,8 +271,9 @@ fun LauncherRoot(
     )
     val homeBlur = when {
         menuSettled -> 20.dp
-        else -> (48f * ccExpansion.value.coerceIn(0f, 1f)).dp
+        else -> (48f * ccExpansion.value.coerceIn(0f, 1f) + 14f * launchT).dp
     }
+    val hiddenLaunchKey = overlayApp?.key?.takeIf { launchT > 0.001f }
 
     CompositionLocalProvider(
         LocalIconAppearance provides appearance,
@@ -228,17 +301,18 @@ fun LauncherRoot(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            scaleX = homeFocusScale
-                            scaleY = homeFocusScale
+                            val zoom = homeFocusScale * (1f - 0.08f * launchT)
+                            scaleX = zoom
+                            scaleY = zoom
                             transformOrigin = TransformOrigin.Center
                         }
                 ) {
                     CompositionLocalProvider(
-                        LocalHiddenAppKey provides if (menuSettled) actionApp?.key else null
+                        LocalHiddenAppKey provides (hiddenLaunchKey ?: if (menuSettled) actionApp?.key else null)
                     ) {
                     HomeScreen(
                         state = state,
-                        onLaunchApp = onLaunchApp,
+                        onLaunchApp = { requestLaunch(it) },
                         onAppLongClick = { app, bounds -> openAppMenu(app, bounds) },
                         onAppMenuDismiss = { dismissAppMenu() },
                         onAppMenuArmDismiss = { armAppMenuDismiss() },
@@ -291,12 +365,12 @@ fun LauncherRoot(
 
             // Drawer outside the home blur/zoom layer so opening it stays snappy
             CompositionLocalProvider(
-                LocalHiddenAppKey provides if (menuSettled) actionApp?.key else null
+                LocalHiddenAppKey provides (hiddenLaunchKey ?: if (menuSettled) actionApp?.key else null)
             ) {
             AppDrawer(
                 visible = state.isDrawerOpen,
                 state = state,
-                onLaunchApp = onLaunchApp,
+                onLaunchApp = { requestLaunch(it) },
                 onAppLongClick = { app, bounds -> openAppMenu(app, bounds) },
                 onAppMenuDismiss = { dismissAppMenu() },
                 onAppMenuArmDismiss = { armAppMenuDismiss() },
@@ -324,6 +398,19 @@ fun LauncherRoot(
                     .fillMaxSize()
                     .zIndex(12f)
             )
+
+            val launching = overlayApp
+            if (launching != null && launchT > 0.001f) {
+                PolarAppOpenOverlay(
+                    app = launching,
+                    start = overlayStart,
+                    progress = launchT,
+                    rootPos = rootPos,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(13f)
+                )
+            }
 
             PolarStatusBar(
                 controller = polarStatusBar,
@@ -364,7 +451,8 @@ fun LauncherRoot(
                         iconScale = state.iconScale,
                         onClick = {},
                         onLongClick = {},
-                        longPressEnabled = false
+                        longPressEnabled = false,
+                        trackLaunchBounds = false
                     )
                 }
                 }

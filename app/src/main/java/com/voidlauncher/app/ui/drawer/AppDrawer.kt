@@ -480,7 +480,8 @@ fun AppDrawer(
                         iconScale = state.iconScale,
                         onClick = {},
                         onLongClick = {},
-                        longPressEnabled = false
+                        longPressEnabled = false,
+                        trackLaunchBounds = false
                     )
                 }
             }

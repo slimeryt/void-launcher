@@ -248,7 +248,8 @@ fun DockBar(
                         iconScale = iconScale,
                         onClick = {},
                         onLongClick = {},
-                        longPressEnabled = false
+                        longPressEnabled = false,
+                        trackLaunchBounds = false
                     )
                 }
             }

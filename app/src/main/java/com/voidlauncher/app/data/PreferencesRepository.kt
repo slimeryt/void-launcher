@@ -56,6 +56,8 @@ data class LauncherPreferences(
     val showBatteryPercent: Boolean = true,
     val reduceMotion: Boolean = false,
     val reduceTransparency: Boolean = false,
+    /** Polar-drawn icon → window morph when opening or returning from apps. */
+    val customAppAnimations: Boolean = true,
     /** Phone and Messages were pinned onto Polar home once. */
     val polarSystemAppsPlaced: Boolean = false,
     /**
@@ -106,6 +108,7 @@ class PreferencesRepository(private val context: Context) {
         val ShowBatteryPercent = booleanPreferencesKey("show_battery_percent")
         val ReduceMotion = booleanPreferencesKey("reduce_motion")
         val ReduceTransparency = booleanPreferencesKey("reduce_transparency")
+        val CustomAppAnimations = booleanPreferencesKey("custom_app_animations")
         val PolarSystemAppsPlaced = booleanPreferencesKey("polar_system_apps_placed")
         val UpdateChannel = stringPreferencesKey("update_channel")
         val AgreedPublicBeta = booleanPreferencesKey("agreed_public_beta")
@@ -143,6 +146,7 @@ class PreferencesRepository(private val context: Context) {
             showBatteryPercent = prefs[Keys.ShowBatteryPercent] ?: true,
             reduceMotion = prefs[Keys.ReduceMotion] ?: false,
             reduceTransparency = prefs[Keys.ReduceTransparency] ?: false,
+            customAppAnimations = prefs[Keys.CustomAppAnimations] ?: true,
             polarSystemAppsPlaced = prefs[Keys.PolarSystemAppsPlaced] ?: false,
             updateChannel = prefs[Keys.UpdateChannel] ?: "off",
             agreedPublicBeta = prefs[Keys.AgreedPublicBeta] ?: false,
@@ -249,6 +253,10 @@ class PreferencesRepository(private val context: Context) {
 
     suspend fun setReduceMotion(value: Boolean) {
         context.dataStore.edit { it[Keys.ReduceMotion] = value }
+    }
+
+    suspend fun setCustomAppAnimations(value: Boolean) {
+        context.dataStore.edit { it[Keys.CustomAppAnimations] = value }
     }
 
     suspend fun setReduceTransparency(value: Boolean) {

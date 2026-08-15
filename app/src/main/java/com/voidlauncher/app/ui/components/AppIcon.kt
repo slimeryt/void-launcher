@@ -56,7 +56,9 @@ fun AppIcon(
     editMode: Boolean = false,
     selected: Boolean = false,
     /** When false, only tap is handled here — parent owns long-press / drag. */
-    longPressEnabled: Boolean = true
+    longPressEnabled: Boolean = true,
+    /** When false, this copy does not feed the icon→window morph (overlays / drag ghosts). */
+    trackLaunchBounds: Boolean = true
 ) {
     val appearance = LocalIconAppearance.current
     val hideInPlace = LocalHiddenAppKey.current == app.key
@@ -119,6 +121,19 @@ fun AppIcon(
                 colorFilter = colorFilter,
                 modifier = Modifier
                     .size(iconSize)
+                    .onGloballyPositioned { coords ->
+                        if (!trackLaunchBounds) return@onGloballyPositioned
+                        val pos = coords.positionInWindow()
+                        PendingLaunchBounds.rememberIcon(
+                            app.key,
+                            android.graphics.Rect(
+                                pos.x.roundToInt(),
+                                pos.y.roundToInt(),
+                                (pos.x + coords.size.width).roundToInt(),
+                                (pos.y + coords.size.height).roundToInt()
+                            )
+                        )
+                    }
                     // Stroke outside clip so the rim follows the squircle edge (no gap / crop).
                     .liquidGlassStroke(shape = shape, strong = true)
                     .clip(shape)

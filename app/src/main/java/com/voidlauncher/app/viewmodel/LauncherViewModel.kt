@@ -53,6 +53,7 @@ data class LauncherUiState(
     val showBatteryPercent: Boolean = true,
     val reduceMotion: Boolean = false,
     val reduceTransparency: Boolean = false,
+    val customAppAnimations: Boolean = true,
     val hiddenApps: List<AppInfo> = emptyList(),
     val openWallpaperPicker: Boolean = false,
     val widgetIds: List<Int> = emptyList()
@@ -137,6 +138,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             showBatteryPercent = prefs.showBatteryPercent,
             reduceMotion = prefs.reduceMotion,
             reduceTransparency = prefs.reduceTransparency,
+            customAppAnimations = prefs.customAppAnimations,
             hiddenApps = apps.filter { it.key in prefs.hidden }.sortedBy { it.label.lowercase() },
             openWallpaperPicker = wallpaperOpen,
             widgetIds = prefs.widgetIds
@@ -421,6 +423,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun setReduceMotion(value: Boolean) {
         viewModelScope.launch { prefsRepository.setReduceMotion(value) }
+    }
+
+    fun setCustomAppAnimations(value: Boolean) {
+        viewModelScope.launch { prefsRepository.setCustomAppAnimations(value) }
     }
 
     fun setReduceTransparency(value: Boolean) {
