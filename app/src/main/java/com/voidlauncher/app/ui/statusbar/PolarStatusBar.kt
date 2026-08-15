@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.width
@@ -24,6 +26,7 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AirplanemodeActive
 import androidx.compose.material.icons.rounded.SignalCellularAlt
@@ -46,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -61,7 +65,6 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.voidlauncher.app.ui.components.CapsuleShape
 import com.voidlauncher.app.ui.components.SmoothCornerShape
 import com.voidlauncher.app.ui.theme.VoidBody
 import kotlinx.coroutines.delay
@@ -261,7 +264,6 @@ fun Ios27BatteryIcon(
     modifier: Modifier = Modifier
 ) {
     val value = percent.coerceIn(0, 100)
-    val solid = glyph != BatteryGlyph.Idle
     val track = when (glyph) {
         BatteryGlyph.Idle -> BatteryIdleFill
         BatteryGlyph.Charging -> BatteryChargingFill
@@ -274,7 +276,7 @@ fun Ios27BatteryIcon(
         else -> Color.White
     }
     val fillFrac by animateFloatAsState(
-        targetValue = if (solid) 1f else value / 100f,
+        targetValue = value / 100f,
         animationSpec = tween(220),
         label = "batteryFill"
     )
@@ -285,7 +287,7 @@ fun Ios27BatteryIcon(
         modifier = modifier.height(bodyH),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .width(bodyW)
                 .fillMaxHeight()
@@ -295,9 +297,9 @@ fun Ios27BatteryIcon(
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(fillFrac.coerceIn(0f, 1f))
                     .align(Alignment.CenterStart)
+                    .width(maxWidth * fillFrac.coerceIn(0f, 1f))
+                    .fillMaxHeight()
                     .background(track)
             )
             Text(
@@ -312,13 +314,20 @@ fun Ios27BatteryIcon(
                 maxLines = 1
             )
         }
-        Spacer(Modifier.width(0.85.dp))
+        Spacer(Modifier.width(0.65.dp))
+        val terminalFill = if (fillFrac >= 0.97f) track else BatteryEmpty
         Box(
             modifier = Modifier
-                .width(1.7.dp)
-                .height(5.4.dp)
-                .clip(CapsuleShape)
-                .background(if (fillFrac >= 0.97f) track else BatteryEmpty)
-        )
+                .width(1.25.dp)
+                .height(4.dp)
+                .clip(RectangleShape)
+        ) {
+            Box(
+                modifier = Modifier
+                    .requiredSize(4.dp)
+                    .align(Alignment.CenterEnd)
+                    .background(terminalFill, CircleShape)
+            )
+        }
     }
 }

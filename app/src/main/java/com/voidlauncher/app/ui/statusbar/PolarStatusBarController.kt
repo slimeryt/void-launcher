@@ -119,7 +119,12 @@ class PolarStatusBarController(private val context: Context) {
     private fun applyBattery(intent: Intent) {
         val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
         val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, 100).coerceAtLeast(1)
-        val percent = if (level < 0) batteryPercent else ((level * 100f) / scale).toInt().coerceIn(0, 100)
+        val fromIntent = if (level < 0) batteryPercent else ((level * 100f) / scale).toInt().coerceIn(0, 100)
+        val cap = runCatching {
+            app.getSystemService(BatteryManager::class.java)
+                ?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        }.getOrNull()
+        val percent = if (cap != null && cap in 0..100) cap else fromIntent
         val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN)
         val plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
         val charging = status == BatteryManager.BATTERY_STATUS_CHARGING
@@ -136,6 +141,14 @@ class PolarStatusBarController(private val context: Context) {
         }
     }
 
+    private fun refreshBatteryLevel() {
+        val cap = runCatching {
+            app.getSystemService(BatteryManager::class.java)
+                ?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        }.getOrNull()
+        if (cap != null && cap in 0..100) batteryPercent = cap
+    }
+
     private fun refreshRadios() {
         airplane = Settings.Global.getInt(app.contentResolver, Settings.Global.AIRPLANE_MODE_ON, 0) == 1
         val caps = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
@@ -144,6 +157,7 @@ class PolarStatusBarController(private val context: Context) {
         wifiConnected = wifiOn && hasWifi
         wifiBars = if (wifiConnected) readWifiBars() else 0
         cellularBars = if (airplane) 0 else readCellularBars()
+        refreshBatteryLevel()
         if (!listening) return
         // Keep Low Power in sync even if battery sticky didn't re-fire.
         if (powerManager.isPowerSaveMode && batteryGlyph != BatteryGlyph.LowPower) {
