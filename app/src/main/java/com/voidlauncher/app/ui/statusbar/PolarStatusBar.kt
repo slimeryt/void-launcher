@@ -118,7 +118,8 @@ fun PolarStatusBar(
     shadeLocked: Boolean,
     onPullNotificationCenter: () -> Unit,
     onPullControlCenter: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showBatteryPercent: Boolean = true
 ) {
     val context = LocalContext.current
     var now by remember { mutableStateOf(Date()) }
@@ -213,7 +214,8 @@ fun PolarStatusBar(
                 }
                 Ios27BatteryIcon(
                     percent = controller.batteryPercent,
-                    glyph = controller.batteryGlyph
+                    glyph = controller.batteryGlyph,
+                    showPercent = showBatteryPercent
                 )
             }
         }
@@ -261,7 +263,8 @@ private fun StatusBarsIcon(ghost: ImageVector, lit: ImageVector?) {
 fun Ios27BatteryIcon(
     percent: Int,
     glyph: BatteryGlyph,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showPercent: Boolean = true
 ) {
     val value = percent.coerceIn(0, 100)
     val track = when (glyph) {
@@ -302,17 +305,19 @@ fun Ios27BatteryIcon(
                     .fillMaxHeight()
                     .background(track)
             )
-            Text(
-                text = value.toString(),
-                color = onFill,
-                fontSize = if (value >= 100) 8.5.sp else 9.5.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = VoidBody,
-                letterSpacing = (-0.4).sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-                maxLines = 1
-            )
+            if (showPercent) {
+                Text(
+                    text = value.toString(),
+                    color = onFill,
+                    fontSize = if (value >= 100) 8.5.sp else 9.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = VoidBody,
+                    letterSpacing = (-0.4).sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 1
+                )
+            }
         }
         Spacer(Modifier.width(0.65.dp))
         val terminalFill = if (fillFrac >= 0.97f) track else BatteryEmpty

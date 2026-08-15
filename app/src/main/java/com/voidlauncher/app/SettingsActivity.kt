@@ -67,8 +67,8 @@ class SettingsActivity : ComponentActivity() {
                 LocalGlassSettings provides GlassSettings(
                     blurStrength = state.glassBlurStrength,
                     frostAmount = state.glassFrostAmount,
-                    refractionEnabled = state.glassRefraction,
-                    sheenEnabled = state.glassSheen
+                    refractionEnabled = state.glassRefraction && !state.reduceTransparency,
+                    sheenEnabled = state.glassSheen && !state.reduceTransparency
                 )
             ) {
                 VoidTheme {
@@ -86,6 +86,12 @@ class SettingsActivity : ComponentActivity() {
                             onIconScaleChange = viewModel::setIconScale,
                             onDockLabelsChange = viewModel::setDockLabels,
                             onHapticChange = viewModel::setHapticFeedback,
+                            onShowHomeSearchChange = viewModel::setShowHomeSearch,
+                            onShowAssistantChange = viewModel::setShowAssistant,
+                            onShowBatteryPercentChange = viewModel::setShowBatteryPercent,
+                            onReduceMotionChange = viewModel::setReduceMotion,
+                            onReduceTransparencyChange = viewModel::setReduceTransparency,
+                            onUnhideApp = viewModel::unhideApp,
                             onAutoCheckUpdatesChange = viewModel::setAutoCheckUpdates,
                             onGlassBlurChange = viewModel::setGlassBlurStrength,
                             onGlassFrostChange = viewModel::setGlassFrostAmount,

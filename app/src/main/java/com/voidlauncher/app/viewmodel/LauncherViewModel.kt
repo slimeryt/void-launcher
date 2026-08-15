@@ -9,6 +9,7 @@ import com.voidlauncher.app.data.HomeFolder
 import com.voidlauncher.app.data.HomeItem
 import com.voidlauncher.app.data.LauncherPreferences
 import com.voidlauncher.app.data.PreferencesRepository
+import com.voidlauncher.app.system.PolarSystemApps
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -47,6 +48,13 @@ data class LauncherUiState(
     val dockLabels: Boolean = false,
     val hapticFeedback: Boolean = true,
     val autoCheckUpdates: Boolean = true,
+    val showHomeSearch: Boolean = true,
+    val showAssistant: Boolean = true,
+    val showBatteryPercent: Boolean = true,
+    val reduceMotion: Boolean = false,
+    val reduceTransparency: Boolean = false,
+    val hiddenApps: List<AppInfo> = emptyList(),
+    val openWallpaperPicker: Boolean = false,
     val widgetIds: List<Int> = emptyList()
 )
 
@@ -64,11 +72,14 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val isEditMode = MutableStateFlow(false)
     private val isLoading = MutableStateFlow(true)
     private val iconEditorOpen = MutableStateFlow(false)
+    private val wallpaperPickerOpen = MutableStateFlow(false)
 
     val state: StateFlow<LauncherUiState> = combine(
         combine(allApps, searchQuery, isDrawerOpen) { a, q, d -> Triple(a, q, d) },
         combine(drawerFocusSearch, isEditMode, isLoading) { f, e, l -> Triple(f, e, l) },
-        combine(iconEditorOpen, prefsRepository.preferences) { editor, prefs -> editor to prefs },
+        combine(iconEditorOpen, prefsRepository.preferences, wallpaperPickerOpen) { editor, prefs, wallpaper ->
+            Triple(editor, prefs, wallpaper)
+        },
         combine(isNotificationCenterOpen, isControlCenterOpen) { n, c -> n to c }
     ) { t1, t2, editorPrefs, shade ->
         val apps = t1.first
@@ -79,6 +90,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val loading = t2.third
         val editorOpen = editorPrefs.first
         val prefs = editorPrefs.second
+        val wallpaperOpen = editorPrefs.third
 
         val visible = apps.filterNot { it.key in prefs.hidden }
         val byKey = visible.associateBy { it.key }
@@ -120,6 +132,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             dockLabels = prefs.dockLabels,
             hapticFeedback = prefs.hapticFeedback,
             autoCheckUpdates = prefs.autoCheckUpdates,
+            showHomeSearch = prefs.showHomeSearch,
+            showAssistant = prefs.showAssistant,
+            showBatteryPercent = prefs.showBatteryPercent,
+            reduceMotion = prefs.reduceMotion,
+            reduceTransparency = prefs.reduceTransparency,
+            hiddenApps = apps.filter { it.key in prefs.hidden }.sortedBy { it.label.lowercase() },
+            openWallpaperPicker = wallpaperOpen,
             widgetIds = prefs.widgetIds
         )
     }.stateIn(
@@ -136,6 +155,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             prefsRepository.preferences.collect { prefs ->
                 prefsCache = prefs
                 maybeSeedHome(prefs)
+                maybePlacePolarSystemApps(prefs)
             }
         }
         refreshApps()
@@ -150,14 +170,49 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val apps = allApps.value
         if (apps.isEmpty()) return
         seeded = true
-        val page = apps.filterNot { it.key in prefs.hidden }
+        val polarKeys = PolarSystemApps.keys(getApplication<Application>().packageName)
+            .filter { key -> apps.any { it.key == key } }
+        val rest = apps.filterNot { it.key in polarKeys || it.key in prefs.hidden }
             .take(prefs.gridColumns * 5)
-            .map { HomeItem.App(it.key) }
+        val page = (polarKeys + rest.map { it.key }).distinct()
+            .map { HomeItem.App(it) }
         viewModelScope.launch {
             prefsRepository.setHomeLayout(listOf(page), prefs.folders)
             if (prefs.favorites.isEmpty()) {
-                prefsRepository.setFavorites(apps.take(4).map { it.key })
+                prefsRepository.setFavorites((polarKeys + rest.map { it.key }).distinct().take(4))
             }
+            prefsRepository.setPolarSystemAppsPlaced(true)
+        }
+    }
+
+    private fun maybePlacePolarSystemApps(prefs: LauncherPreferences) {
+        if (prefs.polarSystemAppsPlaced) return
+        val apps = allApps.value
+        if (apps.isEmpty()) return
+        if (prefs.pages.none { it.isNotEmpty() }) return
+        val wanted = PolarSystemApps.keys(getApplication<Application>().packageName)
+            .filter { key -> apps.any { it.key == key } }
+        if (wanted.isEmpty()) return
+        val onHome = prefs.pages.flatten().mapNotNull { item ->
+            when (item) {
+                is HomeItem.App -> item.key
+                is HomeItem.Folder -> null
+            }
+        }.toSet() + prefs.folders.values.flatMap { it.appKeys }.toSet()
+        val missing = wanted.filter { it !in onHome && it !in prefs.hidden }
+        viewModelScope.launch {
+            if (missing.isNotEmpty()) {
+                val pages = prefs.pages.toMutableList().ifEmpty { mutableListOf(emptyList()) }
+                val first = missing.map { HomeItem.App(it) } + pages[0]
+                pages[0] = first
+                prefsRepository.setHomeLayout(pages, prefs.folders)
+            }
+            if (prefs.favorites.isEmpty()) {
+                prefsRepository.setFavorites(
+                    (wanted + apps.map { it.key }).distinct().take(4)
+                )
+            }
+            prefsRepository.setPolarSystemAppsPlaced(true)
         }
     }
 
@@ -167,6 +222,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             allApps.value = appRepository.loadLaunchableApps()
             isLoading.value = false
             maybeSeedHome(prefsCache)
+            maybePlacePolarSystemApps(prefsCache)
         }
     }
 
@@ -230,6 +286,20 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             prefsRepository.setHidden(prefsCache.hidden + app.key)
             removeAppFromHome(app.key)
         }
+    }
+
+    fun unhideApp(key: String) {
+        viewModelScope.launch {
+            prefsRepository.setHidden(prefsCache.hidden - key)
+        }
+    }
+
+    fun requestWallpaperPicker() {
+        wallpaperPickerOpen.value = true
+    }
+
+    fun consumeWallpaperPicker() {
+        wallpaperPickerOpen.value = false
     }
 
     fun setSearchQuery(query: String) {
@@ -335,6 +405,26 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun setHapticFeedback(value: Boolean) {
         viewModelScope.launch { prefsRepository.setHapticFeedback(value) }
+    }
+
+    fun setShowHomeSearch(value: Boolean) {
+        viewModelScope.launch { prefsRepository.setShowHomeSearch(value) }
+    }
+
+    fun setShowAssistant(value: Boolean) {
+        viewModelScope.launch { prefsRepository.setShowAssistant(value) }
+    }
+
+    fun setShowBatteryPercent(value: Boolean) {
+        viewModelScope.launch { prefsRepository.setShowBatteryPercent(value) }
+    }
+
+    fun setReduceMotion(value: Boolean) {
+        viewModelScope.launch { prefsRepository.setReduceMotion(value) }
+    }
+
+    fun setReduceTransparency(value: Boolean) {
+        viewModelScope.launch { prefsRepository.setReduceTransparency(value) }
     }
 
     fun setAutoCheckUpdates(value: Boolean) {

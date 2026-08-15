@@ -3,4 +3,6 @@
     <color name="void_black">#FF05060A</color>
     <color name="void_cyan">#FF5EEAD4</color>
     <color name="ic_launcher_background">#05060A</color>
+    <color name="polar_phone_bg">#30D158</color>
+    <color name="polar_messages_bg">#34C759</color>
 </resources>

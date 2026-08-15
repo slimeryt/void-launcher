@@ -216,31 +216,6 @@ private fun AboutLinkRow(
     }
 }
 
-// SettingsGroup is private in SettingsScreen — duplicate a tiny local one.
-@Composable
-private fun SettingsGroup(
-    label: String,
-    content: @Composable () -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.titleSmall,
-            color = VoidMuted,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(start = 4.dp)
-        )
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(CardShape)
-                .background(SettingsCardBg)
-        ) {
-            content()
-        }
-    }
-}
-
 private val PrivacyPolicyText = """
 Last updated: August 6, 2026
 

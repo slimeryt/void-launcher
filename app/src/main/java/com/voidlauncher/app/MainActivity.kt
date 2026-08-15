@@ -51,6 +51,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_OPEN_ICON_EDITOR = "open_icon_editor"
+        const val EXTRA_OPEN_WALLPAPER_PICKER = "open_wallpaper_picker"
     }
 
     private val viewModel: LauncherViewModel by viewModels()
@@ -88,7 +89,7 @@ class MainActivity : ComponentActivity() {
         blurController = WallpaperBlurController(applicationContext, lifecycleScope)
         appWidgetManager = AppWidgetManager.getInstance(this)
         appWidgetHost = AppWidgetHost(this, WIDGET_HOST_ID)
-        handleIconEditorIntent(intent)
+        handleHomeIntents(intent)
 
         setContent {
             val state by viewModel.state.collectAsStateWithLifecycle()
@@ -104,8 +105,8 @@ class MainActivity : ComponentActivity() {
                 LocalGlassSettings provides GlassSettings(
                     blurStrength = state.glassBlurStrength,
                     frostAmount = state.glassFrostAmount,
-                    refractionEnabled = state.glassRefraction,
-                    sheenEnabled = state.glassSheen
+                    refractionEnabled = state.glassRefraction && !state.reduceTransparency,
+                    sheenEnabled = state.glassSheen && !state.reduceTransparency
                 ),
                 LocalWidgetHostApi provides WidgetHostApi(
                     host = appWidgetHost,
@@ -167,6 +168,7 @@ class MainActivity : ComponentActivity() {
                             )
                         },
                         onIconEditorOpenChange = viewModel::setIconEditorOpen,
+                        onWallpaperPickerConsumed = viewModel::consumeWallpaperPicker,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -177,13 +179,17 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handleIconEditorIntent(intent)
+        handleHomeIntents(intent)
     }
 
-    private fun handleIconEditorIntent(intent: Intent?) {
+    private fun handleHomeIntents(intent: Intent?) {
         if (intent?.getBooleanExtra(EXTRA_OPEN_ICON_EDITOR, false) == true) {
             viewModel.setIconEditorOpen(true)
             intent.removeExtra(EXTRA_OPEN_ICON_EDITOR)
+        }
+        if (intent?.getBooleanExtra(EXTRA_OPEN_WALLPAPER_PICKER, false) == true) {
+            viewModel.requestWallpaperPicker()
+            intent.removeExtra(EXTRA_OPEN_WALLPAPER_PICKER)
         }
     }
 

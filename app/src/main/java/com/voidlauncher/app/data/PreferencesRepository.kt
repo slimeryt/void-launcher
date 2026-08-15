@@ -51,6 +51,13 @@ data class LauncherPreferences(
     val dockLabels: Boolean = false,
     val hapticFeedback: Boolean = true,
     val autoCheckUpdates: Boolean = true,
+    val showHomeSearch: Boolean = true,
+    val showAssistant: Boolean = true,
+    val showBatteryPercent: Boolean = true,
+    val reduceMotion: Boolean = false,
+    val reduceTransparency: Boolean = false,
+    /** Phone and Messages were pinned onto Polar home once. */
+    val polarSystemAppsPlaced: Boolean = false,
     /**
      * Software update channel key — see [com.voidlauncher.app.update.UpdateChannel]:
      * `off` | `public_beta` | `developer`.
@@ -94,6 +101,12 @@ class PreferencesRepository(private val context: Context) {
         val DockLabels = booleanPreferencesKey("dock_labels")
         val Haptic = booleanPreferencesKey("haptic_feedback")
         val AutoCheckUpdates = booleanPreferencesKey("auto_check_updates")
+        val ShowHomeSearch = booleanPreferencesKey("show_home_search")
+        val ShowAssistant = booleanPreferencesKey("show_assistant")
+        val ShowBatteryPercent = booleanPreferencesKey("show_battery_percent")
+        val ReduceMotion = booleanPreferencesKey("reduce_motion")
+        val ReduceTransparency = booleanPreferencesKey("reduce_transparency")
+        val PolarSystemAppsPlaced = booleanPreferencesKey("polar_system_apps_placed")
         val UpdateChannel = stringPreferencesKey("update_channel")
         val AgreedPublicBeta = booleanPreferencesKey("agreed_public_beta")
         val AgreedDeveloperBeta = booleanPreferencesKey("agreed_developer_beta")
@@ -125,6 +138,12 @@ class PreferencesRepository(private val context: Context) {
             dockLabels = prefs[Keys.DockLabels] ?: false,
             hapticFeedback = prefs[Keys.Haptic] ?: true,
             autoCheckUpdates = prefs[Keys.AutoCheckUpdates] ?: true,
+            showHomeSearch = prefs[Keys.ShowHomeSearch] ?: true,
+            showAssistant = prefs[Keys.ShowAssistant] ?: true,
+            showBatteryPercent = prefs[Keys.ShowBatteryPercent] ?: true,
+            reduceMotion = prefs[Keys.ReduceMotion] ?: false,
+            reduceTransparency = prefs[Keys.ReduceTransparency] ?: false,
+            polarSystemAppsPlaced = prefs[Keys.PolarSystemAppsPlaced] ?: false,
             updateChannel = prefs[Keys.UpdateChannel] ?: "off",
             agreedPublicBeta = prefs[Keys.AgreedPublicBeta] ?: false,
             agreedDeveloperBeta = prefs[Keys.AgreedDeveloperBeta] ?: false,
@@ -216,6 +235,26 @@ class PreferencesRepository(private val context: Context) {
         context.dataStore.edit { it[Keys.Haptic] = value }
     }
 
+    suspend fun setShowHomeSearch(value: Boolean) {
+        context.dataStore.edit { it[Keys.ShowHomeSearch] = value }
+    }
+
+    suspend fun setShowAssistant(value: Boolean) {
+        context.dataStore.edit { it[Keys.ShowAssistant] = value }
+    }
+
+    suspend fun setShowBatteryPercent(value: Boolean) {
+        context.dataStore.edit { it[Keys.ShowBatteryPercent] = value }
+    }
+
+    suspend fun setReduceMotion(value: Boolean) {
+        context.dataStore.edit { it[Keys.ReduceMotion] = value }
+    }
+
+    suspend fun setReduceTransparency(value: Boolean) {
+        context.dataStore.edit { it[Keys.ReduceTransparency] = value }
+    }
+
     suspend fun setAutoCheckUpdates(value: Boolean) {
         context.dataStore.edit { it[Keys.AutoCheckUpdates] = value }
     }
@@ -275,6 +314,10 @@ class PreferencesRepository(private val context: Context) {
 
     suspend fun currentAccountToken(): String {
         return preferences.map { it.accountToken }.first()
+    }
+
+    suspend fun setPolarSystemAppsPlaced(placed: Boolean) {
+        context.dataStore.edit { it[Keys.PolarSystemAppsPlaced] = placed }
     }
 
     suspend fun setWidgetIds(ids: List<Int>) {

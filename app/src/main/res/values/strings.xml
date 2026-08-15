@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Polar</string>
+    <string name="polar_phone">Phone</string>
+    <string name="polar_messages">Messages</string>
 </resources>

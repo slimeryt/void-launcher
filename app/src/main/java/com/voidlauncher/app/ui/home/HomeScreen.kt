@@ -165,6 +165,7 @@ fun HomeScreen(
     onAddPage: () -> Unit,
     onRemovePage: (pageIndex: Int) -> Unit,
     onAddAppToHome: (AppInfo, Int) -> Unit,
+    onWallpaperPickerConsumed: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -213,6 +214,13 @@ fun HomeScreen(
     var showPageManager by remember { mutableStateOf(false) }
     var dockDragApp by remember { mutableStateOf<AppInfo?>(null) }
     var dockDragFinger by remember { mutableStateOf<Offset?>(null) }
+
+    LaunchedEffect(state.openWallpaperPicker) {
+        if (state.openWallpaperPicker) {
+            showWallpaperPicker = true
+            onWallpaperPickerConsumed()
+        }
+    }
 
     LaunchedEffect(openFolderId, state.folders) {
         val id = openFolderId ?: return@LaunchedEffect
@@ -968,15 +976,20 @@ fun HomeScreen(
                         }
                 }
                 val dotsUi = showDots || state.isEditMode
+                val motion = if (state.reduceMotion) {
+                    tween<Float>(0)
+                } else {
+                    tween(220, easing = FastOutSlowInEasing)
+                }
                 val dotsWidth = (24 + pageCount * 14).dp
                 val dotsAlpha by animateFloatAsState(
                     targetValue = if (dotsUi) 1f else 0f,
-                    animationSpec = tween(220, easing = FastOutSlowInEasing),
+                    animationSpec = motion,
                     label = "dotsAlpha"
                 )
                 val searchAlpha by animateFloatAsState(
                     targetValue = if (dotsUi) 0f else 1f,
-                    animationSpec = tween(220, easing = FastOutSlowInEasing),
+                    animationSpec = motion,
                     label = "searchAlpha"
                 )
 
@@ -1011,6 +1024,7 @@ fun HomeScreen(
                 }
 
                 // Search pill — same center as dots (Assistant is outside this box)
+                if (state.showHomeSearch) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.Center)
@@ -1051,12 +1065,15 @@ fun HomeScreen(
                         }
                     }
                 }
+                }
 
                 // Assistant — parked to the right of the centered Search pill
+                if (state.showAssistant) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.Center)
                         .offset {
+                            if (!state.showHomeSearch) return@offset IntOffset.Zero
                             val gap = with(density) { 7.dp.roundToPx() }
                             val halfAssistant = with(density) { 13.dp.roundToPx() }
                             val w = if (searchWidthPx > 1f) {
@@ -1094,6 +1111,7 @@ fun HomeScreen(
                             )
                         }
                     }
+                }
                 }
             }
 

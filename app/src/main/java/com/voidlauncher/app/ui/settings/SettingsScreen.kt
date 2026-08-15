@@ -1,5 +1,6 @@
 package com.voidlauncher.app.ui.settings
 
+import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -42,12 +43,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voidlauncher.app.account.AccountUiState
 import com.voidlauncher.app.account.DeveloperAccountStatus
 import com.voidlauncher.app.glass.LocalHazeState
+import com.voidlauncher.app.system.PolarRoles
+import com.voidlauncher.app.system.PolarSystemApps
 import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.components.SmoothCornerShape
 import com.voidlauncher.app.ui.theme.IosBlue
@@ -57,7 +61,10 @@ import com.voidlauncher.app.update.UpdateChannel
 import com.voidlauncher.app.update.UpdateUiState
 import com.voidlauncher.app.viewmodel.LauncherUiState
 
-private enum class SettingsPage { Root, Account, LiquidGlass, HomeLayout, Updates, General, About }
+private enum class SettingsPage {
+    Root, Account, LiquidGlass, HomeLayout, Updates, General, PolarApps, About,
+    Notifications, Haptics, Display, Accessibility, Privacy, StatusBar, SearchAssistant, HiddenApps
+}
 
 @Composable
 fun SettingsContent(
@@ -71,6 +78,12 @@ fun SettingsContent(
     onIconScaleChange: (Float) -> Unit,
     onDockLabelsChange: (Boolean) -> Unit,
     onHapticChange: (Boolean) -> Unit,
+    onShowHomeSearchChange: (Boolean) -> Unit,
+    onShowAssistantChange: (Boolean) -> Unit,
+    onShowBatteryPercentChange: (Boolean) -> Unit,
+    onReduceMotionChange: (Boolean) -> Unit,
+    onReduceTransparencyChange: (Boolean) -> Unit,
+    onUnhideApp: (String) -> Unit,
     onAutoCheckUpdatesChange: (Boolean) -> Unit,
     onGlassBlurChange: (Float) -> Unit,
     onGlassFrostChange: (Float) -> Unit,
@@ -187,6 +200,7 @@ fun SettingsContent(
                         updateState = updateState,
                         accountState = accountState,
                         searchQuery = searchQuery,
+                        hiddenCount = state.hiddenCount,
                         onOpen = {
                             searchQuery = ""
                             page = it
@@ -212,6 +226,26 @@ fun SettingsContent(
                     SettingsPage.Updates -> Unit
                     SettingsPage.Account -> Unit
                     SettingsPage.About -> Unit
+                    SettingsPage.PolarApps -> PolarAppsPage()
+                    SettingsPage.Notifications -> NotificationsSettingsPage()
+                    SettingsPage.Haptics -> SoundsHapticsPage(state, onHapticChange)
+                    SettingsPage.Display -> DisplaySettingsPage(state, onReduceTransparencyChange)
+                    SettingsPage.Accessibility -> AccessibilitySettingsPage(
+                        state,
+                        onReduceMotionChange,
+                        onReduceTransparencyChange
+                    )
+                    SettingsPage.Privacy -> PrivacySettingsPage(
+                        hasWallpaperAccess,
+                        onGrantWallpaperAccess
+                    )
+                    SettingsPage.StatusBar -> StatusBarSettingsPage(state, onShowBatteryPercentChange)
+                    SettingsPage.SearchAssistant -> SearchAssistantPage(
+                        state,
+                        onShowHomeSearchChange,
+                        onShowAssistantChange
+                    )
+                    SettingsPage.HiddenApps -> HiddenAppsPage(state.hiddenApps, onUnhideApp)
                     SettingsPage.General -> GeneralPage(
                         state = state,
                         onHapticChange = onHapticChange
@@ -234,6 +268,7 @@ private fun RootPage(
     updateState: UpdateUiState,
     accountState: AccountUiState,
     searchQuery: String,
+    hiddenCount: Int,
     onOpen: (SettingsPage) -> Unit,
     onOpenAppIcons: () -> Unit
 ) {
@@ -256,15 +291,34 @@ private fun RootPage(
             "${accountState.email} · Pending"
         else -> accountState.email.ifBlank { "Signed in" }
     }
+    val context = LocalContext.current
+    rememberSettingsTick()
     val showAccount = matches("Account", accountSubtitle, "sign in", "developer")
+    val showWifi = matches("Wi-Fi", "wifi", "WLAN", "network")
+    val showBluetooth = matches("Bluetooth", "network")
+    val showCellular = matches("Cellular", "Mobile", "data", "network")
+    val showNotifications = matches("Notifications", "Notification Center")
+    val showWallpaper = matches("Wallpaper", "Appearance")
     val showLiquid = matches("Liquid Glass", "Blur", "frost", "refraction", "Appearance")
     val showIcons = matches("App Icons", "Icons", "theme", "tint", "Appearance")
     val showHome = matches("Home Screen", "labels", "grid", "Appearance")
+    val showSearch = matches("Search", "Assistant", "Home")
+    val showStatusBar = matches("Status Bar", "battery", "time")
+    val showPolarApps = matches("Polar Apps", "Phone", "Messages", "dialer", "SMS")
+    val showHidden = matches("Hidden Apps", "hide")
+    val showHaptics = matches("Sounds", "Haptics", "vibrate")
+    val showDisplay = matches("Display", "Brightness", "transparency")
+    val showAccess = matches("Accessibility", "motion", "reduce")
+    val showPrivacy = matches("Privacy", "permissions", "location")
+    val showHomeRole = matches("Default Home", "launcher")
+    val showDate = matches("Date", "Time")
+    val showLanguage = matches("Language", "Region")
+    val showBattery = matches("Battery")
     val updatesSubtitle = "v${updateState.currentVersion}" +
         (updateState.available?.let { " · ${it.versionName} available" } ?: "")
-    val showUpdates = matches("Updates", updatesSubtitle, "System")
-    val showGeneral = matches("General", "Haptics", "behavior", "System")
-    val showAbout = matches("About", "Version", "privacy", "licenses", "System")
+    val showUpdates = matches("Updates", updatesSubtitle)
+    val showGeneral = matches("General", "Haptics", "behavior", PolarSettingsIntents.modelLabel())
+    val showAbout = matches("About", "Version", "privacy", "licenses")
 
     if (showAccount) {
         SettingsGroup(label = "Account") {
@@ -277,14 +331,67 @@ private fun RootPage(
         }
     }
 
-    if (showLiquid || showIcons || showHome) {
-        SettingsGroup(label = "Appearance") {
+    if (showWifi || showBluetooth || showCellular || showNotifications) {
+        SettingsGroup(label = "Network") {
+            if (showWifi) {
+                NavRow(
+                    title = "Wi-Fi",
+                    subtitle = PolarSettingsIntents.wifiLabel(context),
+                    onClick = { PolarSettingsIntents.open(context, android.provider.Settings.ACTION_WIFI_SETTINGS) },
+                    showDivider = showBluetooth || showCellular || showNotifications
+                )
+            }
+            if (showBluetooth) {
+                NavRow(
+                    title = "Bluetooth",
+                    subtitle = PolarSettingsIntents.bluetoothLabel(context),
+                    onClick = { PolarSettingsIntents.open(context, android.provider.Settings.ACTION_BLUETOOTH_SETTINGS) },
+                    showDivider = showCellular || showNotifications
+                )
+            }
+            if (showCellular) {
+                NavRow(
+                    title = "Cellular",
+                    subtitle = "Mobile data & carrier",
+                    onClick = {
+                        PolarSettingsIntents.open(
+                            context,
+                            android.provider.Settings.ACTION_NETWORK_OPERATOR_SETTINGS
+                        )
+                    },
+                    showDivider = showNotifications
+                )
+            }
+            if (showNotifications) {
+                NavRow(
+                    title = "Notifications",
+                    subtitle = PolarSettingsIntents.notificationsLabel(context),
+                    onClick = { onOpen(SettingsPage.Notifications) },
+                    showDivider = false
+                )
+            }
+        }
+    }
+
+    if (showWallpaper || showLiquid || showIcons || showHome || showSearch || showStatusBar) {
+        SettingsGroup(label = "Polar Home") {
+            if (showWallpaper) {
+                NavRow(
+                    title = "Wallpaper",
+                    subtitle = "Photos, colors, live wallpaper",
+                    onClick = {
+                        PolarSettingsIntents.polarHome(context, extra = "open_wallpaper_picker")
+                        (context as? android.app.Activity)?.finish()
+                    },
+                    showDivider = showLiquid || showIcons || showHome || showSearch || showStatusBar
+                )
+            }
             if (showLiquid) {
                 NavRow(
                     title = "Liquid Glass",
                     subtitle = "Blur, frost, refraction",
                     onClick = { onOpen(SettingsPage.LiquidGlass) },
-                    showDivider = showIcons || showHome
+                    showDivider = showIcons || showHome || showSearch || showStatusBar
                 )
             }
             if (showIcons) {
@@ -292,7 +399,7 @@ private fun RootPage(
                     title = "App Icons",
                     subtitle = "Theme, radius, tint",
                     onClick = onOpenAppIcons,
-                    showDivider = showHome
+                    showDivider = showHome || showSearch || showStatusBar
                 )
             }
             if (showHome) {
@@ -300,14 +407,125 @@ private fun RootPage(
                     title = "Home Screen",
                     subtitle = "Labels & grid",
                     onClick = { onOpen(SettingsPage.HomeLayout) },
+                    showDivider = showSearch || showStatusBar
+                )
+            }
+            if (showSearch) {
+                NavRow(
+                    title = "Search & Assistant",
+                    subtitle = "Home search pill",
+                    onClick = { onOpen(SettingsPage.SearchAssistant) },
+                    showDivider = showStatusBar
+                )
+            }
+            if (showStatusBar) {
+                NavRow(
+                    title = "Status Bar",
+                    subtitle = "Time, battery, pull gestures",
+                    onClick = { onOpen(SettingsPage.StatusBar) },
                     showDivider = false
                 )
             }
         }
     }
 
-    if (showUpdates || showGeneral || showAbout) {
+    if (showPolarApps || showHidden) {
+        SettingsGroup(label = "Apps") {
+            if (showPolarApps) {
+                NavRow(
+                    title = "Polar Apps",
+                    subtitle = "Phone & Messages",
+                    onClick = { onOpen(SettingsPage.PolarApps) },
+                    showDivider = showHidden
+                )
+            }
+            if (showHidden) {
+                NavRow(
+                    title = "Hidden Apps",
+                    subtitle = if (hiddenCount == 0) "None hidden" else "$hiddenCount hidden",
+                    onClick = { onOpen(SettingsPage.HiddenApps) },
+                    showDivider = false
+                )
+            }
+        }
+    }
+
+    if (showHaptics || showDisplay || showAccess || showPrivacy) {
+        SettingsGroup(label = "Device") {
+            if (showHaptics) {
+                NavRow(
+                    title = "Sounds & Haptics",
+                    subtitle = "Vibration & volume",
+                    onClick = { onOpen(SettingsPage.Haptics) },
+                    showDivider = showDisplay || showAccess || showPrivacy
+                )
+            }
+            if (showDisplay) {
+                NavRow(
+                    title = "Display",
+                    subtitle = "Brightness & transparency",
+                    onClick = { onOpen(SettingsPage.Display) },
+                    showDivider = showAccess || showPrivacy
+                )
+            }
+            if (showAccess) {
+                NavRow(
+                    title = "Accessibility",
+                    subtitle = "Motion & transparency",
+                    onClick = { onOpen(SettingsPage.Accessibility) },
+                    showDivider = showPrivacy
+                )
+            }
+            if (showPrivacy) {
+                NavRow(
+                    title = "Privacy",
+                    subtitle = "Permissions Polar uses",
+                    onClick = { onOpen(SettingsPage.Privacy) },
+                    showDivider = false
+                )
+            }
+        }
+    }
+
+    if (showHomeRole || showDate || showLanguage || showBattery || showUpdates || showGeneral || showAbout) {
         SettingsGroup(label = "System") {
+            if (showHomeRole) {
+                NavRow(
+                    title = "Default Home",
+                    subtitle = "Set Polar as the Home app",
+                    onClick = { PolarSettingsIntents.open(context, android.provider.Settings.ACTION_HOME_SETTINGS) },
+                    showDivider = showDate || showLanguage || showBattery || showUpdates || showGeneral || showAbout
+                )
+            }
+            if (showDate) {
+                NavRow(
+                    title = "Date & Time",
+                    subtitle = "24-hour time, time zone",
+                    onClick = { PolarSettingsIntents.open(context, android.provider.Settings.ACTION_DATE_SETTINGS) },
+                    showDivider = showLanguage || showBattery || showUpdates || showGeneral || showAbout
+                )
+            }
+            if (showLanguage) {
+                NavRow(
+                    title = "Language & Region",
+                    subtitle = "System locale",
+                    onClick = { PolarSettingsIntents.open(context, android.provider.Settings.ACTION_LOCALE_SETTINGS) },
+                    showDivider = showBattery || showUpdates || showGeneral || showAbout
+                )
+            }
+            if (showBattery) {
+                NavRow(
+                    title = "Battery",
+                    subtitle = "Charging & battery saver",
+                    onClick = {
+                        PolarSettingsIntents.open(
+                            context,
+                            android.provider.Settings.ACTION_BATTERY_SAVER_SETTINGS
+                        )
+                    },
+                    showDivider = showUpdates || showGeneral || showAbout
+                )
+            }
             if (showUpdates) {
                 NavRow(
                     title = "Updates",
@@ -319,7 +537,7 @@ private fun RootPage(
             if (showGeneral) {
                 NavRow(
                     title = "General",
-                    subtitle = "Haptics & behavior",
+                    subtitle = PolarSettingsIntents.modelLabel(),
                     onClick = { onOpen(SettingsPage.General) },
                     showDivider = showAbout
                 )
@@ -513,6 +731,64 @@ private fun HomeLayoutPage(
 }
 
 @Composable
+private fun PolarAppsPage() {
+    val context = LocalContext.current
+    val activity = context as? android.app.Activity
+    Text(
+        text = "Polar Apps",
+        style = MaterialTheme.typography.headlineLarge,
+        color = VoidMist,
+        modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+    )
+    SettingsGroup(label = "Defaults") {
+        NavRow(
+            title = "Phone",
+            subtitle = if (PolarRoles.isPhone(context)) "Default Phone" else "Open Polar Phone",
+            onClick = {
+                context.startActivity(
+                    Intent().setClassName(context.packageName, PolarSystemApps.PhoneActivity)
+                )
+            },
+            showDivider = true
+        )
+        NavRow(
+            title = "Messages",
+            subtitle = if (PolarRoles.isMessages(context)) "Default Messages" else "Open Polar Messages",
+            onClick = {
+                context.startActivity(
+                    Intent().setClassName(context.packageName, PolarSystemApps.MessagesActivity)
+                )
+            },
+            showDivider = false
+        )
+    }
+    if (activity != null && (!PolarRoles.isPhone(context) || !PolarRoles.isMessages(context))) {
+        SettingsGroup(label = "System roles") {
+            if (!PolarRoles.isPhone(context)) {
+                NavRow(
+                    title = "Set as default Phone",
+                    subtitle = "Calls stay in Polar",
+                    onClick = {
+                        PolarRoles.requestPhone(activity)?.let { activity.startActivity(it) }
+                    },
+                    showDivider = !PolarRoles.isMessages(context)
+                )
+            }
+            if (!PolarRoles.isMessages(context)) {
+                NavRow(
+                    title = "Set as default Messages",
+                    subtitle = "SMS stays in Polar",
+                    onClick = {
+                        PolarRoles.requestMessages(activity)?.let { activity.startActivity(it) }
+                    },
+                    showDivider = false
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun GeneralPage(
     state: LauncherUiState,
     onHapticChange: (Boolean) -> Unit
@@ -534,7 +810,9 @@ private fun GeneralPage(
         )
     }
 
-    SettingsGroup(label = "Stats") {
+    SettingsGroup(label = "Device") {
+        InfoRow("Name", PolarSettingsIntents.modelLabel(), showDivider = true)
+        InfoRow("Android", android.os.Build.VERSION.RELEASE.orEmpty(), showDivider = true)
         InfoRow("Apps", "${state.apps.size}", showDivider = true)
         InfoRow("Hidden", "${state.hiddenCount}", showDivider = true)
         InfoRow("Home pages", "${state.pages.size}", showDivider = false)
@@ -542,7 +820,7 @@ private fun GeneralPage(
 }
 
 @Composable
-private fun SettingsGroup(
+internal fun SettingsGroup(
     label: String,
     content: @Composable () -> Unit
 ) {
@@ -565,7 +843,7 @@ private fun SettingsGroup(
 }
 
 @Composable
-private fun NavRow(
+internal fun NavRow(
     title: String,
     subtitle: String,
     onClick: () -> Unit,
@@ -609,7 +887,7 @@ private fun NavRow(
 }
 
 @Composable
-private fun ToggleRow(
+internal fun ToggleRow(
     title: String,
     subtitle: String,
     checked: Boolean,
@@ -678,7 +956,7 @@ private fun SliderBlock(
 }
 
 @Composable
-private fun InfoRow(title: String, value: String, showDivider: Boolean) {
+internal fun InfoRow(title: String, value: String, showDivider: Boolean) {
     Column {
         Row(
             modifier = Modifier

@@ -88,6 +88,7 @@ fun LauncherRoot(
     onRemovePage: (pageIndex: Int) -> Unit,
     onApplyIconAppearance: (IconAppearance) -> Unit,
     onIconEditorOpenChange: (Boolean) -> Unit,
+    onWallpaperPickerConsumed: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val systemUi = rememberSystemUiController()
@@ -281,6 +282,7 @@ fun LauncherRoot(
                         onAddPage = onAddPage,
                         onRemovePage = onRemovePage,
                         onAddAppToHome = { app, _ -> onAddAppToHome(app) },
+                        onWallpaperPickerConsumed = onWallpaperPickerConsumed,
                         modifier = Modifier.fillMaxSize()
                     )
                     }
@@ -328,6 +330,7 @@ fun LauncherRoot(
                 shadeLocked = state.isNotificationCenterOpen ||
                     state.isControlCenterOpen ||
                     ccExpansion.value > 0.08f,
+                showBatteryPercent = state.showBatteryPercent,
                 onPullNotificationCenter = { onNotificationCenterOpenChange(true) },
                 onPullControlCenter = {
                     ccDragging = false
