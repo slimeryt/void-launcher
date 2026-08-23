@@ -12,9 +12,9 @@ enum class PolarSendNetworkBlock {
 }
 
 object PolarMessagesNetwork {
-    /** When Wi-Fi sending is off, block sends that would rely on Wi-Fi-only connectivity. */
+    /** When Wi-Fi sending is off, block MMS on Wi-Fi-only. SMS uses cellular signaling and is not gated here. */
     fun sendBlockReason(context: Context, wifiSending: Boolean, isMms: Boolean): PolarSendNetworkBlock? {
-        if (wifiSending) return null
+        if (wifiSending || !isMms) return null
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             ?: return PolarSendNetworkBlock.NoConnection
         val active = cm.activeNetwork

@@ -21,8 +21,14 @@ object PolarRoles {
         return telecom?.defaultDialerPackage == context.packageName
     }
 
-    fun isMessages(context: Context): Boolean =
-        Telephony.Sms.getDefaultSmsPackage(context) == context.packageName
+    fun isMessages(context: Context): Boolean {
+        val pkg = context.packageName
+        if (Build.VERSION.SDK_INT >= 29) {
+            val rm = context.getSystemService(RoleManager::class.java)
+            if (rm != null && rm.isRoleHeld(RoleManager.ROLE_SMS)) return true
+        }
+        return Telephony.Sms.getDefaultSmsPackage(context) == pkg
+    }
 
     fun isCallerId(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < 29) return false
@@ -44,17 +50,21 @@ object PolarRoles {
     }
 
     fun requestMessages(activity: Activity): Intent? {
+        if (isMessages(activity)) return null
         if (Build.VERSION.SDK_INT >= 29) {
-            val rm = activity.getSystemService(RoleManager::class.java) ?: return null
-            if (rm.isRoleAvailable(RoleManager.ROLE_SMS) && !rm.isRoleHeld(RoleManager.ROLE_SMS)) {
+            val rm = activity.getSystemService(RoleManager::class.java) ?: return legacyMessagesIntent(activity)
+            if (rm.isRoleAvailable(RoleManager.ROLE_SMS)) {
                 return rm.createRequestRoleIntent(RoleManager.ROLE_SMS)
             }
-            return null
+            return legacyMessagesIntent(activity)
         }
-        return Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT).apply {
+        return legacyMessagesIntent(activity)
+    }
+
+    private fun legacyMessagesIntent(activity: Activity): Intent =
+        Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT).apply {
             putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, activity.packageName)
         }
-    }
 
     fun requestCallerId(activity: Activity): Intent? {
         if (Build.VERSION.SDK_INT < 29) return null

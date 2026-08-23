@@ -22,9 +22,10 @@ object PolarMms {
     ): Boolean {
         if (address.isBlank()) return false
         if (!PolarRoles.isMessages(context)) return false
-        when (PolarMessagesNetwork.sendBlockReason(context, wifiSending, isMms = true)) {
-            PolarSendNetworkBlock.WifiOnlyDisabled,
-            PolarSendNetworkBlock.NoConnection -> return false
+        when (PolarSms.sendFailure(context, wifiSending, isMms = true)) {
+            PolarSms.SendFailure.NotDefaultApp,
+            PolarSms.SendFailure.MissingSendPermission,
+            PolarSms.SendFailure.NetworkBlocked -> return false
             null -> Unit
         }
         val sms = PolarSms.smsManager(context)

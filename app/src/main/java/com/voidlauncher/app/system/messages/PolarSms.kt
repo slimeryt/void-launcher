@@ -53,6 +53,27 @@ object PolarSms {
             ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) ==
             PackageManager.PERMISSION_GRANTED
 
+    enum class SendFailure {
+        NotDefaultApp,
+        MissingSendPermission,
+        NetworkBlocked
+    }
+
+    fun sendFailure(context: Context, wifiSending: Boolean, isMms: Boolean): SendFailure? {
+        if (!PolarRoles.isMessages(context)) return SendFailure.NotDefaultApp
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return SendFailure.MissingSendPermission
+        }
+        when (PolarMessagesNetwork.sendBlockReason(context, wifiSending, isMms)) {
+            PolarSendNetworkBlock.WifiOnlyDisabled,
+            PolarSendNetworkBlock.NoConnection -> return SendFailure.NetworkBlocked
+            null -> Unit
+        }
+        return null
+    }
+
     fun threads(context: Context): List<PolarSmsThread> {
         if (!canRead(context)) return emptyList()
         val grouped = linkedMapOf<String, PolarSmsThread>()
@@ -71,12 +92,7 @@ object PolarSms {
 
     fun send(context: Context, address: String, body: String, wifiSending: Boolean = false): Boolean {
         if (address.isBlank() || body.isBlank()) return false
-        if (!canSend(context)) return false
-        when (PolarMessagesNetwork.sendBlockReason(context, wifiSending, isMms = false)) {
-            PolarSendNetworkBlock.WifiOnlyDisabled,
-            PolarSendNetworkBlock.NoConnection -> return false
-            null -> Unit
-        }
+        if (sendFailure(context, wifiSending, isMms = false) != null) return false
         val sms = smsManager(context)
         return runCatching {
             val rowId = insertOutbox(context, address, body) ?: return false

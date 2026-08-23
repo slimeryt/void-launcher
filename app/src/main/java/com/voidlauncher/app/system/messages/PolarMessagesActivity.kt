@@ -44,6 +44,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,10 +58,13 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.voidlauncher.app.system.PolarRoleButton
 import com.voidlauncher.app.system.PolarRoles
@@ -84,14 +88,7 @@ class PolarMessagesActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        permissionLauncher.launch(
-            arrayOf(
-                Manifest.permission.READ_SMS,
-                Manifest.permission.RECEIVE_SMS,
-                Manifest.permission.SEND_SMS,
-                Manifest.permission.RECEIVE_MMS
-            )
-        )
+        requestSmsPermissions()
         val seedAddress = intent.data?.schemeSpecificPart
             ?: intent.getStringExtra("address")
         val seedBody = intent.getStringExtra(Intent.EXTRA_TEXT)
@@ -100,12 +97,33 @@ class PolarMessagesActivity : ComponentActivity() {
             PolarMessagesScreen(
                 seedAddress = seedAddress.orEmpty(),
                 seedBody = seedBody.orEmpty(),
-                onRequestDefault = {
-                    val intent = PolarRoles.requestMessages(this)
-                    if (intent != null) roleLauncher.launch(intent)
-                    else Toast.makeText(this, "Polar is already Messages", Toast.LENGTH_SHORT).show()
-                }
+                onRequestDefault = { requestDefaultMessagesRole() },
+                onRequestSmsPermissions = { requestSmsPermissions() }
             )
+        }
+    }
+
+    private fun requestSmsPermissions() {
+        permissionLauncher.launch(
+            arrayOf(
+                Manifest.permission.READ_SMS,
+                Manifest.permission.RECEIVE_SMS,
+                Manifest.permission.SEND_SMS,
+                Manifest.permission.RECEIVE_MMS
+            )
+        )
+    }
+
+    private fun requestDefaultMessagesRole() {
+        if (PolarRoles.isMessages(this)) {
+            Toast.makeText(this, "Polar is already your Messages app", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val intent = PolarRoles.requestMessages(this)
+        if (intent != null) {
+            roleLauncher.launch(intent)
+        } else {
+            Toast.makeText(this, "Could not open Messages role settings", Toast.LENGTH_SHORT).show()
         }
     }
 }
@@ -114,22 +132,32 @@ class PolarMessagesActivity : ComponentActivity() {
 private fun PolarMessagesScreen(
     seedAddress: String,
     seedBody: String,
-    onRequestDefault: () -> Unit
+    onRequestDefault: () -> Unit,
+    onRequestSmsPermissions: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var route by remember { mutableStateOf(PolarMessagesRoute.Inbox) }
     var open by remember { mutableStateOf(seedAddress.takeIf { it.isNotBlank() }) }
     var threads by remember { mutableStateOf(PolarSms.threads(context)) }
-    val isDefault = PolarRoles.isMessages(context)
+    var isDefault by remember { mutableStateOf(PolarRoles.isMessages(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
     val wifiSending by PolarMessagesSettings.wifiSendingFlow(context)
         .collectAsStateWithLifecycle(initialValue = false)
 
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isDefault = PolarRoles.isMessages(context)
+                threads = PolarSms.threads(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     LaunchedEffect(Unit) {
         PolarSms.changes.collectLatest { threads = PolarSms.threads(context) }
-    }
-    LaunchedEffect(isDefault) {
-        threads = PolarSms.threads(context)
     }
 
     val thread = open
@@ -140,6 +168,7 @@ private fun PolarMessagesScreen(
             isDefault = isDefault,
             wifiSending = wifiSending,
             onRequestDefault = onRequestDefault,
+            onRequestSmsPermissions = onRequestSmsPermissions,
             onOpenSettings = { route = PolarMessagesRoute.Settings },
             onBack = { open = null }
         )
@@ -371,6 +400,7 @@ private fun PolarConversation(
     isDefault: Boolean,
     wifiSending: Boolean,
     onRequestDefault: () -> Unit,
+    onRequestSmsPermissions: () -> Unit,
     onOpenSettings: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -404,26 +434,27 @@ private fun PolarConversation(
     }
 
     fun sendCurrent() {
-        if (!isDefault) {
-            Toast.makeText(context, "Set Polar as default Messages to send", Toast.LENGTH_SHORT).show()
-            onRequestDefault()
-            return
-        }
         val body = draft.trim()
         val attachment = pendingAttachment
         val mime = pendingMime
         val isMms = attachment != null && mime != null
-        when (PolarMessagesNetwork.sendBlockReason(context, wifiSending, isMms)) {
-            PolarSendNetworkBlock.WifiOnlyDisabled -> {
+        when (PolarSms.sendFailure(context, wifiSending, isMms)) {
+            PolarSms.SendFailure.NotDefaultApp -> {
+                Toast.makeText(context, "Set Polar as default Messages to send", Toast.LENGTH_SHORT).show()
+                onRequestDefault()
+                return
+            }
+            PolarSms.SendFailure.MissingSendPermission -> {
+                Toast.makeText(context, "Allow SMS permission for Polar", Toast.LENGTH_SHORT).show()
+                onRequestSmsPermissions()
+                return
+            }
+            PolarSms.SendFailure.NetworkBlocked -> {
                 Toast.makeText(
                     context,
                     "Enable Wi-Fi sending in Messages settings, or turn on mobile data",
                     Toast.LENGTH_LONG
                 ).show()
-                return
-            }
-            PolarSendNetworkBlock.NoConnection -> {
-                Toast.makeText(context, "No network connection", Toast.LENGTH_SHORT).show()
                 return
             }
             null -> Unit
