@@ -228,6 +228,15 @@
         </receiver>
 
         <receiver
+            android:name=".system.messages.PolarSmsSentReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.voidlauncher.app.SMS_SENT" />
+                <action android:name="com.voidlauncher.app.MMS_SENT" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name=".system.messages.PolarMmsDeliverReceiver"
             android:exported="true"
             android:permission="android.permission.BROADCAST_WAP_PUSH">

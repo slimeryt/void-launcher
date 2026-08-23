@@ -12,7 +12,7 @@ class PolarHeadlessSmsSendService : Service() {
         val dest = intent?.data?.schemeSpecificPart?.let { Uri.decode(it) }.orEmpty()
         val body = intent?.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
         if (dest.isNotBlank() && body.isNotBlank()) {
-            PolarSms.send(this, dest, body)
+            PolarSms.send(this, dest, body, PolarMessagesSettings.wifiSendingEnabled(this))
         }
         stopSelf(startId)
         return START_NOT_STICKY

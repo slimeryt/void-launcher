@@ -1,9 +1,11 @@
 package com.voidlauncher.app.data
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import com.voidlauncher.app.util.ComponentKey
 import com.voidlauncher.app.util.PendingLaunchBounds
 import com.voidlauncher.app.util.PolarActivityOptions
 import kotlinx.coroutines.Dispatchers
@@ -19,15 +21,16 @@ class AppRepository(private val context: Context) {
         resolveInfos
             .asSequence()
             .map { info ->
+                val component = ComponentName(info.activityInfo.packageName, info.activityInfo.name)
                 val appInfo = try {
-                    pm.getApplicationInfo(info.activityInfo.packageName, 0)
+                    pm.getApplicationInfo(component.packageName, 0)
                 } catch (_: Exception) {
                     null
                 }
                 AppInfo(
                     label = info.loadLabel(pm).toString(),
-                    packageName = info.activityInfo.packageName,
-                    activityName = info.activityInfo.name,
+                    packageName = component.packageName,
+                    activityName = component.className,
                     icon = info.loadIcon(pm),
                     isSystemApp = appInfo?.let {
                         (it.flags and ApplicationInfo.FLAG_SYSTEM) != 0
@@ -39,10 +42,9 @@ class AppRepository(private val context: Context) {
     }
 
     fun launch(app: AppInfo) {
-        val intent = Intent(Intent.ACTION_MAIN).apply {
-            addCategory(Intent.CATEGORY_LAUNCHER)
-            setClassName(app.packageName, app.activityName)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+        val intent = Intent().apply {
+            component = ComponentName(app.packageName, app.activityName)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(intent, PolarActivityOptions.bundle(PendingLaunchBounds.take(app.key)))
     }

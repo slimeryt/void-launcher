@@ -1,6 +1,7 @@
 package com.voidlauncher.app.data
 
 import android.content.Context
+import com.voidlauncher.app.util.ComponentKey
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -326,6 +327,43 @@ class PreferencesRepository(private val context: Context) {
 
     suspend fun setPolarSystemAppsPlaced(placed: Boolean) {
         context.dataStore.edit { it[Keys.PolarSystemAppsPlaced] = placed }
+    }
+
+    /** Rewrites legacy relative activity names (`.FooActivity`) to canonical FQCN keys. */
+    suspend fun migrateStoredComponentKeys(): Boolean {
+        val raw = context.dataStore.data.first()
+        val pages = decodePages(raw[Keys.PagesJson])
+        val folders = decodeFolders(raw[Keys.FoldersJson])
+        val favorites = decodeFavorites(raw[Keys.FavoritesOrder], raw[Keys.Favorites])
+        val hidden = raw[Keys.Hidden] ?: emptySet()
+
+        val normPages = pages.map { page ->
+            page.map { item ->
+                when (item) {
+                    is HomeItem.App -> HomeItem.App(ComponentKey.normalize(item.key))
+                    is HomeItem.Folder -> item
+                }
+            }
+        }
+        val normFolders = folders.mapValues { (_, folder) ->
+            folder.copy(appKeys = folder.appKeys.map(ComponentKey::normalize))
+        }
+        val normFavorites = favorites.map(ComponentKey::normalize)
+        val normHidden = hidden.map(ComponentKey::normalize).toSet()
+
+        val changed = pages != normPages || folders != normFolders ||
+            favorites != normFavorites || hidden != normHidden
+        if (!changed) return false
+
+        context.dataStore.edit {
+            it[Keys.PagesJson] = encodePages(normPages)
+            it[Keys.FoldersJson] = encodeFolders(normFolders)
+            it[Keys.FavoritesOrder] = JSONArray(normFavorites).toString()
+            it[Keys.Favorites] = normFavorites.toSet()
+            it[Keys.Hidden] = normHidden
+            it[Keys.PolarSystemAppsPlaced] = false
+        }
+        return true
     }
 
     suspend fun setWidgetIds(ids: List<Int>) {

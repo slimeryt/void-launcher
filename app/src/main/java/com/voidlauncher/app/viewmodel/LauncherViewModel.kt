@@ -154,6 +154,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     init {
         viewModelScope.launch {
+            prefsRepository.migrateStoredComponentKeys()
             prefsRepository.preferences.collect { prefs ->
                 prefsCache = prefs
                 maybeSeedHome(prefs)
