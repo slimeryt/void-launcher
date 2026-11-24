@@ -49,11 +49,21 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voidlauncher.app.account.AccountUiState
 import com.voidlauncher.app.account.DeveloperAccountStatus
+import androidx.compose.material.icons.rounded.BlurOn
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.WaterDrop
+import androidx.compose.runtime.mutableIntStateOf
 import com.voidlauncher.app.glass.LocalHazeState
+import com.voidlauncher.app.glass.LocalLayerBackdrop
 import com.voidlauncher.app.system.PolarRoles
 import com.voidlauncher.app.system.PolarSystemApps
 import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.components.SmoothCornerShape
+import com.voidlauncher.app.ui.liquid.LiquidBottomTab
+import com.voidlauncher.app.ui.liquid.LiquidBottomTabs
+import com.voidlauncher.app.ui.liquid.LiquidButton
+import com.voidlauncher.app.ui.liquid.LiquidSlider
+import com.voidlauncher.app.ui.liquid.LiquidToggle
 import com.voidlauncher.app.ui.theme.IosBlue
 import com.voidlauncher.app.ui.theme.VoidMist
 import com.voidlauncher.app.ui.theme.VoidMuted
@@ -375,7 +385,18 @@ private fun RootPage(
         }
     }
 
-    if (showWallpaper || showLiquid || showIcons || showHome || showSearch || showStatusBar) {
+    if (showLiquid) {
+        SettingsGroup(label = "Liquid Glass") {
+            NavRow(
+                title = "Customize glass",
+                subtitle = "Blur, frost, refraction, liquid controls",
+                onClick = { onOpen(SettingsPage.LiquidGlass) },
+                showDivider = false
+            )
+        }
+    }
+
+    if (showWallpaper || showIcons || showHome || showSearch || showStatusBar) {
         SettingsGroup(label = "Polar Home") {
             if (showWallpaper) {
                 NavRow(
@@ -385,14 +406,6 @@ private fun RootPage(
                         PolarSettingsIntents.polarHome(context, extra = "open_wallpaper_picker")
                         (context as? android.app.Activity)?.finish()
                     },
-                    showDivider = showLiquid || showIcons || showHome || showSearch || showStatusBar
-                )
-            }
-            if (showLiquid) {
-                NavRow(
-                    title = "Liquid Glass",
-                    subtitle = "Blur, frost, refraction",
-                    onClick = { onOpen(SettingsPage.LiquidGlass) },
                     showDivider = showIcons || showHome || showSearch || showStatusBar
                 )
             }
@@ -566,6 +579,9 @@ private fun LiquidGlassPage(
     onGlassRefractionChange: (Boolean) -> Unit,
     onGlassSheenChange: (Boolean) -> Unit
 ) {
+    val backdrop = LocalLayerBackdrop.current
+    var tab by remember { mutableIntStateOf(0) }
+
     Text(
         text = "Liquid Glass",
         style = MaterialTheme.typography.headlineLarge,
@@ -577,11 +593,10 @@ private fun LiquidGlassPage(
         WallpaperAccessBanner(onGrantWallpaperAccess)
     }
 
-    // Live preview — samples wallpaper (portal) so refraction/blur knobs are visible
     GlassPanel(
         modifier = Modifier
             .fillMaxWidth()
-            .height(120.dp),
+            .height(132.dp),
         cornerRadius = 28.dp,
         strong = true,
         enableSheen = state.glassSheen,
@@ -589,53 +604,136 @@ private fun LiquidGlassPage(
         sampleWallpaper = true
     ) {
         Text(
-            text = "Liquid Glass preview",
+            text = "Live glass — your settings, not a preset",
             style = MaterialTheme.typography.titleMedium,
             color = VoidMist,
-            modifier = Modifier.align(Alignment.Center)
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(horizontal = 20.dp),
+            textAlign = TextAlign.Center
         )
     }
 
-    SettingsGroup(label = "Look") {
-        ToggleRow(
-            title = "Refraction",
-            subtitle = "Lens bend + chromatic edge",
-            checked = state.glassRefraction,
-            onCheckedChange = onGlassRefractionChange,
-            showDivider = true
-        )
-        ToggleRow(
-            title = "Sheen",
-            subtitle = "Wet specular highlight",
-            checked = state.glassSheen,
-            onCheckedChange = onGlassSheenChange,
-            showDivider = false
-        )
+    if (backdrop != null) {
+        LiquidBottomTabs(
+            selectedTabIndex = { tab },
+            onTabSelected = { tab = it },
+            backdrop = backdrop,
+            tabsCount = 3,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp)
+        ) {
+            LiquidBottomTab(onClick = { tab = 0 }) {
+                Icon(Icons.Rounded.WaterDrop, contentDescription = null, tint = VoidMist, modifier = Modifier.size(18.dp))
+                Text("Glass", style = MaterialTheme.typography.labelMedium, color = VoidMist)
+            }
+            LiquidBottomTab(onClick = { tab = 1 }) {
+                Icon(Icons.Rounded.Tune, contentDescription = null, tint = VoidMist, modifier = Modifier.size(18.dp))
+                Text("Look", style = MaterialTheme.typography.labelMedium, color = VoidMist)
+            }
+            LiquidBottomTab(onClick = { tab = 2 }) {
+                Icon(Icons.Rounded.BlurOn, contentDescription = null, tint = VoidMist, modifier = Modifier.size(18.dp))
+                Text("Intensity", style = MaterialTheme.typography.labelMedium, color = VoidMist)
+            }
+        }
     }
 
-    SettingsGroup(label = "Intensity") {
-        SliderBlock(
-            title = "Blur strength",
-            valueLabel = "${(state.glassBlurStrength * 100).toInt()}%",
-            value = state.glassBlurStrength,
-            onValueChange = onGlassBlurChange,
-            // Down to 0 so "minimum" is actually clear glass, not a mandatory blur floor.
-            valueRange = 0f..1.6f,
-            showDivider = true
-        )
-        SliderBlock(
-            title = "Frost amount",
-            valueLabel = "${(state.glassFrostAmount * 100).toInt()}%",
-            value = state.glassFrostAmount,
-            onValueChange = onGlassFrostChange,
-            valueRange = 0f..1.5f,
-            showDivider = false
-        )
+    when (tab) {
+        0 -> {
+            SettingsGroup(label = "Controls") {
+                if (backdrop != null) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        LiquidButton(
+                            onClick = { /* demo press */ },
+                            backdrop = backdrop,
+                            surfaceColor = Color.White.copy(alpha = 0.12f)
+                        ) {
+                            Text("Liquid button", color = VoidMist, style = MaterialTheme.typography.titleMedium)
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Text("Liquid toggle", color = VoidMist, style = MaterialTheme.typography.titleMedium)
+                            LiquidToggle(
+                                selected = { state.glassSheen },
+                                onSelect = onGlassSheenChange,
+                                backdrop = backdrop
+                            )
+                        }
+                        LiquidSlider(
+                            value = { state.glassBlurStrength },
+                            onValueChange = onGlassBlurChange,
+                            valueRange = 0f..1.6f,
+                            visibilityThreshold = 0.001f,
+                            backdrop = backdrop,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            "Blur ${(state.glassBlurStrength * 100).toInt()}% — drag the liquid thumb",
+                            color = VoidMuted,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                } else {
+                    Text(
+                        "Backdrop layer loading…",
+                        color = VoidMuted,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+            }
+        }
+        1 -> {
+            SettingsGroup(label = "Look") {
+                ToggleRow(
+                    title = "Refraction",
+                    subtitle = "Lens bend + chromatic edge",
+                    checked = state.glassRefraction,
+                    onCheckedChange = onGlassRefractionChange,
+                    showDivider = true
+                )
+                ToggleRow(
+                    title = "Sheen",
+                    subtitle = "Wet specular highlight",
+                    checked = state.glassSheen,
+                    onCheckedChange = onGlassSheenChange,
+                    showDivider = false
+                )
+            }
+        }
+        else -> {
+            SettingsGroup(label = "Intensity") {
+                SliderBlock(
+                    title = "Blur strength",
+                    valueLabel = "${(state.glassBlurStrength * 100).toInt()}%",
+                    value = state.glassBlurStrength,
+                    onValueChange = onGlassBlurChange,
+                    valueRange = 0f..1.6f,
+                    showDivider = true
+                )
+                SliderBlock(
+                    title = "Frost amount",
+                    valueLabel = "${(state.glassFrostAmount * 100).toInt()}%",
+                    value = state.glassFrostAmount,
+                    onValueChange = onGlassFrostChange,
+                    valueRange = 0f..1.5f,
+                    showDivider = false
+                )
+            }
+        }
     }
 
     Text(
-        text = "Preview above updates live. Toggle refraction to see edge lens bend + " +
-            "chromatic fringe; blur/frost/sheen drive the same AGSL on home dock / pills.",
+        text = "Everything here writes straight to Polar — no locked default look. " +
+            "Home, Control Center, and settings glass all follow these knobs.",
         style = MaterialTheme.typography.bodyMedium,
         color = VoidMuted,
         modifier = Modifier.padding(horizontal = 8.dp)
@@ -664,18 +762,30 @@ private fun WallpaperAccessBanner(onGrantAccess: () -> Unit) {
             style = MaterialTheme.typography.bodyMedium,
             color = VoidMuted
         )
-        Text(
-            text = "Grant access",
-            style = MaterialTheme.typography.titleMedium,
-            color = IosBlue,
-            modifier = Modifier
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onGrantAccess
-                )
-                .padding(vertical = 4.dp)
-        )
+        val backdrop = LocalLayerBackdrop.current
+        if (backdrop != null) {
+            LiquidButton(
+                onClick = onGrantAccess,
+                backdrop = backdrop,
+                tint = IosBlue,
+                surfaceColor = IosBlue.copy(alpha = 0.35f)
+            ) {
+                Text("Grant access", color = Color.White, style = MaterialTheme.typography.titleMedium)
+            }
+        } else {
+            Text(
+                text = "Grant access",
+                style = MaterialTheme.typography.titleMedium,
+                color = IosBlue,
+                modifier = Modifier
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onGrantAccess
+                    )
+                    .padding(vertical = 4.dp)
+            )
+        }
     }
 }
 
@@ -911,6 +1021,7 @@ internal fun ToggleRow(
     onCheckedChange: (Boolean) -> Unit,
     showDivider: Boolean
 ) {
+    val backdrop = LocalLayerBackdrop.current
     Column {
         Row(
             modifier = Modifier
@@ -923,7 +1034,15 @@ internal fun ToggleRow(
                 Text(title, style = MaterialTheme.typography.titleMedium, color = VoidMist)
                 Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = VoidMuted)
             }
-            IosToggle(checked = checked, onCheckedChange = onCheckedChange)
+            if (backdrop != null) {
+                LiquidToggle(
+                    selected = { checked },
+                    onSelect = onCheckedChange,
+                    backdrop = backdrop
+                )
+            } else {
+                IosToggle(checked = checked, onCheckedChange = onCheckedChange)
+            }
         }
         if (showDivider) {
             HorizontalDivider(
@@ -945,6 +1064,7 @@ private fun SliderBlock(
     showDivider: Boolean,
     steps: Int = 0
 ) {
+    val backdrop = LocalLayerBackdrop.current
     Column {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
             Row(
@@ -955,12 +1075,24 @@ private fun SliderBlock(
                 Text(valueLabel, style = MaterialTheme.typography.titleMedium, color = IosBlue)
             }
             Spacer(modifier = Modifier.height(12.dp))
-            IosSlider(
-                value = value,
-                onValueChange = onValueChange,
-                valueRange = valueRange,
-                steps = steps
-            )
+            if (backdrop != null) {
+                LiquidSlider(
+                    value = { value },
+                    onValueChange = onValueChange,
+                    valueRange = valueRange,
+                    visibilityThreshold = ((valueRange.endInclusive - valueRange.start) * 0.001f)
+                        .coerceAtLeast(0.001f),
+                    backdrop = backdrop,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else {
+                IosSlider(
+                    value = value,
+                    onValueChange = onValueChange,
+                    valueRange = valueRange,
+                    steps = steps
+                )
+            }
         }
         if (showDivider) {
             HorizontalDivider(

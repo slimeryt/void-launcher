@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -58,15 +57,14 @@ fun IconEditorPanel(
             .navigationBarsPadding(),
         contentAlignment = Alignment.BottomCenter
     ) {
-        // App Icons editor: liquid glass with fixed 50% backdrop blur (not home blur).
+        // Follows the user's Liquid Glass settings (no locked default blur).
         GlassPanel(
             modifier = Modifier.fillMaxWidth(),
             cornerRadius = 28.dp,
             strong = true,
             enableSheen = true,
             enableRefraction = true,
-            sampleWallpaper = true,
-            blurStrengthOverride = 0.5f
+            sampleWallpaper = true
         ) {
             Column(
                 modifier = Modifier
@@ -74,24 +72,11 @@ fun IconEditorPanel(
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Header: reset · title · size
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    HeaderCircleButton(
-                        onClick = { onDraftChange(IconAppearance.Default) },
-                        contentDescription = "Reset to default"
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Refresh,
-                            contentDescription = null,
-                            tint = VoidMist,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
                     Text(
                         text = "App Icons",
                         style = MaterialTheme.typography.titleMedium,
