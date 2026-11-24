@@ -34,15 +34,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Resolve version
         id: ver
         shell: bash
@@ -118,6 +109,18 @@ jobs:
             fi
           fi
           echo "exists=false" >> "$GITHUB_OUTPUT"
+
+      - name: Set up JDK 17
+        if: steps.skip.outputs.exists != 'true'
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # v3 still requests the removed Google `tools` package and fails CI.
+      - name: Setup Android SDK
+        if: steps.skip.outputs.exists != 'true'
+        uses: android-actions/setup-android@v4
 
       - name: Build signed APK
         if: steps.skip.outputs.exists != 'true'
