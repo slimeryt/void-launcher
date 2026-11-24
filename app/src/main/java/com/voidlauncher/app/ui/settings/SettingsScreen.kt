@@ -98,8 +98,12 @@ fun SettingsContent(
     onAutoCheckUpdatesChange: (Boolean) -> Unit,
     onGlassBlurChange: (Float) -> Unit,
     onGlassFrostChange: (Float) -> Unit,
+    onGlassBlurRadiusChange: (Float) -> Unit,
+    onGlassRefractionHeightChange: (Float) -> Unit,
+    onGlassRefractionAmountChange: (Float) -> Unit,
     onGlassRefractionChange: (Boolean) -> Unit,
     onGlassSheenChange: (Boolean) -> Unit,
+    onGlassChromaticChange: (Boolean) -> Unit,
     onCheckUpdate: () -> Unit,
     onCancelUpdate: () -> Unit,
     onDownloadUpdate: () -> Unit,
@@ -224,8 +228,12 @@ fun SettingsContent(
                         onGrantWallpaperAccess = onGrantWallpaperAccess,
                         onGlassBlurChange = onGlassBlurChange,
                         onGlassFrostChange = onGlassFrostChange,
+                        onGlassBlurRadiusChange = onGlassBlurRadiusChange,
+                        onGlassRefractionHeightChange = onGlassRefractionHeightChange,
+                        onGlassRefractionAmountChange = onGlassRefractionAmountChange,
                         onGlassRefractionChange = onGlassRefractionChange,
-                        onGlassSheenChange = onGlassSheenChange
+                        onGlassSheenChange = onGlassSheenChange,
+                        onGlassChromaticChange = onGlassChromaticChange
                     )
                     SettingsPage.HomeLayout -> HomeLayoutPage(
                         state = state,
@@ -576,8 +584,12 @@ private fun LiquidGlassPage(
     onGrantWallpaperAccess: () -> Unit,
     onGlassBlurChange: (Float) -> Unit,
     onGlassFrostChange: (Float) -> Unit,
+    onGlassBlurRadiusChange: (Float) -> Unit,
+    onGlassRefractionHeightChange: (Float) -> Unit,
+    onGlassRefractionAmountChange: (Float) -> Unit,
     onGlassRefractionChange: (Boolean) -> Unit,
-    onGlassSheenChange: (Boolean) -> Unit
+    onGlassSheenChange: (Boolean) -> Unit,
+    onGlassChromaticChange: (Boolean) -> Unit
 ) {
     val backdrop = LocalLayerBackdrop.current
     var tab by remember { mutableIntStateOf(0) }
@@ -669,15 +681,14 @@ private fun LiquidGlassPage(
                             )
                         }
                         LiquidSlider(
-                            value = { state.glassBlurStrength },
-                            onValueChange = onGlassBlurChange,
-                            valueRange = 0f..1.6f,
-                            visibilityThreshold = 0.001f,
+                            value = state.glassBlurRadiusDp,
+                            onValueChange = onGlassBlurRadiusChange,
+                            valueRange = 0f..40f,
                             backdrop = backdrop,
                             modifier = Modifier.fillMaxWidth()
                         )
                         Text(
-                            "Blur ${(state.glassBlurStrength * 100).toInt()}% — drag the liquid thumb",
+                            "Blur radius ${state.glassBlurRadiusDp.toInt()} dp",
                             color = VoidMuted,
                             style = MaterialTheme.typography.bodyMedium
                         )
@@ -712,11 +723,27 @@ private fun LiquidGlassPage(
         else -> {
             SettingsGroup(label = "Intensity") {
                 SliderBlock(
-                    title = "Blur strength",
-                    valueLabel = "${(state.glassBlurStrength * 100).toInt()}%",
-                    value = state.glassBlurStrength,
-                    onValueChange = onGlassBlurChange,
-                    valueRange = 0f..1.6f,
+                    title = "Blur radius",
+                    valueLabel = "${state.glassBlurRadiusDp.toInt()} dp",
+                    value = state.glassBlurRadiusDp,
+                    onValueChange = onGlassBlurRadiusChange,
+                    valueRange = 0f..40f,
+                    showDivider = true
+                )
+                SliderBlock(
+                    title = "Refraction height",
+                    valueLabel = "${state.glassRefractionHeightDp.toInt()} dp",
+                    value = state.glassRefractionHeightDp,
+                    onValueChange = onGlassRefractionHeightChange,
+                    valueRange = 0f..40f,
+                    showDivider = true
+                )
+                SliderBlock(
+                    title = "Refraction amount",
+                    valueLabel = "${state.glassRefractionAmountDp.toInt()} dp",
+                    value = state.glassRefractionAmountDp,
+                    onValueChange = onGlassRefractionAmountChange,
+                    valueRange = 0f..80f,
                     showDivider = true
                 )
                 SliderBlock(
@@ -725,6 +752,29 @@ private fun LiquidGlassPage(
                     value = state.glassFrostAmount,
                     onValueChange = onGlassFrostChange,
                     valueRange = 0f..1.5f,
+                    showDivider = false
+                )
+            }
+            SettingsGroup(label = "Optics") {
+                ToggleRow(
+                    title = "Refraction",
+                    subtitle = "Enable lens bend",
+                    checked = state.glassRefraction,
+                    onCheckedChange = onGlassRefractionChange,
+                    showDivider = true
+                )
+                ToggleRow(
+                    title = "Chromatic aberration",
+                    subtitle = "RGB fringe on the lens edge",
+                    checked = state.glassChromaticAberration,
+                    onCheckedChange = onGlassChromaticChange,
+                    showDivider = true
+                )
+                ToggleRow(
+                    title = "Sheen",
+                    subtitle = "Wet specular highlight",
+                    checked = state.glassSheen,
+                    onCheckedChange = onGlassSheenChange,
                     showDivider = false
                 )
             }
@@ -1077,13 +1127,12 @@ private fun SliderBlock(
             Spacer(modifier = Modifier.height(12.dp))
             if (backdrop != null) {
                 LiquidSlider(
-                    value = { value },
+                    value = value,
                     onValueChange = onValueChange,
                     valueRange = valueRange,
-                    visibilityThreshold = ((valueRange.endInclusive - valueRange.start) * 0.001f)
-                        .coerceAtLeast(0.001f),
                     backdrop = backdrop,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    steps = steps
                 )
             } else {
                 IosSlider(
@@ -1134,25 +1183,44 @@ private fun ActionChip(
     modifier: Modifier = Modifier,
     filled: Boolean = false
 ) {
-    val bg = when {
-        !enabled -> SettingsChipBg.copy(alpha = 0.5f)
-        filled -> IosBlue
-        else -> SettingsChipBg
-    }
+    val backdrop = LocalLayerBackdrop.current
     val fg = when {
         !enabled -> VoidMuted
         filled -> Color.White
         else -> VoidMist
     }
-    Text(
-        text = label,
-        style = MaterialTheme.typography.titleMedium,
-        color = fg,
-        textAlign = TextAlign.Center,
-        modifier = modifier
-            .clip(SmoothCornerShape(14.dp))
-            .background(bg)
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(vertical = 12.dp)
-    )
+    if (backdrop != null && enabled) {
+        LiquidButton(
+            onClick = onClick,
+            backdrop = backdrop,
+            modifier = modifier.fillMaxWidth(),
+            tint = if (filled) IosBlue else Color.Unspecified,
+            surfaceColor = if (filled) IosBlue.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.1f)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleMedium,
+                color = fg,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    } else {
+        val bg = when {
+            !enabled -> SettingsChipBg.copy(alpha = 0.5f)
+            filled -> IosBlue
+            else -> SettingsChipBg
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleMedium,
+            color = fg,
+            textAlign = TextAlign.Center,
+            modifier = modifier
+                .clip(SmoothCornerShape(14.dp))
+                .background(bg)
+                .clickable(enabled = enabled, onClick = onClick)
+                .padding(vertical = 12.dp)
+        )
+    }
 }

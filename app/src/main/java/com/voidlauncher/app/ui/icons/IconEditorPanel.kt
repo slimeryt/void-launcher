@@ -216,20 +216,26 @@ private fun HeaderCircleButton(
     contentDescription: String,
     content: @Composable () -> Unit
 ) {
-    Box(
+    GlassPanel(
         modifier = Modifier
             .size(36.dp)
-            .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.12f))
-            .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onClick
             ),
-        contentAlignment = Alignment.Center
+        cornerRadius = 18.dp,
+        strong = true,
+        enableSheen = true,
+        enableRefraction = true,
+        sampleWallpaper = true
     ) {
-        content()
+        Box(
+            modifier = Modifier.fillMaxWidth().height(36.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            content()
+        }
     }
 }
 

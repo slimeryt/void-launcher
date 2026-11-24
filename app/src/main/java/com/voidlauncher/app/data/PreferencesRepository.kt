@@ -47,8 +47,12 @@ data class LauncherPreferences(
     val folders: Map<String, HomeFolder> = emptyMap(),
     val glassBlurStrength: Float = 1f,
     val glassFrostAmount: Float = 1f,
+    val glassBlurRadiusDp: Float = 18f,
+    val glassRefractionHeightDp: Float = 16f,
+    val glassRefractionAmountDp: Float = 32f,
     val glassRefraction: Boolean = true,
     val glassSheen: Boolean = true,
+    val glassChromaticAberration: Boolean = true,
     val dockLabels: Boolean = false,
     val hapticFeedback: Boolean = true,
     val autoCheckUpdates: Boolean = true,
@@ -99,8 +103,12 @@ class PreferencesRepository(private val context: Context) {
         val FoldersJson = stringPreferencesKey("home_folders_json")
         val GlassBlur = floatPreferencesKey("glass_blur")
         val GlassFrost = floatPreferencesKey("glass_frost")
+        val GlassBlurRadius = floatPreferencesKey("glass_blur_radius_dp")
+        val GlassRefractionHeight = floatPreferencesKey("glass_refraction_height_dp")
+        val GlassRefractionAmount = floatPreferencesKey("glass_refraction_amount_dp")
         val GlassRefraction = booleanPreferencesKey("glass_refraction")
         val GlassSheen = booleanPreferencesKey("glass_sheen")
+        val GlassChromatic = booleanPreferencesKey("glass_chromatic")
         val DockLabels = booleanPreferencesKey("dock_labels")
         val Haptic = booleanPreferencesKey("haptic_feedback")
         val AutoCheckUpdates = booleanPreferencesKey("auto_check_updates")
@@ -137,8 +145,13 @@ class PreferencesRepository(private val context: Context) {
             folders = decodeFolders(prefs[Keys.FoldersJson]),
             glassBlurStrength = prefs[Keys.GlassBlur] ?: 1f,
             glassFrostAmount = prefs[Keys.GlassFrost] ?: 1f,
+            glassBlurRadiusDp = prefs[Keys.GlassBlurRadius]
+                ?: ((prefs[Keys.GlassBlur] ?: 1f) * 18f).coerceIn(0f, 40f),
+            glassRefractionHeightDp = prefs[Keys.GlassRefractionHeight] ?: 16f,
+            glassRefractionAmountDp = prefs[Keys.GlassRefractionAmount] ?: 32f,
             glassRefraction = prefs[Keys.GlassRefraction] ?: true,
             glassSheen = prefs[Keys.GlassSheen] ?: true,
+            glassChromaticAberration = prefs[Keys.GlassChromatic] ?: true,
             dockLabels = prefs[Keys.DockLabels] ?: false,
             hapticFeedback = prefs[Keys.Haptic] ?: true,
             autoCheckUpdates = prefs[Keys.AutoCheckUpdates] ?: true,
@@ -224,12 +237,28 @@ class PreferencesRepository(private val context: Context) {
         context.dataStore.edit { it[Keys.GlassFrost] = value.coerceIn(0f, 1.5f) }
     }
 
+    suspend fun setGlassBlurRadiusDp(value: Float) {
+        context.dataStore.edit { it[Keys.GlassBlurRadius] = value.coerceIn(0f, 40f) }
+    }
+
+    suspend fun setGlassRefractionHeightDp(value: Float) {
+        context.dataStore.edit { it[Keys.GlassRefractionHeight] = value.coerceIn(0f, 40f) }
+    }
+
+    suspend fun setGlassRefractionAmountDp(value: Float) {
+        context.dataStore.edit { it[Keys.GlassRefractionAmount] = value.coerceIn(0f, 80f) }
+    }
+
     suspend fun setGlassRefraction(value: Boolean) {
         context.dataStore.edit { it[Keys.GlassRefraction] = value }
     }
 
     suspend fun setGlassSheen(value: Boolean) {
         context.dataStore.edit { it[Keys.GlassSheen] = value }
+    }
+
+    suspend fun setGlassChromaticAberration(value: Boolean) {
+        context.dataStore.edit { it[Keys.GlassChromatic] = value }
     }
 
     suspend fun setDockLabels(value: Boolean) {

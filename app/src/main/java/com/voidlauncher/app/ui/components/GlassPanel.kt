@@ -80,25 +80,29 @@ fun GlassPanel(
     }
 
     if (backdrop != null) {
-        val blurPxBase = when {
-            blurStrengthOverride != null -> 28f * blurStrength
-            sampleWallpaper -> 18f * blurStrength * (if (strong) 1.1f else 0.95f)
-            else -> 10f * blurStrength * (if (strong) 1.05f else 0.9f)
-        }.coerceIn(0f, 36f)
-        val lensHeight = if (refractionOn) {
-            (if (strong) 18f else 14f) * (0.7f + 0.3f * blurStrength.coerceIn(0.4f, 1.4f))
+        val blurRadiusDp = when {
+            blurStrengthOverride != null ->
+                (28f * blurStrength).coerceIn(0f, 40f)
+            else ->
+                (glass.blurRadiusDp * (if (strong) 1.08f else 1f) *
+                    if (sampleWallpaper) 1f else 0.72f).coerceIn(0f, 40f)
+        }
+        val lensHeightDp = if (refractionOn) {
+            glass.refractionHeightDp * (if (strong) 1.1f else 1f)
         } else {
             0f
         }
-        val lensAmount = if (refractionOn) {
-            (if (strong) 36f else 28f) * (0.75f + 0.25f * blurStrength.coerceIn(0.4f, 1.4f))
+        val lensAmountDp = if (refractionOn) {
+            glass.refractionAmountDp * (if (strong) 1.1f else 1f)
         } else {
             0f
         }
+        val chromatic = refractionOn && glass.chromaticAberration
+        val frostScale = glass.frostAmount.coerceIn(0f, 1.5f)
         val surfaceAlpha = when {
             tint.alpha > 0.01f -> 0f
-            sampleWallpaper -> if (strong) 0.08f else 0.05f
-            else -> if (strong) 0.12f else 0.08f
+            sampleWallpaper -> (if (strong) 0.08f else 0.05f) * frostScale.coerceAtLeast(0.35f)
+            else -> (if (strong) 0.12f else 0.08f) * frostScale.coerceAtLeast(0.35f)
         }
 
         Box(
@@ -107,13 +111,13 @@ fun GlassPanel(
                 shape = glassShape,
                 effects = {
                     vibrancy()
-                    if (blurPxBase >= 1f) blur(blurPxBase)
-                    if (lensHeight > 0f && lensAmount > 0f) {
+                    if (blurRadiusDp >= 0.5f) blur(blurRadiusDp.dp.toPx())
+                    if (lensHeightDp > 0f && lensAmountDp > 0f) {
                         lens(
-                            refractionHeight = lensHeight.dp.toPx(),
-                            refractionAmount = lensAmount.dp.toPx(),
+                            refractionHeight = lensHeightDp.dp.toPx(),
+                            refractionAmount = lensAmountDp.dp.toPx(),
                             depthEffect = strong,
-                            chromaticAberration = refractionOn && sampleWallpaper
+                            chromaticAberration = chromatic
                         )
                     }
                 },

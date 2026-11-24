@@ -105,8 +105,12 @@ class MainActivity : ComponentActivity() {
                 LocalGlassSettings provides GlassSettings(
                     blurStrength = state.glassBlurStrength,
                     frostAmount = state.glassFrostAmount,
+                    blurRadiusDp = state.glassBlurRadiusDp,
+                    refractionHeightDp = state.glassRefractionHeightDp,
+                    refractionAmountDp = state.glassRefractionAmountDp,
                     refractionEnabled = state.glassRefraction && !state.reduceTransparency,
-                    sheenEnabled = state.glassSheen && !state.reduceTransparency
+                    sheenEnabled = state.glassSheen && !state.reduceTransparency,
+                    chromaticAberration = state.glassChromaticAberration && !state.reduceTransparency
                 ),
                 LocalWidgetHostApi provides WidgetHostApi(
                     host = appWidgetHost,

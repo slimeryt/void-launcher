@@ -43,8 +43,12 @@ data class LauncherUiState(
     val hiddenCount: Int = 0,
     val glassBlurStrength: Float = 1f,
     val glassFrostAmount: Float = 1f,
+    val glassBlurRadiusDp: Float = 18f,
+    val glassRefractionHeightDp: Float = 16f,
+    val glassRefractionAmountDp: Float = 32f,
     val glassRefraction: Boolean = true,
     val glassSheen: Boolean = true,
+    val glassChromaticAberration: Boolean = true,
     val dockLabels: Boolean = false,
     val hapticFeedback: Boolean = true,
     val autoCheckUpdates: Boolean = true,
@@ -128,8 +132,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             hiddenCount = prefs.hidden.size,
             glassBlurStrength = prefs.glassBlurStrength,
             glassFrostAmount = prefs.glassFrostAmount,
+            glassBlurRadiusDp = prefs.glassBlurRadiusDp,
+            glassRefractionHeightDp = prefs.glassRefractionHeightDp,
+            glassRefractionAmountDp = prefs.glassRefractionAmountDp,
             glassRefraction = prefs.glassRefraction,
             glassSheen = prefs.glassSheen,
+            glassChromaticAberration = prefs.glassChromaticAberration,
             dockLabels = prefs.dockLabels,
             hapticFeedback = prefs.hapticFeedback,
             autoCheckUpdates = prefs.autoCheckUpdates,
@@ -394,12 +402,28 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch { prefsRepository.setGlassFrostAmount(value) }
     }
 
+    fun setGlassBlurRadiusDp(value: Float) {
+        viewModelScope.launch { prefsRepository.setGlassBlurRadiusDp(value) }
+    }
+
+    fun setGlassRefractionHeightDp(value: Float) {
+        viewModelScope.launch { prefsRepository.setGlassRefractionHeightDp(value) }
+    }
+
+    fun setGlassRefractionAmountDp(value: Float) {
+        viewModelScope.launch { prefsRepository.setGlassRefractionAmountDp(value) }
+    }
+
     fun setGlassRefraction(value: Boolean) {
         viewModelScope.launch { prefsRepository.setGlassRefraction(value) }
     }
 
     fun setGlassSheen(value: Boolean) {
         viewModelScope.launch { prefsRepository.setGlassSheen(value) }
+    }
+
+    fun setGlassChromaticAberration(value: Boolean) {
+        viewModelScope.launch { prefsRepository.setGlassChromaticAberration(value) }
     }
 
     fun setDockLabels(value: Boolean) {

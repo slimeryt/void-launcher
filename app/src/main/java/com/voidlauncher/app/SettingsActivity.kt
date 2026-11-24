@@ -67,8 +67,12 @@ class SettingsActivity : ComponentActivity() {
                 LocalGlassSettings provides GlassSettings(
                     blurStrength = state.glassBlurStrength,
                     frostAmount = state.glassFrostAmount,
+                    blurRadiusDp = state.glassBlurRadiusDp,
+                    refractionHeightDp = state.glassRefractionHeightDp,
+                    refractionAmountDp = state.glassRefractionAmountDp,
                     refractionEnabled = state.glassRefraction && !state.reduceTransparency,
-                    sheenEnabled = state.glassSheen && !state.reduceTransparency
+                    sheenEnabled = state.glassSheen && !state.reduceTransparency,
+                    chromaticAberration = state.glassChromaticAberration && !state.reduceTransparency
                 )
             ) {
                 VoidTheme {
@@ -96,8 +100,12 @@ class SettingsActivity : ComponentActivity() {
                             onAutoCheckUpdatesChange = viewModel::setAutoCheckUpdates,
                             onGlassBlurChange = viewModel::setGlassBlurStrength,
                             onGlassFrostChange = viewModel::setGlassFrostAmount,
+                            onGlassBlurRadiusChange = viewModel::setGlassBlurRadiusDp,
+                            onGlassRefractionHeightChange = viewModel::setGlassRefractionHeightDp,
+                            onGlassRefractionAmountChange = viewModel::setGlassRefractionAmountDp,
                             onGlassRefractionChange = viewModel::setGlassRefraction,
                             onGlassSheenChange = viewModel::setGlassSheen,
+                            onGlassChromaticChange = viewModel::setGlassChromaticAberration,
                             onCheckUpdate = { updateViewModel.checkForUpdates(silent = false) },
                             onCancelUpdate = updateViewModel::cancelUpdateAction,
                             onDownloadUpdate = updateViewModel::downloadUpdate,

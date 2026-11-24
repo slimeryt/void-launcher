@@ -32,6 +32,7 @@ import com.voidlauncher.app.glass.LocalHazeState
 import com.voidlauncher.app.glass.LocalLayerBackdrop
 import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.components.SmoothCornerShape
+import com.voidlauncher.app.ui.liquid.LiquidButton
 import com.voidlauncher.app.ui.theme.IosBlue
 import com.voidlauncher.app.ui.theme.VoidInk
 import com.voidlauncher.app.ui.theme.VoidMist
@@ -87,24 +88,13 @@ fun SettingsBackButton(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    GlassPanel(
-        modifier = modifier,
-        cornerRadius = 22.dp,
-        strong = true,
-        enableSheen = true,
-        enableRefraction = true,
-        sampleWallpaper = false
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-            modifier = Modifier
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onBack
-                )
-                .padding(start = 6.dp, end = 14.dp, top = 8.dp, bottom = 8.dp)
+    val backdrop = LocalLayerBackdrop.current
+    if (backdrop != null) {
+        LiquidButton(
+            onClick = onBack,
+            backdrop = backdrop,
+            modifier = modifier,
+            surfaceColor = Color.White.copy(alpha = 0.1f)
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
@@ -117,6 +107,39 @@ fun SettingsBackButton(
                 style = MaterialTheme.typography.titleMedium,
                 color = IosBlue
             )
+        }
+    } else {
+        GlassPanel(
+            modifier = modifier,
+            cornerRadius = 22.dp,
+            strong = true,
+            enableSheen = true,
+            enableRefraction = true,
+            sampleWallpaper = false
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                modifier = Modifier
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onBack
+                    )
+                    .padding(start = 6.dp, end = 14.dp, top = 8.dp, bottom = 8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
+                    contentDescription = null,
+                    tint = IosBlue,
+                    modifier = Modifier.size(26.dp)
+                )
+                Text(
+                    text = "Back",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = IosBlue
+                )
+            }
         }
     }
 }

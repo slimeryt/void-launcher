@@ -12,8 +12,8 @@ android {
         applicationId = "com.voidlauncher.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 9000505
-        versionName = (project.findProperty("versionName") as String?) ?: "0.9.0-beta.5"
+        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 9000506
+        versionName = (project.findProperty("versionName") as String?) ?: "0.9.0-beta.6"
 
         // Override with -PaccountApiBase=https://...
         val accountApiBase = (project.findProperty("accountApiBase") as String?)
