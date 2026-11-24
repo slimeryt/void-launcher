@@ -26,7 +26,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.voidlauncher.app.glass.LocalHazeState
+import com.voidlauncher.app.glass.LocalLayerBackdrop
 import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.components.SmoothCornerShape
 import com.voidlauncher.app.ui.theme.IosBlue
@@ -49,20 +52,28 @@ fun SettingsHazeHost(
     content: @Composable () -> Unit
 ) {
     val hazeState = rememberHazeState()
-    CompositionLocalProvider(LocalHazeState provides hazeState) {
-        Box(
-            modifier = modifier
-                .fillMaxSize()
-                .background(
-                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF2A2A30),
-                            VoidInk,
-                            Color(0xFF050508)
+    val layerBackdrop = rememberLayerBackdrop()
+    CompositionLocalProvider(
+        LocalHazeState provides hazeState,
+        LocalLayerBackdrop provides layerBackdrop
+    ) {
+        Box(modifier = modifier.fillMaxSize()) {
+            // Plate only — must be a sibling of glass, not an ancestor, or
+            // layerBackdrop records drawBackdrop and crashes RenderThread.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .layerBackdrop(layerBackdrop)
+                    .background(
+                        brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFF2A2A30),
+                                VoidInk,
+                                Color(0xFF050508)
+                            )
                         )
                     )
-                )
-        ) {
+            )
             content()
         }
     }

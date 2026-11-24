@@ -6,14 +6,14 @@ plugins {
 
 android {
     namespace = "com.voidlauncher.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.voidlauncher.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1002
-        versionName = (project.findProperty("versionName") as String?) ?: "0.1.2"
+        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 9000504
+        versionName = (project.findProperty("versionName") as String?) ?: "0.9.0-beta.4"
 
         // Override with -PaccountApiBase=https://...
         val accountApiBase = (project.findProperty("accountApiBase") as String?)
@@ -94,6 +94,9 @@ dependencies {
     implementation("androidx.compose.animation:animation")
     implementation("androidx.graphics:graphics-shapes:1.0.1")
     implementation("dev.chrisbanes.haze:haze:1.6.10")
+    // Kyant Liquid Glass (Backdrop). 1.0.2 = Kotlin 2.2 metadata + compileSdk 36.
+    // 2.0.1 needs Compose 1.12 / AGP 9.1 / compileSdk 37.
+    implementation("io.github.kyant0:backdrop:1.0.2")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("com.google.accompanist:accompanist-drawablepainter:0.36.0")
     implementation("com.google.accompanist:accompanist-systemuicontroller:0.36.0")

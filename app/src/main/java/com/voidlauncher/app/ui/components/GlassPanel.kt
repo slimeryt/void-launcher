@@ -5,65 +5,38 @@ import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Paint as AndroidPaint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
-import android.graphics.RenderEffect as AndroidRenderEffect
-import android.graphics.Shader
 import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
-import android.util.Log
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.requiredSize
-import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.RenderEffect
-import androidx.compose.ui.graphics.asComposeRenderEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.layout.positionInWindow
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.DpSize
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import com.voidlauncher.app.glass.LiquidRefractionShader
-import com.voidlauncher.app.glass.LocalBlurredWallpaper
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.highlight.Highlight
 import com.voidlauncher.app.glass.LocalGlassSettings
-import com.voidlauncher.app.glass.LocalWallpaperScrollState
-import com.voidlauncher.app.glass.WallpaperCrop
+import com.voidlauncher.app.glass.LocalLayerBackdrop
 import com.voidlauncher.app.ui.theme.VoidGlassBorder
-import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * Optical liquid glass (Polar AGSL): wallpaper/plate backdrop → light blur →
- * RuntimeShader refraction / chromatic / Fresnel / specular.
- *
- * [sampleWallpaper] true = wallpaper crop (home / preview). false = frost plate
- * for settings chrome (no wallpaper portals).
+ * Optical liquid glass via Kyant Backdrop (AGSL refraction / blur / vibrancy)
+ * when a [LocalLayerBackdrop] is provided. Falls back to a frosted plate + stroke
+ * when no backdrop layer is available.
  */
 @Composable
 fun GlassPanel(
@@ -87,178 +60,87 @@ fun GlassPanel(
     liquidStroke: Boolean = false,
     content: @Composable BoxScope.() -> Unit
 ) {
-    val wallpaper = LocalBlurredWallpaper.current
     val glass = LocalGlassSettings.current
-    // Stable holder — read .offset only inside graphicsLayer (no per-frame recomposition).
-    val wallpaperScroll = LocalWallpaperScrollState.current
-    val density = LocalDensity.current
-
+    val backdrop = LocalLayerBackdrop.current
     val blurStrength = (blurStrengthOverride ?: glass.blurStrength).coerceIn(0f, 1.6f)
-    val frostAmount = glass.frostAmount
     val refractionOn = enableRefraction && glass.refractionEnabled
     val specularOn = enableSheen && glass.sheenEnabled
-
-    var layerSize by remember { mutableStateOf(IntSize.Zero) }
-    // Store numeric pos so wallpaper recomposes when layout settles (folder open, etc.).
-    var panelPos by remember { mutableStateOf(Offset.Zero) }
-    var layoutCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val smoothing = cornerSmoothing.coerceIn(0f, 1f)
-    val shape = remember(cornerRadius, smoothing, capsule) {
+
+    // Kyant lens SDF supports CornerBasedShape — not SmoothCornerShape.
+    val glassShape: () -> Shape = remember(capsule, cornerRadius) {
+        {
+            if (capsule) RoundedCornerShape(percent = 50)
+            else RoundedCornerShape(cornerRadius)
+        }
+    }
+    val clipShape = remember(capsule, cornerRadius, smoothing) {
         if (capsule) SmoothCornerShape(percent = 50, smoothing = smoothing)
         else SmoothCornerShape(radius = cornerRadius, smoothing = smoothing)
     }
-    val cornerRadiusPx = if (capsule && layerSize.width > 1 && layerSize.height > 1) {
-        min(layerSize.width, layerSize.height) / 2f
-    } else {
-        with(density) { cornerRadius.toPx() }
-    }
 
-    val runtimeShader = remember {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            runCatching { LiquidRefractionShader.create() }
-                .onFailure { Log.e("GlassPanel", "AGSL liquid glass failed to compile", it) }
-                .getOrNull()
+    if (backdrop != null) {
+        val blurPxBase = when {
+            blurStrengthOverride != null -> 28f * blurStrength
+            sampleWallpaper -> 18f * blurStrength * (if (strong) 1.1f else 0.95f)
+            else -> 10f * blurStrength * (if (strong) 1.05f else 0.9f)
+        }.coerceIn(0f, 36f)
+        val lensHeight = if (refractionOn) {
+            (if (strong) 18f else 14f) * (0.7f + 0.3f * blurStrength.coerceIn(0.4f, 1.4f))
         } else {
-            null
+            0f
         }
-    }
-    val useWallpaperBackdrop = sampleWallpaper && wallpaper != null
-    val useOpticalShader = refractionOn && runtimeShader != null
+        val lensAmount = if (refractionOn) {
+            (if (strong) 36f else 28f) * (0.75f + 0.25f * blurStrength.coerceIn(0.4f, 1.4f))
+        } else {
+            0f
+        }
+        val surfaceAlpha = when {
+            tint.alpha > 0.01f -> 0f
+            sampleWallpaper -> if (strong) 0.08f else 0.05f
+            else -> if (strong) 0.12f else 0.08f
+        }
 
-    val blurSigma = when {
-        blurStrength <= 0.01f -> 0f
-        // Fixed / overridden blur (e.g. icon editor at 50%): use the fuller σ range
-        // so “50%” is clearly frosted, not a tiny refraction blur.
-        blurStrengthOverride != null ->
-            (30f * blurStrength).coerceIn(0f, 30f)
-        !useWallpaperBackdrop && refractionOn ->
-            (6f * blurStrength).coerceIn(0f, 9f) * (if (strong) 1.05f else 1f)
-        refractionOn -> (10f * blurStrength).coerceIn(0f, 16f) * (if (strong) 1.05f else 1f)
-        else -> (22f * blurStrength).coerceIn(0f, 30f) * (if (strong) 1.05f else 0.92f)
-    }
-    val effectiveBlurSigma = when {
-        blurStrengthOverride != null -> blurSigma
-        useWallpaperBackdrop -> blurSigma
-        else -> (blurSigma * 0.45f).coerceAtMost(5f)
-    }
-
-    val panelRenderEffect: RenderEffect? = remember(
-        layerSize,
-        effectiveBlurSigma,
-        useOpticalShader,
-        useWallpaperBackdrop,
-        strong,
-        blurStrength,
-        blurStrengthOverride,
-        frostAmount,
-        specularOn,
-        cornerRadiusPx,
-        capsule,
-        runtimeShader
-    ) {
-        if (layerSize.width <= 1 || layerSize.height <= 1) return@remember null
-        val blurEffect =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && effectiveBlurSigma >= 1f) {
-                AndroidRenderEffect.createBlurEffect(
-                    effectiveBlurSigma,
-                    effectiveBlurSigma,
-                    Shader.TileMode.CLAMP
-                )
-            } else {
-                null
-            }
-        val shader = runtimeShader
-        val shaderEffect =
-            if (useOpticalShader && shader != null) {
-                val eta = if (useWallpaperBackdrop) {
-                    (if (strong) 0.14f else 0.12f) *
-                        (0.85f + 0.15f * blurStrength.coerceIn(0.4f, 1.4f))
-                } else {
-                    if (strong) 0.12f else 0.1f
-                }
-                LiquidRefractionShader.update(
-                    shader = shader,
-                    size = Size(layerSize.width.toFloat(), layerSize.height.toFloat()),
-                    cornerRadiusPx = cornerRadiusPx,
-                    eta = eta.coerceIn(0.07f, 0.18f),
-                    frost = frostAmount * (if (useWallpaperBackdrop) {
-                        if (strong) 0.85f else 0.7f
-                    } else {
-                        // Settings chrome: keep frost low so the plate stays transparent.
-                        if (strong) 0.22f else 0.16f
-                    }),
-                    fresnelMin = if (useWallpaperBackdrop) 0.025f else 0.02f,
-                    fresnelMax = if (useWallpaperBackdrop) {
-                        if (strong) 0.28f else 0.22f
-                    } else {
-                        if (strong) 0.22f else 0.16f
-                    },
-                    specularPower = if (useWallpaperBackdrop) 56f else 48f,
-                    specularStrength = if (specularOn) {
-                        if (useWallpaperBackdrop) {
-                            if (strong) 0.62f else 0.5f
-                        } else {
-                            if (strong) 0.55f else 0.42f
-                        }
-                    } else {
-                        0f
-                    },
-                    chromatic = if (useWallpaperBackdrop) {
-                        if (strong) 1.55f else 1.2f
-                    } else {
-                        if (strong) 1.5f else 1.2f
+        Box(
+            modifier = modifier.drawBackdrop(
+                backdrop = backdrop,
+                shape = glassShape,
+                effects = {
+                    vibrancy()
+                    if (blurPxBase >= 1f) blur(blurPxBase)
+                    if (lensHeight > 0f && lensAmount > 0f) {
+                        lens(
+                            refractionHeight = lensHeight.dp.toPx(),
+                            refractionAmount = lensAmount.dp.toPx(),
+                            depthEffect = strong,
+                            chromaticAberration = refractionOn && sampleWallpaper
+                        )
                     }
-                )
-                AndroidRenderEffect.createRuntimeShaderEffect(shader, "content")
-            } else {
-                null
-            }
-        when {
-            shaderEffect != null && blurEffect != null ->
-                AndroidRenderEffect.createChainEffect(shaderEffect, blurEffect)
-                    .asComposeRenderEffect()
-            shaderEffect != null -> shaderEffect.asComposeRenderEffect()
-            blurEffect != null -> blurEffect.asComposeRenderEffect()
-            else -> null
+                },
+                highlight = if (specularOn || liquidStroke) {
+                    { Highlight.Default }
+                } else {
+                    null
+                },
+                onDrawSurface = {
+                    if (surfaceAlpha > 0.01f) {
+                        drawRect(Color.White.copy(alpha = surfaceAlpha))
+                    }
+                    if (tint.alpha > 0.01f) drawRect(tint)
+                }
+            )
+        ) {
+            content()
         }
+        return
     }
 
-    val extraWidthPx = wallpaper?.let {
-        (it.fullWidthPx - it.screenWidth).coerceAtLeast(0).toFloat()
-    } ?: 0f
-    val extraHeightPx = wallpaper?.let {
-        (it.fullHeightPx - it.screenHeight).coerceAtLeast(0).toFloat()
-    } ?: 0f
-    val stripWidthPx = wallpaper?.fullWidthPx?.toFloat()?.coerceAtLeast(1f)
-        ?: layerSize.width.toFloat().coerceAtLeast(1f)
-    // Full wallpaper height so Y can be aligned via translation (same as X) — avoids
-    // crop/offset mismatch that displaced folder glass.
-    val stripHeightPx = wallpaper?.fullHeightPx?.toFloat()?.coerceAtLeast(1f)
-        ?: layerSize.height.toFloat().coerceAtLeast(1f)
-    val stripDp = with(density) {
-        DpSize(stripWidthPx.toDp(), stripHeightPx.toDp())
-    }
-
+    // No LayerBackdrop yet — lightweight frosted plate so layout still works.
     Box(
         modifier = modifier
-            .shadow(
-                elevation = when {
-                    !useWallpaperBackdrop -> if (strong) 10.dp else 6.dp
-                    strong -> 16.dp
-                    else -> 8.dp
-                },
-                shape = shape,
-                ambientColor = Color.Black.copy(
-                    alpha = if (useWallpaperBackdrop) 0.28f else 0.16f
-                ),
-                spotColor = Color.Black.copy(
-                    alpha = if (useWallpaperBackdrop) 0.38f else 0.2f
-                ),
-                clip = false
-            )
             .then(
-                if (useOpticalShader || liquidStroke) {
-                    Modifier.liquidGlassStroke(shape = shape, strong = strong)
+                if (liquidStroke) {
+                    Modifier.liquidGlassStroke(shape = clipShape, strong = strong)
                 } else {
                     Modifier.border(
                         width = 1.dp,
@@ -270,119 +152,21 @@ fun GlassPanel(
                                 Color.Black.copy(alpha = 0.14f)
                             )
                         ),
-                        shape = shape
+                        shape = clipShape
                     )
                 }
             )
-            .clip(shape)
-            .onGloballyPositioned {
-                layoutCoords = it
-                if (it.isAttached) {
-                    panelPos = it.positionInWindow()
+            .clip(clipShape)
+            .drawBehind {
+                val base = if (sampleWallpaper) {
+                    Color.White.copy(alpha = if (strong) 0.14f else 0.1f)
+                } else {
+                    Color.White.copy(alpha = if (strong) 0.12f else 0.08f)
                 }
+                drawRect(base)
+                if (tint.alpha > 0.01f) drawRect(tint)
             }
     ) {
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .onSizeChanged { layerSize = it }
-                .graphicsLayer(
-                    renderEffect = panelRenderEffect,
-                    compositingStrategy = CompositingStrategy.Offscreen
-                )
-        ) {
-            if (useWallpaperBackdrop && wallpaper != null && layerSize.height > 1) {
-                // Unbounded so the strip can be wider than the panel (matchParentSize
-                // would otherwise crush small edit circles to 56×56 and kill refraction).
-                Canvas(
-                    modifier = Modifier
-                        .wrapContentSize(unbounded = true, align = Alignment.TopStart)
-                        .requiredSize(stripDp)
-                        .graphicsLayer {
-                            val live = layoutCoords?.takeIf { it.isAttached }
-                                ?.positionInWindow()
-                                ?: panelPos
-                            val originX = wallpaperScroll.offset.coerceIn(0f, 1f) * extraWidthPx
-                            val originY = 0.5f * extraHeightPx
-                            translationX = -(originX + live.x)
-                            translationY = -(originY + live.y)
-                        }
-                ) {
-                    val wp = wallpaper
-                    drawImage(
-                        image = wp.image,
-                        srcOffset = IntOffset.Zero,
-                        srcSize = IntSize(
-                            wp.bitmapWidth.coerceAtLeast(1),
-                            wp.bitmapHeight.coerceAtLeast(1)
-                        ),
-                        dstOffset = IntOffset.Zero,
-                        dstSize = IntSize(
-                            stripWidthPx.roundToInt().coerceAtLeast(1),
-                            stripHeightPx.roundToInt().coerceAtLeast(1)
-                        ),
-                        alpha = 1f
-                    )
-                }
-            } else {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    if (size.minDimension <= 2f) return@Canvas
-                    // Clear liquid plate — mostly see-through so settings chrome reads as glass.
-                    drawRect(Color.White.copy(alpha = 0.07f))
-                    drawRect(
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.28f),
-                                Color.White.copy(alpha = 0.04f),
-                                Color.Transparent,
-                                Color.White.copy(alpha = 0.10f)
-                            ),
-                            start = Offset.Zero,
-                            end = Offset(size.width * 1.05f, size.height * 1.15f)
-                        )
-                    )
-                    drawRect(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.18f),
-                                Color.Transparent
-                            ),
-                            center = Offset(size.width * 0.15f, size.height * 0.2f),
-                            radius = size.minDimension * 0.9f
-                        )
-                    )
-                }
-            }
-        }
-
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .drawBehind {
-                    if (!useOpticalShader && !liquidStroke) {
-                        if (useWallpaperBackdrop) {
-                            drawRect(Color.White.copy(alpha = 0.06f * frostAmount))
-                            val rim = if (strong) 0.28f else 0.18f
-                            drawRoundRect(
-                                brush = Brush.linearGradient(
-                                    colors = listOf(
-                                        Color.White.copy(alpha = rim),
-                                        Color.Transparent,
-                                        Color.White.copy(alpha = rim * 0.55f)
-                                    ),
-                                    start = Offset.Zero,
-                                    end = Offset(size.width, size.height)
-                                ),
-                                cornerRadius = CornerRadius(cornerRadius.toPx(), cornerRadius.toPx()),
-                                style = Stroke(width = 1.5.dp.toPx())
-                            )
-                        }
-                        // Chrome frost plate: no extra opaque veil — plate + stroke carry the look.
-                    }
-                    if (tint.alpha > 0.01f) drawRect(tint)
-                }
-        )
-
         content()
     }
 }

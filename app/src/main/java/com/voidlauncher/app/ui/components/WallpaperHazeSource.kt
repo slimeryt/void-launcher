@@ -11,25 +11,38 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import com.kyant.backdrop.backdrops.layerBackdrop
 import com.voidlauncher.app.glass.LocalBlurredWallpaper
+import com.voidlauncher.app.glass.LocalLayerBackdrop
 import com.voidlauncher.app.glass.LocalWallpaperScrollState
 import com.voidlauncher.app.glass.WallpaperCrop
 import kotlin.math.roundToInt
 
 /**
- * Full-screen wallpaper drawn in Compose so Haze can blur the real backdrop
- * (system wallpaper alone isn't a Compose layer).
+ * Full-screen wallpaper drawn in Compose so Haze / Kyant Backdrop can sample
+ * the real backdrop (system wallpaper alone isn't a Compose layer).
  *
  * Parallax uses translationX on a full-width strip so scroll stays cheap.
+ * When [LocalLayerBackdrop] is set, also registers as a Kyant layer source.
  */
 @Composable
 fun WallpaperHazeSource(modifier: Modifier = Modifier) {
     val wp = LocalBlurredWallpaper.current
     val scroll = LocalWallpaperScrollState.current
     val density = LocalDensity.current
+    val layerBackdrop = LocalLayerBackdrop.current
+    val layerMod = if (layerBackdrop != null) {
+        Modifier.layerBackdrop(layerBackdrop)
+    } else {
+        Modifier
+    }
 
     if (wp == null) {
-        Canvas(modifier = modifier.fillMaxSize()) {
+        Canvas(
+            modifier = modifier
+                .then(layerMod)
+                .fillMaxSize()
+        ) {
             drawRect(Color(0xFF05060A))
         }
         return
@@ -42,6 +55,7 @@ fun WallpaperHazeSource(modifier: Modifier = Modifier) {
 
     Canvas(
         modifier = modifier
+            .then(layerMod)
             .requiredSize(stripDp)
             .graphicsLayer {
                 val originX = scroll.offset.coerceIn(0f, 1f) * extraW

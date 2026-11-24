@@ -47,6 +47,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.google.accompanist.systemuicontroller.rememberSystemUiController
 import com.voidlauncher.app.data.AppInfo
 import com.voidlauncher.app.glass.LocalHazeState
+import com.voidlauncher.app.glass.LocalLayerBackdrop
 import com.voidlauncher.app.ui.components.AppActionsSheet
 import com.voidlauncher.app.ui.components.AppIcon
 import com.voidlauncher.app.ui.components.LocalHiddenAppKey
@@ -64,6 +65,7 @@ import com.voidlauncher.app.ui.statusbar.PolarStatusBar
 import com.voidlauncher.app.ui.statusbar.PolarStatusBarController
 import com.voidlauncher.app.util.PendingLaunchBounds
 import com.voidlauncher.app.viewmodel.LauncherUiState
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -259,6 +261,7 @@ fun LauncherRoot(
     }
 
     val hazeState = rememberHazeState()
+    val layerBackdrop = rememberLayerBackdrop()
     val menuOpen = actionApp != null
     // Blur/zoom only after finger lifts (menu sticky). Applying blur while still holding
     // rebuilds the home modifier tree and cancels the hold→drag pointer.
@@ -277,7 +280,8 @@ fun LauncherRoot(
 
     CompositionLocalProvider(
         LocalIconAppearance provides appearance,
-        LocalHazeState provides hazeState
+        LocalHazeState provides hazeState,
+        LocalLayerBackdrop provides layerBackdrop
     ) {
         Box(
             modifier = modifier
