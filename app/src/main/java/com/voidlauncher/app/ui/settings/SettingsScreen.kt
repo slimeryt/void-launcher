@@ -120,6 +120,7 @@ fun SettingsContent(
     onAccountRefresh: () -> Unit,
     onBack: () -> Unit,
     onOpenAppIcons: () -> Unit,
+    onOpenWallpaper: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var page by remember { mutableStateOf(SettingsPage.Root) }
@@ -222,7 +223,8 @@ fun SettingsContent(
                             searchQuery = ""
                             page = it
                         },
-                        onOpenAppIcons = onOpenAppIcons
+                        onOpenAppIcons = onOpenAppIcons,
+                        onOpenWallpaper = onOpenWallpaper
                     )
                     SettingsPage.LiquidGlass -> LiquidGlassPage(
                         state = state,
@@ -294,7 +296,8 @@ private fun RootPage(
     searchQuery: String,
     hiddenCount: Int,
     onOpen: (SettingsPage) -> Unit,
-    onOpenAppIcons: () -> Unit
+    onOpenAppIcons: () -> Unit,
+    onOpenWallpaper: () -> Unit
 ) {
     val q = searchQuery.trim().lowercase()
     fun matches(vararg parts: String): Boolean =
@@ -414,10 +417,7 @@ private fun RootPage(
                 NavRow(
                     title = "Wallpaper",
                     subtitle = "Photos, colors, live wallpaper",
-                    onClick = {
-                        PolarSettingsIntents.polarHome(context, extra = "open_wallpaper_picker")
-                        (context as? android.app.Activity)?.finish()
-                    },
+                    onClick = onOpenWallpaper,
                     showDivider = showIcons || showHome || showSearch || showStatusBar
                 )
             }
@@ -1042,13 +1042,15 @@ internal fun SettingsGroup(
             color = VoidMuted,
             modifier = Modifier.padding(start = 12.dp)
         )
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(SettingsCardShape)
-                .background(SettingsCardBg)
+        GlassPanel(
+            modifier = Modifier.fillMaxWidth(),
+            cornerRadius = 28.dp,
+            strong = true,
+            sampleWallpaper = true
         ) {
-            content()
+            Column(modifier = Modifier.fillMaxWidth()) {
+                content()
+            }
         }
     }
 }

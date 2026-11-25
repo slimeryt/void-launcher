@@ -98,7 +98,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.zIndex
-import com.voidlauncher.app.SettingsActivity
 import com.voidlauncher.app.data.AppInfo
 import com.voidlauncher.app.data.HomeItem
 import com.voidlauncher.app.ui.assistant.AssistantOverlay
@@ -166,6 +165,7 @@ fun HomeScreen(
     onRemovePage: (pageIndex: Int) -> Unit,
     onAddAppToHome: (AppInfo, Int) -> Unit,
     onWallpaperPickerConsumed: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -1184,11 +1184,7 @@ fun HomeScreen(
                         EditFooterButton(
                             icon = Icons.Rounded.Settings,
                             contentDescription = "Settings",
-                            onClick = {
-                                context.startActivity(
-                                    Intent(context, SettingsActivity::class.java)
-                                )
-                            }
+                            onClick = onOpenSettings
                         )
                     }
                 }
@@ -1332,7 +1328,7 @@ fun HomeScreen(
             },
             onOpenSettings = {
                 assistantOpen = false
-                context.startActivity(Intent(context, SettingsActivity::class.java))
+                onOpenSettings()
             },
             onEditHome = {
                 assistantOpen = false

@@ -48,7 +48,7 @@ data class LauncherPreferences(
     val glassBlurStrength: Float = 1f,
     val glassFrostAmount: Float = 1f,
     val glassBlurRadiusDp: Float = 18f,
-    val glassBlurEnabled: Boolean = true,
+    val glassBlurEnabled: Boolean = false,
     val glassVibrancy: Boolean = false,
     val glassRefractionHeightDp: Float = 16f,
     val glassRefractionAmountDp: Float = 32f,
@@ -151,7 +151,7 @@ class PreferencesRepository(private val context: Context) {
             glassFrostAmount = prefs[Keys.GlassFrost] ?: 1f,
             glassBlurRadiusDp = prefs[Keys.GlassBlurRadius]
                 ?: ((prefs[Keys.GlassBlur] ?: 1f) * 18f).coerceIn(0f, 40f),
-            glassBlurEnabled = prefs[Keys.GlassBlurEnabled] ?: true,
+            glassBlurEnabled = prefs[Keys.GlassBlurEnabled] ?: false,
             glassVibrancy = prefs[Keys.GlassVibrancy] ?: false,
             glassRefractionHeightDp = prefs[Keys.GlassRefractionHeight] ?: 16f,
             glassRefractionAmountDp = prefs[Keys.GlassRefractionAmount] ?: 32f,

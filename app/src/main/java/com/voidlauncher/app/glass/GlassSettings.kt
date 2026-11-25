@@ -9,7 +9,7 @@ data class GlassSettings(
     /** Absolute Kyant blur radius in dp (0–40). Used only when [blurEnabled]. */
     val blurRadiusDp: Float = 18f,
     /** When false, skip Kyant [com.kyant.backdrop.effects.blur] entirely. */
-    val blurEnabled: Boolean = true,
+    val blurEnabled: Boolean = false,
     /** Kyant vibrancy color filter (the extra “built-in” frost). Off by default. */
     val vibrancyEnabled: Boolean = false,
     /** Lens edge height in dp (0–40). */

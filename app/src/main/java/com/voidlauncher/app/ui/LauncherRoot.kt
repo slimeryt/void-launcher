@@ -101,6 +101,9 @@ fun LauncherRoot(
     onApplyIconAppearance: (IconAppearance) -> Unit,
     onIconEditorOpenChange: (Boolean) -> Unit,
     onWallpaperPickerConsumed: () -> Unit = {},
+    settingsOpen: Boolean = false,
+    onOpenSettings: () -> Unit = {},
+    settingsContent: @Composable () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val systemUi = rememberSystemUiController()
@@ -361,6 +364,7 @@ fun LauncherRoot(
                         onRemovePage = onRemovePage,
                         onAddAppToHome = { app, _ -> onAddAppToHome(app) },
                         onWallpaperPickerConsumed = onWallpaperPickerConsumed,
+                        onOpenSettings = onOpenSettings,
                         modifier = Modifier.fillMaxSize()
                     )
                     }
@@ -471,6 +475,17 @@ fun LauncherRoot(
                 onHide = onHideApp,
                 onAppInfo = onAppInfo
             )
+
+            if (settingsOpen) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(20f)
+                        .background(Color.Black.copy(alpha = 0.22f))
+                ) {
+                    settingsContent()
+                }
+            }
 
             if (state.iconEditorOpen) {
                 Box(

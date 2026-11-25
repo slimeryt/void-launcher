@@ -41,11 +41,12 @@ data class LauncherUiState(
     val iconTintHue: Float = 210f,
     val iconTintAlpha: Float = 0.55f,
     val iconEditorOpen: Boolean = false,
+    val settingsOpen: Boolean = false,
     val hiddenCount: Int = 0,
     val glassBlurStrength: Float = 1f,
     val glassFrostAmount: Float = 1f,
     val glassBlurRadiusDp: Float = 18f,
-    val glassBlurEnabled: Boolean = true,
+    val glassBlurEnabled: Boolean = false,
     val glassVibrancy: Boolean = false,
     val glassRefractionHeightDp: Float = 16f,
     val glassRefractionAmountDp: Float = 32f,
@@ -80,7 +81,15 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val isEditMode = MutableStateFlow(false)
     private val isLoading = MutableStateFlow(true)
     private val iconEditorOpen = MutableStateFlow(false)
+    private val settingsOpen = MutableStateFlow(false)
     private val wallpaperPickerOpen = MutableStateFlow(false)
+
+    private data class OverlayPrefs(
+        val editor: Boolean,
+        val settings: Boolean,
+        val prefs: LauncherPreferences,
+        val wallpaper: Boolean
+    )
 
     /** In-flight glass knobs so sliders update the preview before DataStore catches up. */
     private data class GlassLive(
@@ -100,21 +109,21 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val state: StateFlow<LauncherUiState> = combine(
         combine(allApps, searchQuery, isDrawerOpen) { a, q, d -> Triple(a, q, d) },
         combine(drawerFocusSearch, isEditMode, isLoading) { f, e, l -> Triple(f, e, l) },
-        combine(iconEditorOpen, prefsRepository.preferences, wallpaperPickerOpen) { editor, prefs, wallpaper ->
-            Triple(editor, prefs, wallpaper)
+        combine(iconEditorOpen, settingsOpen, prefsRepository.preferences, wallpaperPickerOpen) { editor, settings, prefs, wallpaper ->
+            OverlayPrefs(editor, settings, prefs, wallpaper)
         },
         combine(isNotificationCenterOpen, isControlCenterOpen) { n, c -> n to c },
         glassLive
-    ) { t1, t2, editorPrefs, shade, live ->
+    ) { t1, t2, overlay, shade, live ->
         val apps = t1.first
         val query = t1.second
         val drawerOpen = t1.third
         val focusSearch = t2.first
         val editMode = t2.second
         val loading = t2.third
-        val editorOpen = editorPrefs.first
-        val prefs = editorPrefs.second
-        val wallpaperOpen = editorPrefs.third
+        val editorOpen = overlay.editor
+        val prefs = overlay.prefs
+        val wallpaperOpen = overlay.wallpaper
 
         val visible = apps.filterNot { it.key in prefs.hidden }
         val byKey = visible.associateBy { it.key }
@@ -148,6 +157,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             iconTintHue = prefs.iconTintHue,
             iconTintAlpha = prefs.iconTintAlpha,
             iconEditorOpen = editorOpen,
+            settingsOpen = overlay.settings,
             hiddenCount = prefs.hidden.size,
             glassBlurStrength = prefs.glassBlurStrength,
             glassFrostAmount = live.frostAmount ?: prefs.glassFrostAmount,
@@ -410,8 +420,20 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun setIconEditorOpen(open: Boolean) {
         iconEditorOpen.value = open
         if (open) {
+            settingsOpen.value = false
             isDrawerOpen.value = false
             isEditMode.value = false
+        }
+    }
+
+    fun setSettingsOpen(open: Boolean) {
+        settingsOpen.value = open
+        if (open) {
+            iconEditorOpen.value = false
+            isDrawerOpen.value = false
+            isEditMode.value = false
+            isControlCenterOpen.value = false
+            isNotificationCenterOpen.value = false
         }
     }
 

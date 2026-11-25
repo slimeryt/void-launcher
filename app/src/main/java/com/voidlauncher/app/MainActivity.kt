@@ -31,12 +31,17 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import com.voidlauncher.app.account.AccountViewModel
 import com.voidlauncher.app.glass.GlassSettings
 import com.voidlauncher.app.glass.LocalBlurredWallpaper
 import com.voidlauncher.app.glass.LocalGlassSettings
+import com.voidlauncher.app.glass.StoragePermission
 import com.voidlauncher.app.glass.WallpaperBlurController
 import com.voidlauncher.app.ui.LauncherRoot
+import com.voidlauncher.app.ui.settings.SettingsContent
 import com.voidlauncher.app.ui.theme.VoidTheme
+import com.voidlauncher.app.update.ApkInstaller
+import com.voidlauncher.app.update.UpdateViewModel
 import com.voidlauncher.app.util.LauncherWindow
 import com.voidlauncher.app.viewmodel.LauncherViewModel
 import com.voidlauncher.app.wallpaper.LocalWallpaperApi
@@ -52,9 +57,12 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val EXTRA_OPEN_ICON_EDITOR = "open_icon_editor"
         const val EXTRA_OPEN_WALLPAPER_PICKER = "open_wallpaper_picker"
+        const val EXTRA_OPEN_SETTINGS = "open_settings"
     }
 
     private val viewModel: LauncherViewModel by viewModels()
+    private val updateViewModel: UpdateViewModel by viewModels()
+    private val accountViewModel: AccountViewModel by viewModels()
     private lateinit var blurController: WallpaperBlurController
 
     private lateinit var appWidgetManager: AppWidgetManager
@@ -93,7 +101,10 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val state by viewModel.state.collectAsStateWithLifecycle()
+            val updateState by updateViewModel.state.collectAsStateWithLifecycle()
+            val accountState by accountViewModel.state.collectAsStateWithLifecycle()
             val blurredWallpaper by blurController.wallpaper.collectAsStateWithLifecycle()
+            val hasWallpaperAccess by blurController.hasAccess.collectAsStateWithLifecycle()
 
             DisposableEffect(Unit) {
                 blurController.start()
@@ -175,6 +186,82 @@ class MainActivity : ComponentActivity() {
                         },
                         onIconEditorOpenChange = viewModel::setIconEditorOpen,
                         onWallpaperPickerConsumed = viewModel::consumeWallpaperPicker,
+                        settingsOpen = state.settingsOpen,
+                        onOpenSettings = { viewModel.setSettingsOpen(true) },
+                        settingsContent = {
+                            SettingsContent(
+                                state = state,
+                                updateState = updateState,
+                                accountState = accountState,
+                                hasWallpaperAccess = hasWallpaperAccess,
+                                onGrantWallpaperAccess = {
+                                    startActivity(StoragePermission.requestIntent(this))
+                                },
+                                onShowLabelsChange = viewModel::setShowLabels,
+                                onGridColumnsChange = viewModel::setGridColumns,
+                                onIconScaleChange = viewModel::setIconScale,
+                                onDockLabelsChange = viewModel::setDockLabels,
+                                onHapticChange = viewModel::setHapticFeedback,
+                                onShowHomeSearchChange = viewModel::setShowHomeSearch,
+                                onShowAssistantChange = viewModel::setShowAssistant,
+                                onShowBatteryPercentChange = viewModel::setShowBatteryPercent,
+                                onReduceMotionChange = viewModel::setReduceMotion,
+                                onReduceTransparencyChange = viewModel::setReduceTransparency,
+                                onCustomAppAnimationsChange = viewModel::setCustomAppAnimations,
+                                onUnhideApp = viewModel::unhideApp,
+                                onAutoCheckUpdatesChange = viewModel::setAutoCheckUpdates,
+                                onGlassBlurChange = viewModel::setGlassBlurStrength,
+                                onGlassFrostChange = viewModel::setGlassFrostAmount,
+                                onGlassBlurRadiusChange = viewModel::setGlassBlurRadiusDp,
+                                onGlassBlurEnabledChange = viewModel::setGlassBlurEnabled,
+                                onGlassVibrancyChange = viewModel::setGlassVibrancy,
+                                onGlassRefractionHeightChange = viewModel::setGlassRefractionHeightDp,
+                                onGlassRefractionAmountChange = viewModel::setGlassRefractionAmountDp,
+                                onGlassRefractionChange = viewModel::setGlassRefraction,
+                                onGlassSheenChange = viewModel::setGlassSheen,
+                                onGlassChromaticChange = viewModel::setGlassChromaticAberration,
+                                onCheckUpdate = { updateViewModel.checkForUpdates(silent = false) },
+                                onCancelUpdate = updateViewModel::cancelUpdateAction,
+                                onDownloadUpdate = updateViewModel::downloadUpdate,
+                                onUpdateChannelChange = updateViewModel::setUpdateChannel,
+                                onMarkBetaChannelAgreed = updateViewModel::markBetaChannelAgreed,
+                                onAccountLogin = accountViewModel::login,
+                                onAccountRegister = accountViewModel::register,
+                                onAccountLogout = accountViewModel::logout,
+                                onRequestDeveloperAccount = accountViewModel::requestDeveloperAccount,
+                                onRequestEnroll = accountViewModel::requestDeveloperEnrollment,
+                                onAccountRefresh = accountViewModel::refresh,
+                                onInstallUpdate = {
+                                    val apk = updateViewModel.state.value.downloadedApk
+                                        ?: return@SettingsContent
+                                    val block = ApkInstaller.updateBlockReason(this, apk)
+                                    if (block != null) {
+                                        Toast.makeText(this, block, Toast.LENGTH_LONG).show()
+                                        return@SettingsContent
+                                    }
+                                    if (!ApkInstaller.canInstallPackages(this)) {
+                                        Toast.makeText(
+                                            this,
+                                            "Allow Polar to install updates",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                        startActivity(ApkInstaller.installPermissionSettingsIntent(this))
+                                        return@SettingsContent
+                                    }
+                                    ApkInstaller.installApk(this, apk)
+                                },
+                                onBack = { viewModel.setSettingsOpen(false) },
+                                onOpenAppIcons = {
+                                    viewModel.setSettingsOpen(false)
+                                    viewModel.setIconEditorOpen(true)
+                                },
+                                onOpenWallpaper = {
+                                    viewModel.setSettingsOpen(false)
+                                    viewModel.requestWallpaperPicker()
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -197,11 +284,16 @@ class MainActivity : ComponentActivity() {
             viewModel.requestWallpaperPicker()
             intent.removeExtra(EXTRA_OPEN_WALLPAPER_PICKER)
         }
+        if (intent?.getBooleanExtra(EXTRA_OPEN_SETTINGS, false) == true) {
+            viewModel.setSettingsOpen(true)
+            intent.removeExtra(EXTRA_OPEN_SETTINGS)
+        }
     }
 
     override fun onResume() {
         super.onResume()
         viewModel.refreshApps()
+        accountViewModel.refresh()
         if (::blurController.isInitialized) {
             blurController.refresh()
         }
