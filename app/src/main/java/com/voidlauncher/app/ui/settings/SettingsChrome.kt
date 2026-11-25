@@ -26,7 +26,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
-import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.voidlauncher.app.glass.LocalHazeState
 import com.voidlauncher.app.glass.LocalLayerBackdrop
@@ -59,11 +58,11 @@ fun SettingsHazeHost(
         LocalLayerBackdrop provides layerBackdrop
     ) {
         Box(modifier = modifier.fillMaxSize()) {
-            // Wallpaper sibling is the Kyant capture source so glass knobs are visible.
+            // Sibling capture only — never nest layerBackdrop on a child that also
+            // attaches, and never record a strip wider than the window.
             WallpaperHazeSource(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .layerBackdrop(layerBackdrop)
+                modifier = Modifier.fillMaxSize(),
+                attachLayer = true
             )
             Box(
                 modifier = Modifier

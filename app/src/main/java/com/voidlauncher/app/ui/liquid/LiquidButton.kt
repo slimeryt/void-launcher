@@ -79,20 +79,21 @@ fun LiquidButton(
                     }
                 },
                 layerBlock = if (isInteractive) {
-                    {
+                    layer@{
                         val width = size.width
                         val height = size.height
+                        if (width < 1f || height < 1f) return@layer
 
                         val progress = interactiveHighlight.pressProgress
-                        val scale = lerp(1f, 1f + 4f.dp.toPx() / size.height, progress)
+                        val scale = lerp(1f, 1f + 4f.dp.toPx() / height, progress)
 
-                        val maxOffset = size.minDimension
+                        val maxOffset = size.minDimension.coerceAtLeast(1f)
                         val initialDerivative = 0.05f
                         val offset = interactiveHighlight.offset
                         translationX = maxOffset * tanh(initialDerivative * offset.x / maxOffset)
                         translationY = maxOffset * tanh(initialDerivative * offset.y / maxOffset)
 
-                        val maxDragScale = 4f.dp.toPx() / size.height
+                        val maxDragScale = 4f.dp.toPx() / height
                         val offsetAngle = atan2(offset.y, offset.x)
                         scaleX =
                             scale +

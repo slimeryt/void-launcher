@@ -2,13 +2,10 @@ package com.voidlauncher.app.ui.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -19,19 +16,18 @@ import com.voidlauncher.app.glass.WallpaperCrop
 import kotlin.math.roundToInt
 
 /**
- * Full-screen wallpaper drawn in Compose so Haze / Kyant Backdrop can sample
- * the real backdrop (system wallpaper alone isn't a Compose layer).
- *
- * Parallax uses translationX on a full-width strip so scroll stays cheap.
- * When [LocalLayerBackdrop] is set, also registers as a Kyant layer source.
+ * Viewport-sized wallpaper for Haze / Kyant. Drawn at the parent size (not a
+ * multi-page strip) so [layerBackdrop] never records a layer larger than the screen.
  */
 @Composable
-fun WallpaperHazeSource(modifier: Modifier = Modifier) {
+fun WallpaperHazeSource(
+    modifier: Modifier = Modifier,
+    attachLayer: Boolean = true
+) {
     val wp = LocalBlurredWallpaper.current
     val scroll = LocalWallpaperScrollState.current
-    val density = LocalDensity.current
     val layerBackdrop = LocalLayerBackdrop.current
-    val layerMod = if (layerBackdrop != null) {
+    val layerMod = if (attachLayer && layerBackdrop != null) {
         Modifier.layerBackdrop(layerBackdrop)
     } else {
         Modifier
@@ -41,6 +37,7 @@ fun WallpaperHazeSource(modifier: Modifier = Modifier) {
         Canvas(
             modifier = modifier
                 .then(layerMod)
+                .clipToBounds()
                 .fillMaxSize()
         ) {
             drawRect(Color(0xFF05060A))
@@ -48,34 +45,33 @@ fun WallpaperHazeSource(modifier: Modifier = Modifier) {
         return
     }
 
-    val extraW = (wp.fullWidthPx - wp.screenWidth).coerceAtLeast(0).toFloat()
-    val stripW = wp.fullWidthPx.toFloat().coerceAtLeast(1f)
-    val stripH = wp.screenHeight.toFloat().coerceAtLeast(1f)
-    val stripDp = with(density) { DpSize(stripW.toDp(), stripH.toDp()) }
-
     Canvas(
         modifier = modifier
             .then(layerMod)
-            .requiredSize(stripDp)
-            .graphicsLayer {
-                val originX = scroll.offset.coerceIn(0f, 1f) * extraW
-                translationX = -originX
-            }
+            .clipToBounds()
+            .fillMaxSize()
     ) {
+        val extraW = (wp.fullWidthPx - wp.screenWidth).coerceAtLeast(0).toFloat()
+        val originX = scroll.offset.coerceIn(0f, 1f) * extraW
         val (_, originY) = WallpaperCrop.viewportOrigin(wp, wallpaperXOffset = 0.5f)
+        val scaleX = wp.bitmapWidth.toFloat() / wp.fullWidthPx.toFloat().coerceAtLeast(1f)
         val scaleY = wp.bitmapHeight.toFloat() / wp.fullHeightPx.toFloat().coerceAtLeast(1f)
+        val srcX = (originX * scaleX).roundToInt()
+            .coerceIn(0, (wp.bitmapWidth - 1).coerceAtLeast(0))
         val srcY = (originY * scaleY).roundToInt()
             .coerceIn(0, (wp.bitmapHeight - 1).coerceAtLeast(0))
-        val srcH = (stripH * scaleY).roundToInt().coerceAtLeast(1)
+        val srcW = (size.width * scaleX).roundToInt().coerceAtLeast(1)
+            .coerceAtMost((wp.bitmapWidth - srcX).coerceAtLeast(1))
+        val srcH = (size.height * scaleY).roundToInt().coerceAtLeast(1)
             .coerceAtMost((wp.bitmapHeight - srcY).coerceAtLeast(1))
         drawImage(
             image = wp.image,
-            srcOffset = IntOffset(0, srcY),
-            srcSize = IntSize(wp.bitmapWidth.coerceAtLeast(1), srcH),
+            srcOffset = IntOffset(srcX, srcY),
+            srcSize = IntSize(srcW, srcH),
             dstOffset = IntOffset.Zero,
             dstSize = IntSize(
-                stripW.roundToInt().coerceAtLeast(1),
-                stripH.roundToInt().coerceAtLeast(1)
+                size.width.roundToInt().coerceAtLeast(1),
+                size.height.roundToInt().coerceAtLeast(1)
             )
         )
     }
