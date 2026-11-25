@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -101,40 +102,52 @@ fun GlassPanel(
         val frostScale = glass.frostAmount.coerceIn(0f, 1.5f)
         val surfaceAlpha = when {
             tint.alpha > 0.01f -> 0f
-            sampleWallpaper -> (if (strong) 0.08f else 0.05f) * frostScale.coerceAtLeast(0.35f)
-            else -> (if (strong) 0.12f else 0.08f) * frostScale.coerceAtLeast(0.35f)
+            sampleWallpaper -> (if (strong) 0.08f else 0.05f) * frostScale
+            else -> (if (strong) 0.12f else 0.08f) * frostScale
         }
 
-        Box(
-            modifier = modifier.drawBackdrop(
-                backdrop = backdrop,
-                shape = glassShape,
-                effects = {
-                    vibrancy()
-                    if (blurRadiusDp >= 0.5f) blur(blurRadiusDp.dp.toPx())
-                    if (lensHeightDp > 0f && lensAmountDp > 0f) {
-                        lens(
-                            refractionHeight = lensHeightDp.dp.toPx(),
-                            refractionAmount = lensAmountDp.dp.toPx(),
-                            depthEffect = strong,
-                            chromaticAberration = chromatic
-                        )
-                    }
-                },
-                highlight = if (specularOn || liquidStroke) {
-                    { Highlight.Default }
-                } else {
-                    null
-                },
-                onDrawSurface = {
-                    if (surfaceAlpha > 0.01f) {
-                        drawRect(Color.White.copy(alpha = surfaceAlpha))
-                    }
-                    if (tint.alpha > 0.01f) drawRect(tint)
-                }
-            )
+        // Kyant caches the effects lambda until the modifier node is replaced.
+        key(
+            blurRadiusDp,
+            lensHeightDp,
+            lensAmountDp,
+            chromatic,
+            surfaceAlpha,
+            specularOn,
+            liquidStroke,
+            tint
         ) {
-            content()
+            Box(
+                modifier = modifier.drawBackdrop(
+                    backdrop = backdrop,
+                    shape = glassShape,
+                    effects = {
+                        vibrancy()
+                        if (blurRadiusDp >= 0.5f) blur(blurRadiusDp.dp.toPx())
+                        if (lensHeightDp > 0f && lensAmountDp > 0f) {
+                            lens(
+                                refractionHeight = lensHeightDp.dp.toPx(),
+                                refractionAmount = lensAmountDp.dp.toPx(),
+                                depthEffect = strong,
+                                chromaticAberration = chromatic
+                            )
+                        }
+                    },
+                    highlight = if (specularOn || liquidStroke) {
+                        { Highlight.Default }
+                    } else {
+                        null
+                    },
+                    onDrawSurface = {
+                        if (surfaceAlpha > 0.01f) {
+                            drawRect(Color.White.copy(alpha = surfaceAlpha))
+                        }
+                        if (tint.alpha > 0.01f) drawRect(tint)
+                    }
+                )
+            ) {
+                content()
+            }
         }
         return
     }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -20,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastCoerceAtMost
 import androidx.compose.ui.util.lerp
 import com.kyant.backdrop.Backdrop
+import com.voidlauncher.app.glass.LocalGlassSettings
 import com.voidlauncher.app.ui.liquid.utils.InteractiveHighlight
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
@@ -43,6 +45,7 @@ fun LiquidButton(
     content: @Composable RowScope.() -> Unit
 ) {
     val animationScope = rememberCoroutineScope()
+    val glass = LocalGlassSettings.current
 
     val interactiveHighlight = remember(animationScope) {
         InteractiveHighlight(
@@ -50,6 +53,13 @@ fun LiquidButton(
         )
     }
 
+    key(
+        glass.blurRadiusDp,
+        glass.refractionHeightDp,
+        glass.refractionAmountDp,
+        glass.chromaticAberration,
+        glass.refractionEnabled
+    ) {
     Row(
         modifier
             .drawBackdrop(
@@ -57,8 +67,16 @@ fun LiquidButton(
                 shape = { RoundedCornerShape(percent = 50) },
                 effects = {
                     vibrancy()
-                    blur(2f.dp.toPx())
-                    lens(12f.dp.toPx(), 24f.dp.toPx())
+                    blur((glass.blurRadiusDp * 0.35f).coerceIn(2f, 16f).dp.toPx())
+                    if (glass.refractionEnabled) {
+                        lens(
+                            refractionHeight = (glass.refractionHeightDp * 0.7f)
+                                .coerceIn(6f, 28f).dp.toPx(),
+                            refractionAmount = (glass.refractionAmountDp * 0.7f)
+                                .coerceIn(12f, 48f).dp.toPx(),
+                            chromaticAberration = glass.chromaticAberration
+                        )
+                    }
                 },
                 layerBlock = if (isInteractive) {
                     {
@@ -119,4 +137,5 @@ fun LiquidButton(
         verticalAlignment = Alignment.CenterVertically,
         content = content
     )
+    }
 }

@@ -10,10 +10,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,16 +22,20 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
+import com.voidlauncher.app.glass.LocalGlassSettings
 import com.voidlauncher.app.ui.theme.IosBlue
 import kotlin.math.roundToInt
 
 /**
- * Liquid-glass slider with reliable drag (same gesture model as [com.voidlauncher.app.ui.settings.IosSlider]).
+ * Liquid-glass slider: Kyant thumb + a full-track gesture overlay so drag never stalls.
  */
 @Composable
 fun LiquidSlider(
@@ -49,6 +53,7 @@ fun LiquidSlider(
         if (isLightTheme) Color(0xFF787878).copy(alpha = 0.2f)
         else Color(0xFF787880).copy(alpha = 0.36f)
     val fillColor = if (enabled) IosBlue else IosBlue.copy(alpha = 0.4f)
+    val glass = LocalGlassSettings.current
 
     val density = LocalDensity.current
     val thumbW = 40.dp
@@ -56,6 +61,8 @@ fun LiquidSlider(
     val trackH = 6.dp
     val rangeSpan = (valueRange.endInclusive - valueRange.start).coerceAtLeast(0.0001f)
     val current = value()
+    val trackBackdrop = rememberLayerBackdrop()
+    val thumbBackdrop = rememberCombinedBackdrop(backdrop, trackBackdrop)
 
     fun snap(raw: Float): Float {
         var f = raw.coerceIn(0f, 1f)
@@ -87,6 +94,7 @@ fun LiquidSlider(
                 .fillMaxWidth()
                 .height(trackH)
                 .align(Alignment.Center)
+                .layerBackdrop(trackBackdrop)
                 .clip(RoundedCornerShape(percent = 50))
                 .background(trackColor)
         ) {
@@ -99,26 +107,43 @@ fun LiquidSlider(
             )
         }
 
-        Box(
-            modifier = Modifier
-                .offset(x = with(density) { (frac * travel).toDp() })
-                .align(Alignment.CenterStart)
-                .width(thumbW)
-                .height(thumbH)
-                .drawBackdrop(
-                    backdrop = backdrop,
-                    shape = { RoundedCornerShape(percent = 50) },
-                    effects = {
-                        vibrancy()
-                        blur(6f.dp.toPx())
-                        lens(8f.dp.toPx(), 12f.dp.toPx())
-                    },
-                    highlight = { Highlight.Default },
-                    onDrawSurface = {
-                        drawRect(Color.White.copy(alpha = 0.88f))
-                    }
-                )
-        )
+        key(
+            glass.blurRadiusDp,
+            glass.refractionHeightDp,
+            glass.refractionAmountDp,
+            glass.chromaticAberration,
+            glass.refractionEnabled
+        ) {
+            Box(
+                modifier = Modifier
+                    .offset(x = with(density) { (frac * travel).toDp() })
+                    .align(Alignment.CenterStart)
+                    .width(thumbW)
+                    .height(thumbH)
+                    .drawBackdrop(
+                        backdrop = thumbBackdrop,
+                        shape = { RoundedCornerShape(percent = 50) },
+                        effects = {
+                            vibrancy()
+                            val blurDp = (glass.blurRadiusDp * 0.45f).coerceIn(2f, 18f)
+                            blur(blurDp.dp.toPx())
+                            if (glass.refractionEnabled) {
+                                lens(
+                                    refractionHeight = (glass.refractionHeightDp * 0.55f)
+                                        .coerceIn(4f, 22f).dp.toPx(),
+                                    refractionAmount = (glass.refractionAmountDp * 0.45f)
+                                        .coerceIn(8f, 36f).dp.toPx(),
+                                    chromaticAberration = glass.chromaticAberration
+                                )
+                            }
+                        },
+                        highlight = { Highlight.Default },
+                        onDrawSurface = {
+                            drawRect(Color.White.copy(alpha = 0.22f))
+                        }
+                    )
+            )
+        }
 
         Box(
             modifier = Modifier
@@ -138,7 +163,6 @@ fun LiquidSlider(
     }
 }
 
-/** Convenience overload matching common call sites that pass a plain Float. */
 @Composable
 fun LiquidSlider(
     value: Float,

@@ -32,9 +32,9 @@ import com.voidlauncher.app.glass.LocalHazeState
 import com.voidlauncher.app.glass.LocalLayerBackdrop
 import com.voidlauncher.app.ui.components.GlassPanel
 import com.voidlauncher.app.ui.components.SmoothCornerShape
+import com.voidlauncher.app.ui.components.WallpaperHazeSource
 import com.voidlauncher.app.ui.liquid.LiquidButton
 import com.voidlauncher.app.ui.theme.IosBlue
-import com.voidlauncher.app.ui.theme.VoidInk
 import com.voidlauncher.app.ui.theme.VoidMist
 import com.voidlauncher.app.ui.theme.VoidMuted
 import dev.chrisbanes.haze.HazeState
@@ -59,21 +59,16 @@ fun SettingsHazeHost(
         LocalLayerBackdrop provides layerBackdrop
     ) {
         Box(modifier = modifier.fillMaxSize()) {
-            // Plate only — must be a sibling of glass, not an ancestor, or
-            // layerBackdrop records drawBackdrop and crashes RenderThread.
-            Box(
+            // Wallpaper sibling is the Kyant capture source so glass knobs are visible.
+            WallpaperHazeSource(
                 modifier = Modifier
                     .fillMaxSize()
                     .layerBackdrop(layerBackdrop)
-                    .background(
-                        brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFF2A2A30),
-                                VoidInk,
-                                Color(0xFF050508)
-                            )
-                        )
-                    )
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.38f))
             )
             content()
         }
