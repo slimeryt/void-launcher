@@ -99,6 +99,8 @@ fun SettingsContent(
     onGlassBlurChange: (Float) -> Unit,
     onGlassFrostChange: (Float) -> Unit,
     onGlassBlurRadiusChange: (Float) -> Unit,
+    onGlassBlurEnabledChange: (Boolean) -> Unit,
+    onGlassVibrancyChange: (Boolean) -> Unit,
     onGlassRefractionHeightChange: (Float) -> Unit,
     onGlassRefractionAmountChange: (Float) -> Unit,
     onGlassRefractionChange: (Boolean) -> Unit,
@@ -229,6 +231,8 @@ fun SettingsContent(
                         onGlassBlurChange = onGlassBlurChange,
                         onGlassFrostChange = onGlassFrostChange,
                         onGlassBlurRadiusChange = onGlassBlurRadiusChange,
+                        onGlassBlurEnabledChange = onGlassBlurEnabledChange,
+                        onGlassVibrancyChange = onGlassVibrancyChange,
                         onGlassRefractionHeightChange = onGlassRefractionHeightChange,
                         onGlassRefractionAmountChange = onGlassRefractionAmountChange,
                         onGlassRefractionChange = onGlassRefractionChange,
@@ -585,6 +589,8 @@ private fun LiquidGlassPage(
     onGlassBlurChange: (Float) -> Unit,
     onGlassFrostChange: (Float) -> Unit,
     onGlassBlurRadiusChange: (Float) -> Unit,
+    onGlassBlurEnabledChange: (Boolean) -> Unit,
+    onGlassVibrancyChange: (Boolean) -> Unit,
     onGlassRefractionHeightChange: (Float) -> Unit,
     onGlassRefractionAmountChange: (Float) -> Unit,
     onGlassRefractionChange: (Boolean) -> Unit,
@@ -705,6 +711,20 @@ private fun LiquidGlassPage(
         1 -> {
             SettingsGroup(label = "Look") {
                 ToggleRow(
+                    title = "Frosted blur",
+                    subtitle = "Kyant backdrop blur. Off = clear liquid lens",
+                    checked = state.glassBlurEnabled,
+                    onCheckedChange = onGlassBlurEnabledChange,
+                    showDivider = true
+                )
+                ToggleRow(
+                    title = "Vibrancy",
+                    subtitle = "Extra saturation frost on top of blur",
+                    checked = state.glassVibrancy,
+                    onCheckedChange = onGlassVibrancyChange,
+                    showDivider = true
+                )
+                ToggleRow(
                     title = "Refraction",
                     subtitle = "Lens bend + chromatic edge",
                     checked = state.glassRefraction,
@@ -756,6 +776,20 @@ private fun LiquidGlassPage(
                 )
             }
             SettingsGroup(label = "Optics") {
+                ToggleRow(
+                    title = "Frosted blur",
+                    subtitle = "Turn off to drop the built-in frost",
+                    checked = state.glassBlurEnabled,
+                    onCheckedChange = onGlassBlurEnabledChange,
+                    showDivider = true
+                )
+                ToggleRow(
+                    title = "Vibrancy",
+                    subtitle = "Extra saturation frost",
+                    checked = state.glassVibrancy,
+                    onCheckedChange = onGlassVibrancyChange,
+                    showDivider = true
+                )
                 ToggleRow(
                     title = "Refraction",
                     subtitle = "Enable lens bend",

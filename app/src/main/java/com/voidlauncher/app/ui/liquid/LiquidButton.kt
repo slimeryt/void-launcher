@@ -24,9 +24,7 @@ import com.kyant.backdrop.Backdrop
 import com.voidlauncher.app.glass.LocalGlassSettings
 import com.voidlauncher.app.ui.liquid.utils.InteractiveHighlight
 import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
+import com.voidlauncher.app.glass.applyPolarGlass
 import androidx.compose.foundation.shape.RoundedCornerShape
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -53,30 +51,18 @@ fun LiquidButton(
         )
     }
 
-    key(
-        glass.blurRadiusDp,
-        glass.refractionHeightDp,
-        glass.refractionAmountDp,
-        glass.chromaticAberration,
-        glass.refractionEnabled
-    ) {
+    key(glass) {
     Row(
         modifier
             .drawBackdrop(
                 backdrop = backdrop,
                 shape = { RoundedCornerShape(percent = 50) },
                 effects = {
-                    vibrancy()
-                    blur((glass.blurRadiusDp * 0.35f).coerceIn(2f, 16f).dp.toPx())
-                    if (glass.refractionEnabled) {
-                        lens(
-                            refractionHeight = (glass.refractionHeightDp * 0.7f)
-                                .coerceIn(6f, 28f).dp.toPx(),
-                            refractionAmount = (glass.refractionAmountDp * 0.7f)
-                                .coerceIn(12f, 48f).dp.toPx(),
-                            chromaticAberration = glass.chromaticAberration
-                        )
-                    }
+                    applyPolarGlass(
+                        glass = glass,
+                        blurScale = 0.7f,
+                        lensScale = 0.75f
+                    )
                 },
                 layerBlock = if (isInteractive) {
                     layer@{

@@ -16,6 +16,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -43,10 +44,10 @@ import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.voidlauncher.app.ui.liquid.utils.DampedDragAnimation
 import com.voidlauncher.app.ui.liquid.utils.InteractiveHighlight
 import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
+import com.voidlauncher.app.glass.LocalGlassSettings
+import com.voidlauncher.app.glass.applyPolarGlass
 import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -73,8 +74,10 @@ fun LiquidBottomTabs(
         if (isLightTheme) Color(0xFFFAFAFA).copy(0.4f)
         else Color(0xFF121212).copy(0.4f)
 
+    val glass = LocalGlassSettings.current
     val tabsBackdrop = rememberLayerBackdrop()
 
+    key(glass) {
     BoxWithConstraints(
         modifier,
         contentAlignment = Alignment.CenterStart
@@ -167,9 +170,7 @@ fun LiquidBottomTabs(
                     backdrop = backdrop,
                     shape = { RoundedCornerShape(percent = 50) },
                     effects = {
-                        vibrancy()
-                        blur(8f.dp.toPx())
-                        lens(24f.dp.toPx(), 24f.dp.toPx())
+                        applyPolarGlass(glass, blurScale = 0.45f, lensScale = 1.2f)
                     },
                     layerBlock = {
                         val progress = dampedDragAnimation.pressProgress
@@ -205,12 +206,7 @@ fun LiquidBottomTabs(
                         shape = { RoundedCornerShape(percent = 50) },
                         effects = {
                             val progress = dampedDragAnimation.pressProgress
-                            vibrancy()
-                            blur(8f.dp.toPx())
-                            lens(
-                                24f.dp.toPx() * progress,
-                                24f.dp.toPx() * progress
-                            )
+                            applyPolarGlass(glass, blurScale = 0.45f, lensScale = 1.2f * progress)
                         },
                         highlight = {
                             val progress = dampedDragAnimation.pressProgress
@@ -284,5 +280,6 @@ fun LiquidBottomTabs(
                 .height(56f.dp)
                 .fillMaxWidth(1f / tabsCount)
         )
+    }
     }
 }

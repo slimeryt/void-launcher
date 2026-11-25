@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -44,6 +45,8 @@ data class LauncherUiState(
     val glassBlurStrength: Float = 1f,
     val glassFrostAmount: Float = 1f,
     val glassBlurRadiusDp: Float = 18f,
+    val glassBlurEnabled: Boolean = true,
+    val glassVibrancy: Boolean = false,
     val glassRefractionHeightDp: Float = 16f,
     val glassRefractionAmountDp: Float = 32f,
     val glassRefraction: Boolean = true,
@@ -79,14 +82,30 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val iconEditorOpen = MutableStateFlow(false)
     private val wallpaperPickerOpen = MutableStateFlow(false)
 
+    /** In-flight glass knobs so sliders update the preview before DataStore catches up. */
+    private data class GlassLive(
+        val blurRadiusDp: Float? = null,
+        val frostAmount: Float? = null,
+        val refractionHeightDp: Float? = null,
+        val refractionAmountDp: Float? = null,
+        val refraction: Boolean? = null,
+        val sheen: Boolean? = null,
+        val chromatic: Boolean? = null,
+        val blurEnabled: Boolean? = null,
+        val vibrancy: Boolean? = null
+    )
+
+    private val glassLive = MutableStateFlow(GlassLive())
+
     val state: StateFlow<LauncherUiState> = combine(
         combine(allApps, searchQuery, isDrawerOpen) { a, q, d -> Triple(a, q, d) },
         combine(drawerFocusSearch, isEditMode, isLoading) { f, e, l -> Triple(f, e, l) },
         combine(iconEditorOpen, prefsRepository.preferences, wallpaperPickerOpen) { editor, prefs, wallpaper ->
             Triple(editor, prefs, wallpaper)
         },
-        combine(isNotificationCenterOpen, isControlCenterOpen) { n, c -> n to c }
-    ) { t1, t2, editorPrefs, shade ->
+        combine(isNotificationCenterOpen, isControlCenterOpen) { n, c -> n to c },
+        glassLive
+    ) { t1, t2, editorPrefs, shade, live ->
         val apps = t1.first
         val query = t1.second
         val drawerOpen = t1.third
@@ -131,13 +150,15 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             iconEditorOpen = editorOpen,
             hiddenCount = prefs.hidden.size,
             glassBlurStrength = prefs.glassBlurStrength,
-            glassFrostAmount = prefs.glassFrostAmount,
-            glassBlurRadiusDp = prefs.glassBlurRadiusDp,
-            glassRefractionHeightDp = prefs.glassRefractionHeightDp,
-            glassRefractionAmountDp = prefs.glassRefractionAmountDp,
-            glassRefraction = prefs.glassRefraction,
-            glassSheen = prefs.glassSheen,
-            glassChromaticAberration = prefs.glassChromaticAberration,
+            glassFrostAmount = live.frostAmount ?: prefs.glassFrostAmount,
+            glassBlurRadiusDp = live.blurRadiusDp ?: prefs.glassBlurRadiusDp,
+            glassBlurEnabled = live.blurEnabled ?: prefs.glassBlurEnabled,
+            glassVibrancy = live.vibrancy ?: prefs.glassVibrancy,
+            glassRefractionHeightDp = live.refractionHeightDp ?: prefs.glassRefractionHeightDp,
+            glassRefractionAmountDp = live.refractionAmountDp ?: prefs.glassRefractionAmountDp,
+            glassRefraction = live.refraction ?: prefs.glassRefraction,
+            glassSheen = live.sheen ?: prefs.glassSheen,
+            glassChromaticAberration = live.chromatic ?: prefs.glassChromaticAberration,
             dockLabels = prefs.dockLabels,
             hapticFeedback = prefs.hapticFeedback,
             autoCheckUpdates = prefs.autoCheckUpdates,
@@ -399,30 +420,51 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun setGlassFrostAmount(value: Float) {
-        viewModelScope.launch { prefsRepository.setGlassFrostAmount(value) }
+        val v = value.coerceIn(0f, 1.5f)
+        glassLive.update { it.copy(frostAmount = v) }
+        viewModelScope.launch { prefsRepository.setGlassFrostAmount(v) }
     }
 
     fun setGlassBlurRadiusDp(value: Float) {
-        viewModelScope.launch { prefsRepository.setGlassBlurRadiusDp(value) }
+        val v = value.coerceIn(0f, 40f)
+        glassLive.update { it.copy(blurRadiusDp = v) }
+        viewModelScope.launch { prefsRepository.setGlassBlurRadiusDp(v) }
+    }
+
+    fun setGlassBlurEnabled(value: Boolean) {
+        glassLive.update { it.copy(blurEnabled = value) }
+        viewModelScope.launch { prefsRepository.setGlassBlurEnabled(value) }
+    }
+
+    fun setGlassVibrancy(value: Boolean) {
+        glassLive.update { it.copy(vibrancy = value) }
+        viewModelScope.launch { prefsRepository.setGlassVibrancy(value) }
     }
 
     fun setGlassRefractionHeightDp(value: Float) {
-        viewModelScope.launch { prefsRepository.setGlassRefractionHeightDp(value) }
+        val v = value.coerceIn(0f, 40f)
+        glassLive.update { it.copy(refractionHeightDp = v) }
+        viewModelScope.launch { prefsRepository.setGlassRefractionHeightDp(v) }
     }
 
     fun setGlassRefractionAmountDp(value: Float) {
-        viewModelScope.launch { prefsRepository.setGlassRefractionAmountDp(value) }
+        val v = value.coerceIn(0f, 80f)
+        glassLive.update { it.copy(refractionAmountDp = v) }
+        viewModelScope.launch { prefsRepository.setGlassRefractionAmountDp(v) }
     }
 
     fun setGlassRefraction(value: Boolean) {
+        glassLive.update { it.copy(refraction = value) }
         viewModelScope.launch { prefsRepository.setGlassRefraction(value) }
     }
 
     fun setGlassSheen(value: Boolean) {
+        glassLive.update { it.copy(sheen = value) }
         viewModelScope.launch { prefsRepository.setGlassSheen(value) }
     }
 
     fun setGlassChromaticAberration(value: Boolean) {
+        glassLive.update { it.copy(chromatic = value) }
         viewModelScope.launch { prefsRepository.setGlassChromaticAberration(value) }
     }
 

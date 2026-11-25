@@ -106,6 +106,8 @@ class MainActivity : ComponentActivity() {
                     blurStrength = state.glassBlurStrength,
                     frostAmount = state.glassFrostAmount,
                     blurRadiusDp = state.glassBlurRadiusDp,
+                    blurEnabled = state.glassBlurEnabled && !state.reduceTransparency,
+                    vibrancyEnabled = state.glassVibrancy && !state.reduceTransparency,
                     refractionHeightDp = state.glassRefractionHeightDp,
                     refractionAmountDp = state.glassRefractionAmountDp,
                     refractionEnabled = state.glassRefraction && !state.reduceTransparency,

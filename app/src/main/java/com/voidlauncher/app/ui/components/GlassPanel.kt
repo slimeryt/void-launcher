@@ -25,12 +25,10 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
 import com.voidlauncher.app.glass.LocalGlassSettings
 import com.voidlauncher.app.glass.LocalLayerBackdrop
+import com.voidlauncher.app.glass.applyPolarGlass
 import com.voidlauncher.app.ui.theme.VoidGlassBorder
 import kotlin.math.roundToInt
 
@@ -85,20 +83,13 @@ fun GlassPanel(
             blurStrengthOverride != null ->
                 (28f * blurStrength).coerceIn(0f, 40f)
             else ->
-                (glass.blurRadiusDp * (if (strong) 1.08f else 1f) *
-                    if (sampleWallpaper) 1f else 0.72f).coerceIn(0f, 40f)
+                glass.blurRadiusDp.coerceIn(0f, 40f)
         }
-        val lensHeightDp = if (refractionOn) {
-            glass.refractionHeightDp * (if (strong) 1.1f else 1f)
-        } else {
-            0f
-        }
-        val lensAmountDp = if (refractionOn) {
-            glass.refractionAmountDp * (if (strong) 1.1f else 1f)
-        } else {
-            0f
-        }
-        val chromatic = refractionOn && glass.chromaticAberration
+        val panelGlass = glass.copy(
+            blurRadiusDp = blurRadiusDp,
+            blurEnabled = glass.blurEnabled && (blurStrengthOverride == null || blurStrength > 0.01f),
+            refractionEnabled = refractionOn
+        )
         val frostScale = glass.frostAmount.coerceIn(0f, 1.5f)
         val surfaceAlpha = when {
             tint.alpha > 0.01f -> 0f
@@ -108,30 +99,23 @@ fun GlassPanel(
 
         // Kyant caches the effects lambda until the modifier node is replaced.
         key(
-            blurRadiusDp,
-            lensHeightDp,
-            lensAmountDp,
-            chromatic,
+            panelGlass,
             surfaceAlpha,
             specularOn,
             liquidStroke,
-            tint
+            tint,
+            strong
         ) {
             Box(
                 modifier = modifier.drawBackdrop(
                     backdrop = backdrop,
                     shape = glassShape,
                     effects = {
-                        vibrancy()
-                        if (blurRadiusDp >= 0.5f) blur(blurRadiusDp.dp.toPx())
-                        if (lensHeightDp > 0f && lensAmountDp > 0f) {
-                            lens(
-                                refractionHeight = lensHeightDp.dp.toPx(),
-                                refractionAmount = lensAmountDp.dp.toPx(),
-                                depthEffect = strong,
-                                chromaticAberration = chromatic
-                            )
-                        }
+                        applyPolarGlass(
+                            glass = panelGlass,
+                            strong = strong,
+                            depthEffect = strong
+                        )
                     },
                     highlight = if (specularOn || liquidStroke) {
                         { Highlight.Default }

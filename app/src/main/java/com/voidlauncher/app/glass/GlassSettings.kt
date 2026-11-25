@@ -6,8 +6,12 @@ import androidx.compose.runtime.staticCompositionLocalOf
 data class GlassSettings(
     /** Multiplies frost / surface veil (0–1.5). */
     val frostAmount: Float = 1f,
-    /** Absolute Kyant blur radius in dp (0–40). */
+    /** Absolute Kyant blur radius in dp (0–40). Used only when [blurEnabled]. */
     val blurRadiusDp: Float = 18f,
+    /** When false, skip Kyant [com.kyant.backdrop.effects.blur] entirely. */
+    val blurEnabled: Boolean = true,
+    /** Kyant vibrancy color filter (the extra “built-in” frost). Off by default. */
+    val vibrancyEnabled: Boolean = false,
     /** Lens edge height in dp (0–40). */
     val refractionHeightDp: Float = 16f,
     /** Lens bend amount in dp (0–80). */

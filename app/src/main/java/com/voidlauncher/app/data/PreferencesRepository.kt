@@ -48,6 +48,8 @@ data class LauncherPreferences(
     val glassBlurStrength: Float = 1f,
     val glassFrostAmount: Float = 1f,
     val glassBlurRadiusDp: Float = 18f,
+    val glassBlurEnabled: Boolean = true,
+    val glassVibrancy: Boolean = false,
     val glassRefractionHeightDp: Float = 16f,
     val glassRefractionAmountDp: Float = 32f,
     val glassRefraction: Boolean = true,
@@ -104,6 +106,8 @@ class PreferencesRepository(private val context: Context) {
         val GlassBlur = floatPreferencesKey("glass_blur")
         val GlassFrost = floatPreferencesKey("glass_frost")
         val GlassBlurRadius = floatPreferencesKey("glass_blur_radius_dp")
+        val GlassBlurEnabled = booleanPreferencesKey("glass_blur_enabled")
+        val GlassVibrancy = booleanPreferencesKey("glass_vibrancy")
         val GlassRefractionHeight = floatPreferencesKey("glass_refraction_height_dp")
         val GlassRefractionAmount = floatPreferencesKey("glass_refraction_amount_dp")
         val GlassRefraction = booleanPreferencesKey("glass_refraction")
@@ -147,6 +151,8 @@ class PreferencesRepository(private val context: Context) {
             glassFrostAmount = prefs[Keys.GlassFrost] ?: 1f,
             glassBlurRadiusDp = prefs[Keys.GlassBlurRadius]
                 ?: ((prefs[Keys.GlassBlur] ?: 1f) * 18f).coerceIn(0f, 40f),
+            glassBlurEnabled = prefs[Keys.GlassBlurEnabled] ?: true,
+            glassVibrancy = prefs[Keys.GlassVibrancy] ?: false,
             glassRefractionHeightDp = prefs[Keys.GlassRefractionHeight] ?: 16f,
             glassRefractionAmountDp = prefs[Keys.GlassRefractionAmount] ?: 32f,
             glassRefraction = prefs[Keys.GlassRefraction] ?: true,
@@ -239,6 +245,14 @@ class PreferencesRepository(private val context: Context) {
 
     suspend fun setGlassBlurRadiusDp(value: Float) {
         context.dataStore.edit { it[Keys.GlassBlurRadius] = value.coerceIn(0f, 40f) }
+    }
+
+    suspend fun setGlassBlurEnabled(value: Boolean) {
+        context.dataStore.edit { it[Keys.GlassBlurEnabled] = value }
+    }
+
+    suspend fun setGlassVibrancy(value: Boolean) {
+        context.dataStore.edit { it[Keys.GlassVibrancy] = value }
     }
 
     suspend fun setGlassRefractionHeightDp(value: Float) {

@@ -67,7 +67,7 @@ fun SettingsHazeHost(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.38f))
+                    .background(Color.Black.copy(alpha = 0.16f))
             )
             content()
         }

@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
@@ -18,24 +18,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberBackdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.Shadow
 import com.voidlauncher.app.glass.LocalGlassSettings
+import com.voidlauncher.app.glass.applyPolarGlass
 import com.voidlauncher.app.ui.theme.IosBlue
 import kotlin.math.roundToInt
 
 /**
- * Liquid-glass slider: Kyant thumb + a full-track gesture overlay so drag never stalls.
+ * Liquid-glass slider: Kyant thumb sampling the wallpaper layer + a full-track
+ * gesture overlay so drag never stalls.
  */
 @Composable
 fun LiquidSlider(
@@ -56,13 +58,19 @@ fun LiquidSlider(
     val glass = LocalGlassSettings.current
 
     val density = LocalDensity.current
-    val thumbW = 40.dp
-    val thumbH = 24.dp
+    val thumbW = 48.dp
+    val thumbH = 28.dp
     val trackH = 6.dp
     val rangeSpan = (valueRange.endInclusive - valueRange.start).coerceAtLeast(0.0001f)
     val current = value()
     val trackBackdrop = rememberLayerBackdrop()
-    val thumbBackdrop = rememberCombinedBackdrop(backdrop, trackBackdrop)
+    val thumbBackdrop = rememberCombinedBackdrop(
+        backdrop,
+        rememberBackdrop(trackBackdrop) { drawBackdrop ->
+            // At rest, keep the 6.dp track from dominating the thumb sample.
+            scale(0.7f, 0.2f) { drawBackdrop() }
+        }
+    )
 
     fun snap(raw: Float): Float {
         var f = raw.coerceIn(0f, 1f)
@@ -107,39 +115,36 @@ fun LiquidSlider(
             )
         }
 
-        key(
-            glass.blurRadiusDp,
-            glass.refractionHeightDp,
-            glass.refractionAmountDp,
-            glass.chromaticAberration,
-            glass.refractionEnabled
-        ) {
+        key(glass) {
             Box(
                 modifier = Modifier
                     .offset(x = with(density) { (frac * travel).toDp() })
                     .align(Alignment.CenterStart)
-                    .width(thumbW)
-                    .height(thumbH)
+                    .size(thumbW, thumbH)
                     .drawBackdrop(
                         backdrop = thumbBackdrop,
                         shape = { RoundedCornerShape(percent = 50) },
                         effects = {
-                            vibrancy()
-                            val blurDp = (glass.blurRadiusDp * 0.45f).coerceIn(2f, 18f)
-                            blur(blurDp.dp.toPx())
-                            if (glass.refractionEnabled) {
-                                lens(
-                                    refractionHeight = (glass.refractionHeightDp * 0.55f)
-                                        .coerceIn(4f, 22f).dp.toPx(),
-                                    refractionAmount = (glass.refractionAmountDp * 0.45f)
-                                        .coerceIn(8f, 36f).dp.toPx(),
-                                    chromaticAberration = glass.chromaticAberration
-                                )
-                            }
+                            applyPolarGlass(
+                                glass = glass,
+                                blurScale = 0.55f,
+                                lensScale = 0.75f
+                            )
                         },
-                        highlight = { Highlight.Default },
+                        highlight = if (glass.sheenEnabled) {
+                            { Highlight.Default }
+                        } else {
+                            null
+                        },
+                        shadow = {
+                            Shadow(
+                                radius = 4.dp,
+                                color = Color.Black.copy(alpha = 0.12f)
+                            )
+                        },
                         onDrawSurface = {
-                            drawRect(Color.White.copy(alpha = 0.22f))
+                            val veil = (0.07f * glass.frostAmount).coerceIn(0f, 0.18f)
+                            if (veil > 0.01f) drawRect(Color.White.copy(alpha = veil))
                         }
                     )
             )
