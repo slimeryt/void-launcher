@@ -1042,15 +1042,13 @@ internal fun SettingsGroup(
             color = VoidMuted,
             modifier = Modifier.padding(start = 12.dp)
         )
-        GlassPanel(
-            modifier = Modifier.fillMaxWidth(),
-            cornerRadius = 28.dp,
-            strong = true,
-            sampleWallpaper = true
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(SettingsCardShape)
+                .background(SettingsCardBg)
         ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                content()
-            }
+            content()
         }
     }
 }

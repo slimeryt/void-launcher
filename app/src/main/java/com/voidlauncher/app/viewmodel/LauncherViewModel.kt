@@ -10,6 +10,8 @@ import com.voidlauncher.app.data.HomeItem
 import com.voidlauncher.app.data.LauncherPreferences
 import com.voidlauncher.app.data.PreferencesRepository
 import com.voidlauncher.app.system.PolarSystemApps
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -105,6 +107,19 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     )
 
     private val glassLive = MutableStateFlow(GlassLive())
+    private var glassPersistJob: Job? = null
+
+    private fun persistGlassSoon() {
+        glassPersistJob?.cancel()
+        glassPersistJob = viewModelScope.launch {
+            delay(180)
+            val live = glassLive.value
+            live.frostAmount?.let { prefsRepository.setGlassFrostAmount(it) }
+            live.blurRadiusDp?.let { prefsRepository.setGlassBlurRadiusDp(it) }
+            live.refractionHeightDp?.let { prefsRepository.setGlassRefractionHeightDp(it) }
+            live.refractionAmountDp?.let { prefsRepository.setGlassRefractionAmountDp(it) }
+        }
+    }
 
     val state: StateFlow<LauncherUiState> = combine(
         combine(allApps, searchQuery, isDrawerOpen) { a, q, d -> Triple(a, q, d) },
@@ -444,13 +459,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun setGlassFrostAmount(value: Float) {
         val v = value.coerceIn(0f, 1.5f)
         glassLive.update { it.copy(frostAmount = v) }
-        viewModelScope.launch { prefsRepository.setGlassFrostAmount(v) }
+        persistGlassSoon()
     }
 
     fun setGlassBlurRadiusDp(value: Float) {
         val v = value.coerceIn(0f, 40f)
         glassLive.update { it.copy(blurRadiusDp = v) }
-        viewModelScope.launch { prefsRepository.setGlassBlurRadiusDp(v) }
+        persistGlassSoon()
     }
 
     fun setGlassBlurEnabled(value: Boolean) {
@@ -466,13 +481,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun setGlassRefractionHeightDp(value: Float) {
         val v = value.coerceIn(0f, 40f)
         glassLive.update { it.copy(refractionHeightDp = v) }
-        viewModelScope.launch { prefsRepository.setGlassRefractionHeightDp(v) }
+        persistGlassSoon()
     }
 
     fun setGlassRefractionAmountDp(value: Float) {
         val v = value.coerceIn(0f, 80f)
         glassLive.update { it.copy(refractionAmountDp = v) }
-        viewModelScope.launch { prefsRepository.setGlassRefractionAmountDp(v) }
+        persistGlassSoon()
     }
 
     fun setGlassRefraction(value: Boolean) {

@@ -112,6 +112,11 @@ class DampedDragAnimation(
         }
     }
 
+    fun snapValue(value: Float) {
+        val targetValue = value.coerceIn(valueRange)
+        animationScope.launch { valueAnimation.snapTo(targetValue) }
+    }
+
     fun animateToValue(value: Float) {
         animationScope.launch {
             mutatorMutex.mutate {

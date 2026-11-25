@@ -51,6 +51,7 @@ import com.voidlauncher.app.glass.LocalLayerBackdrop
 import com.voidlauncher.app.ui.components.AppActionsSheet
 import com.voidlauncher.app.ui.components.AppIcon
 import com.voidlauncher.app.ui.components.LocalHiddenAppKey
+import com.voidlauncher.app.ui.components.WallpaperHazeSource
 import com.voidlauncher.app.ui.drawer.AppDrawer
 import com.voidlauncher.app.ui.home.HomeScreen
 import com.voidlauncher.app.ui.icons.IconAppearance
@@ -481,8 +482,16 @@ fun LauncherRoot(
                     modifier = Modifier
                         .fillMaxSize()
                         .zIndex(20f)
-                        .background(Color.Black.copy(alpha = 0.22f))
                 ) {
+                    WallpaperHazeSource(
+                        modifier = Modifier.fillMaxSize(),
+                        attachLayer = false
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.16f))
+                    )
                     settingsContent()
                 }
             }
